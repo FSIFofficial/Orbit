@@ -1123,7 +1123,9 @@ function uploadAvatar(memberId, dataUrl, filename, folderId) {
   // Drive's own "uc?export=view" (which can trigger a virus-scan
   // interstitial) or "thumbnail?id=" (rate-limited more aggressively) URLs
   var url = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w256-h256-c'
-  updateMemberFields(memberId, { avatar_url: url })
+  console.log('uploadAvatar: memberId=' + memberId + ' url=' + url)
+  var writeResult = updateMemberFields(memberId, { avatar_url: url })
+  console.log('uploadAvatar: updateMemberFields result=' + JSON.stringify(writeResult))
   return { url: url }
 }
 
