@@ -1499,3 +1499,103 @@ function notifyOverdueTasksToDiscord() {
     // best-effort
   }
 }
+
+// ---- 初期セットアップ --------------------------------------------------------
+//
+// GASエディタ上部の関数ドロップダウンで "setupOrbit" を選び、▶ 実行 を押す。
+// これ一回で:
+//   1. 全サービスの権限ダイアログをまとめて通す (Drive / Mail / Calendar / 等)
+//   2. Members / Projects / Tasks / Settings の各シートに不足しているヘッダー列を
+//      自動追加する（既存データは一切変更しない）
+//   3. 実行結果をエディタ下部のログに出力する
+//
+// デプロイ後に一度だけ実行すればOK。再実行しても重複は起きない。
+
+function setupOrbit() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  console.log('📋 スプレッドシート: ' + ss.getName())
+
+  // --- 権限の事前取得 ---
+  try { DriveApp.getRootFolder(); console.log('✅ DriveApp') }
+  catch (e) { console.error('❌ DriveApp: ' + e) }
+
+  try { console.log('✅ MailApp (残り送信数: ' + MailApp.getRemainingDailyQuota() + ')') }
+  catch (e) { console.error('❌ MailApp: ' + e) }
+
+  try { console.log('✅ CalendarApp: ' + CalendarApp.getDefaultCalendar().getName()) }
+  catch (e) { console.error('❌ CalendarApp: ' + e) }
+
+  try {
+    UrlFetchApp.fetch('https://www.google.com', { method: 'get', muteHttpExceptions: true })
+    console.log('✅ UrlFetchApp')
+  } catch (e) { console.error('❌ UrlFetchApp: ' + e) }
+
+  try { console.log('✅ ScriptApp (トリガー数: ' + ScriptApp.getProjectTriggers().length + ')') }
+  catch (e) { console.error('❌ ScriptApp: ' + e) }
+
+  try { PropertiesService.getScriptProperties().getProperties(); console.log('✅ PropertiesService') }
+  catch (e) { console.error('❌ PropertiesService: ' + e) }
+
+  // --- ヘッダー行の確認・追加 ---
+  var MEMBERS_HEADERS = [
+    'id', 'name', 'email', 'role', 'notify_new_task', 'display_name',
+    'avatar_url', 'avatar_color', 'avatar_initials',
+    'will_tags', 'judgment_tags',
+    'reports_to_id', 'mentor_id', 'joined_at', 'unavailable_dates', 'project_ids',
+    'years_of_experience', 'has_management_experience', 'desired_areas',
+    'career_history_json', 'qualifications_json', 'evaluation_history_json',
+    'transfer_history_json', 'skill_levels_json', 'competencies_json',
+    'career_aspiration', 'desired_future_role', 'career_plan',
+    'training_history_json', 'development_plan_json', 'one_on_ones_json',
+  ]
+  var PROJECTS_HEADERS = [
+    'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived',
+  ]
+  var TASKS_HEADERS = [
+    'id', 'project_id', 'title', 'description', 'status', 'assign_type',
+    'assignee_id', 'creator_id', 'created_at', 'start_date', 'due_date', 'due_time',
+    'visibility', 'department', 'category', 'skills', 'difficulty', 'priority',
+    'last_activity', 'original_input_id', 'approval_status', 'estimated_hours',
+    'importance', 'reviewer_id', 'depends_on_ids',
+    'progress_note', 'progress_history_json',
+    'deliverables_json', 'history_json', 'comments_json',
+    'retrospective_json', 'schedule_json', 'form_json',
+    'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
+  ]
+  var SETTINGS_HEADERS = ['key', 'value']
+
+  ensureSheetHeaders(ss, SHEET_MEMBERS,  MEMBERS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
+
+  console.log('🚀 setupOrbit 完了')
+}
+
+// シートが存在しなければ作成し、不足しているヘッダー列を末尾に追加する。
+// 既存のデータ行や既存の列は一切変更しない。
+function ensureSheetHeaders(ss, sheetName, requiredHeaders) {
+  var sheet = ss.getSheetByName(sheetName)
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName)
+    sheet.appendRow(requiredHeaders)
+    console.log('📄 シート作成: ' + sheetName + ' (' + requiredHeaders.length + ' 列)')
+    return
+  }
+
+  var lastCol = sheet.getLastColumn()
+  var existing = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim() })
+    : []
+
+  var missing = requiredHeaders.filter(function (h) { return existing.indexOf(h) === -1 })
+  if (missing.length === 0) {
+    console.log('✅ ' + sheetName + ': ヘッダー問題なし (' + existing.length + ' 列)')
+    return
+  }
+
+  // 不足列を1行目の末尾に追加（既存データ行は空欄のままで問題ない）
+  var startCol = lastCol + 1
+  sheet.getRange(1, startCol, 1, missing.length).setValues([missing])
+  console.log('➕ ' + sheetName + ': ' + missing.length + ' 列追加 — ' + missing.join(', '))
+}
