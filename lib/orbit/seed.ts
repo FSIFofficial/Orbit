@@ -1,0 +1,501 @@
+import type {
+  Member,
+  Project,
+  Task,
+  ParsedTask,
+  Difficulty,
+  Department,
+  Priority,
+  TaskInput,
+} from './types'
+
+export const PROJECTS: Project[] = [
+  {
+    id: 'p-cosmo-base',
+    name: 'Cosmo Base',
+    description: '宇宙・科学コミュニティの企画運営。',
+  },
+  {
+    id: 'p-cosmo-media',
+    name: 'Cosmo Base Media',
+    description: '宇宙ニュース・記事メディアの制作。',
+  },
+  {
+    id: 'p-event',
+    name: 'イベント事業',
+    description: 'リアル／オンラインイベントの企画・運営・渉外。',
+  },
+  {
+    id: 'p-orbit',
+    name: 'Orbit',
+    description: '組織運営プロダクト Orbit 自体の開発。',
+  },
+  {
+    id: 'p-quiz',
+    name: '毎日宇宙クイズ',
+    description: '毎日配信する宇宙クイズコンテンツの制作。',
+  },
+]
+
+export const MEMBERS: Member[] = [
+  {
+    id: 'm-manabe',
+    name: '眞鍋 和士',
+    affiliation: 'Orbit',
+    role: '代表',
+    avatarColor: '#6366f1',
+    initials: 'MK',
+    will: ['プロダクト戦略を磨きたい', '組織づくりに関わりたい'],
+    judgment: ['リーダー経験', 'プロダクト設計', 'ファシリテーション'],
+    facts: [
+      { label: 'プロジェクト統括', count: 8 },
+      { label: '要件定義', count: 6 },
+      { label: 'イベント運営', count: 4 },
+    ],
+    skills: ['プロダクト設計', 'リーダーシップ', '要件定義', 'ファシリテーション'],
+  },
+  {
+    id: 'm-sato',
+    name: '佐藤 美咲',
+    affiliation: 'Cosmo Base Media',
+    role: '班長',
+    // 班長 is a project-scoped admin (design doc §3) — she only manages
+    // Cosmo Base Media's tasks/projects in the Admin screens, unlike 代表
+    // (see store.tsx's isFullAdmin)
+    projectIds: ['p-cosmo-media'],
+    avatarColor: '#db2777',
+    initials: 'SM',
+    will: ['UI/UXをやりたい', '広報に興味がある', 'デザイン経験を増やしたい'],
+    judgment: ['Canva', 'リサーチ', 'コミュニケーション'],
+    facts: [
+      { label: 'イベント運営', count: 5 },
+      { label: 'SNS制作', count: 12 },
+      { label: 'UI設計', count: 3 },
+    ],
+    skills: ['Canva', 'デザイン', '広報', 'SNS', 'UI/UX'],
+  },
+  {
+    id: 'm-suzuki',
+    name: '鈴木 健太',
+    affiliation: 'Cosmo Base Media',
+    role: '一般',
+    avatarColor: '#059669',
+    initials: 'SK',
+    will: ['記事の執筆力を高めたい', 'デザインも学びたい'],
+    judgment: ['ライティング', 'Design', 'リサーチ'],
+    facts: [
+      { label: '記事執筆', count: 18 },
+      { label: '校閲', count: 7 },
+      { label: 'デザイン', count: 2 },
+    ],
+    skills: ['デザイン', 'ライティング', 'リサーチ', '校閲'],
+  },
+  {
+    id: 'm-takahashi',
+    name: '高橋 彩',
+    affiliation: 'イベント事業',
+    role: '一般',
+    avatarColor: '#d97706',
+    initials: 'TA',
+    will: ['イベント企画を極めたい', '渉外を経験したい'],
+    judgment: ['イベント運営', 'コミュニケーション', '調整力'],
+    facts: [
+      { label: 'イベント運営', count: 9 },
+      { label: '渉外', count: 6 },
+    ],
+    skills: ['イベント運営', 'コミュニケーション', 'メール', 'リサーチ'],
+  },
+  {
+    id: 'm-yamada',
+    name: '山田 悠斗',
+    affiliation: 'Orbit',
+    role: '一般',
+    avatarColor: '#0ea5e9',
+    initials: 'YY',
+    will: ['フロントエンド開発を伸ばしたい', 'プロダクトづくりに関わりたい'],
+    judgment: ['フロントエンド', '実装', 'UI設計'],
+    facts: [
+      { label: 'UI設計', count: 6 },
+      { label: '実装', count: 14 },
+    ],
+    skills: ['UI/UX', 'デザイン', '実装', 'フロントエンド'],
+  },
+  {
+    id: 'm-nakamura',
+    name: '中村 葵',
+    affiliation: 'Cosmo Base',
+    role: '一般',
+    avatarColor: '#8b5cf6',
+    initials: 'NA',
+    will: ['SNS運用を伸ばしたい', 'コンテンツ企画をしたい'],
+    judgment: ['SNS', '企画', 'コミュニケーション'],
+    facts: [
+      { label: 'SNS制作', count: 10 },
+      { label: 'コンテンツ企画', count: 5 },
+    ],
+    skills: ['SNS', '広報', '企画', 'コミュニケーション'],
+  },
+]
+
+// helper for relative dates so demo always shows some overdue / recent
+function daysFromNow(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+// relative datetime (ISO) for progress / provenance timestamps
+function hoursAgo(h: number): string {
+  const d = new Date()
+  d.setHours(d.getHours() - h)
+  return d.toISOString()
+}
+
+const prog = (byId: string, text: string, h: number) => ({
+  id: `pg-${Math.random().toString(36).slice(2, 9)}`,
+  text,
+  at: hoursAgo(h),
+  byId,
+})
+
+export const SEED_TASKS: Task[] = [
+  {
+    id: 't-poster',
+    name: 'イベントポスター制作',
+    description:
+      '9/4のイベントに向けたポスターを制作する。Canvaを使える人に依頼したい。A2サイズ、印刷用データまで含む。',
+    projectId: 'p-event',
+    department: 'デザイン',
+    assigneeIds: ['m-sato'],
+    deadline: '2026-09-04',
+    category: 'デザイン',
+    skills: ['Canva', 'デザイン', '広報'],
+    difficulty: '少し経験必要',
+    priority: '高',
+    status: 'progress',
+    lastActivity: daysFromNow(-1),
+    originalInputId: 'in-event',
+    createdById: 'm-manabe',
+    createdAt: hoursAgo(30),
+    progressHistory: [
+      prog('m-sato', 'ポスター初稿まで完成。写真素材の差し替えが残っている。', 4),
+      prog('m-sato', 'デザイン構成を決定。配色をブランドカラーに統一。', 26),
+    ],
+    progress: 'ポスター初稿まで完成。写真素材の差し替えが残っている。',
+  },
+  {
+    id: 't-speaker',
+    name: '登壇企業への連絡',
+    description: '登壇予定企業へ当日の流れと必要情報を連絡する。',
+    projectId: 'p-event',
+    department: '渉外',
+    assigneeIds: ['m-takahashi'],
+    deadline: daysFromNow(-1),
+    category: '渉外',
+    skills: ['メール', 'コミュニケーション'],
+    difficulty: '新人歓迎',
+    priority: '高',
+    status: 'progress',
+    lastActivity: daysFromNow(-3),
+    originalInputId: 'in-event',
+    createdById: 'm-manabe',
+    createdAt: hoursAgo(30),
+    progressHistory: [
+      prog('m-takahashi', '3社中2社へ連絡済み。残り1社の返信待ち。', 72),
+    ],
+    progress: '3社中2社へ連絡済み。残り1社の返信待ち。',
+  },
+  {
+    id: 't-media-ui',
+    name: 'Cosmo Base Media トップページUI改善',
+    description: 'メディアトップの回遊率を上げるためUIを改善する。',
+    projectId: 'p-cosmo-media',
+    department: '開発',
+    assigneeIds: ['m-yamada'],
+    deadline: daysFromNow(10),
+    category: 'デザイン',
+    skills: ['UI/UX', 'デザイン', '実装'],
+    difficulty: '経験者向け',
+    priority: '中',
+    status: 'progress',
+    lastActivity: daysFromNow(-2),
+    progressHistory: [prog('m-yamada', '記事カードのレイアウトを試作中。', 48)],
+    progress: '記事カードのレイアウトを試作中。',
+  },
+  {
+    id: 't-news',
+    name: '宇宙ニュース記事執筆',
+    description: '今週の宇宙関連ニュースをまとめた記事を執筆する。',
+    projectId: 'p-cosmo-media',
+    department: '広報',
+    assigneeIds: ['m-suzuki'],
+    deadline: daysFromNow(3),
+    category: 'ライティング',
+    skills: ['ライティング', 'リサーチ'],
+    difficulty: '少し経験必要',
+    priority: '中',
+    status: 'review',
+    lastActivity: daysFromNow(-1),
+    originalInputId: 'in-media',
+    createdById: 'm-suzuki',
+    createdAt: hoursAgo(50),
+    progressHistory: [prog('m-suzuki', '本文執筆完了。編集の確認を依頼中。', 20)],
+    progress: '本文執筆完了。編集の確認を依頼中。',
+  },
+  {
+    id: 't-quiz',
+    name: '毎日宇宙クイズ作成',
+    description: '来週分の宇宙クイズを7問作成する。',
+    projectId: 'p-quiz',
+    department: 'リサーチ',
+    assigneeIds: ['m-nakamura'],
+    deadline: daysFromNow(2),
+    category: '企画',
+    skills: ['企画', 'リサーチ'],
+    difficulty: '新人歓迎',
+    priority: '低',
+    status: 'progress',
+    lastActivity: daysFromNow(0),
+    originalInputId: 'in-quiz',
+    createdById: 'm-nakamura',
+    createdAt: hoursAgo(28),
+    progressHistory: [prog('m-nakamura', '7問中4問作成済み。', 6)],
+    progress: '7問中4問作成済み。',
+  },
+  {
+    id: 't-supplies',
+    name: 'イベント備品確認',
+    description: '当日の備品リストを作成し、不足分を購入する。',
+    projectId: 'p-event',
+    department: 'イベント',
+    assigneeIds: ['m-takahashi'],
+    deadline: daysFromNow(5),
+    category: 'イベント',
+    skills: ['イベント運営', 'リサーチ'],
+    difficulty: '新人歓迎',
+    priority: '中',
+    status: 'todo',
+    lastActivity: daysFromNow(-1),
+    originalInputId: 'in-event',
+    createdById: 'm-manabe',
+    createdAt: hoursAgo(30),
+    progressHistory: [],
+  },
+  {
+    id: 't-sns',
+    name: 'SNS投稿制作',
+    description: 'Cosmo Base の告知投稿を作成する。',
+    projectId: 'p-cosmo-base',
+    department: '広報',
+    assigneeIds: [],
+    deadline: daysFromNow(4),
+    category: '広報',
+    skills: ['SNS', 'デザイン', '広報'],
+    difficulty: '少し経験必要',
+    priority: '中',
+    status: 'todo',
+    lastActivity: daysFromNow(-1),
+    originalInputId: 'in-quiz',
+    createdById: 'm-nakamura',
+    createdAt: hoursAgo(28),
+    progressHistory: [],
+  },
+  {
+    id: 't-orbit-req',
+    name: 'Orbit要件整理',
+    description: '次期リリースの要件を整理しドキュメント化する。',
+    projectId: 'p-orbit',
+    department: '開発',
+    assigneeIds: ['m-manabe'],
+    deadline: daysFromNow(7),
+    category: '企画',
+    skills: ['要件定義', 'プロダクト設計'],
+    difficulty: '経験者向け',
+    priority: '高',
+    status: 'progress',
+    lastActivity: daysFromNow(-1),
+    progressHistory: [prog('m-manabe', 'ユースケースの洗い出しが完了。', 24)],
+    progress: 'ユースケースの洗い出しが完了。',
+  },
+  {
+    id: 't-layout',
+    name: 'イベント会場レイアウト作成',
+    description: '会場の座席・ブース配置図を作成する。',
+    projectId: 'p-event',
+    department: 'イベント',
+    assigneeIds: [],
+    deadline: daysFromNow(6),
+    category: 'イベント',
+    skills: ['イベント運営', 'デザイン'],
+    difficulty: '少し経験必要',
+    priority: '低',
+    status: 'todo',
+    lastActivity: daysFromNow(-2),
+    progressHistory: [],
+  },
+  {
+    id: 't-partner',
+    name: 'パートナー企業リサーチ',
+    description: '協業候補となるパートナー企業を調査しリスト化する。',
+    projectId: 'p-cosmo-base',
+    department: '渉外',
+    assigneeIds: ['m-nakamura'],
+    deadline: daysFromNow(9),
+    category: '渉外',
+    skills: ['リサーチ', 'コミュニケーション'],
+    difficulty: '新人歓迎',
+    priority: '低',
+    status: 'todo',
+    lastActivity: daysFromNow(-1),
+    progressHistory: [],
+  },
+  {
+    id: 't-proof',
+    name: 'メディア記事校閲',
+    description: '公開前記事の校閲・ファクトチェックを行う。',
+    projectId: 'p-cosmo-media',
+    department: '広報',
+    assigneeIds: ['m-suzuki'],
+    deadline: daysFromNow(1),
+    category: 'ライティング',
+    skills: ['校閲', 'ライティング'],
+    difficulty: '少し経験必要',
+    priority: '中',
+    status: 'fix',
+    lastActivity: daysFromNow(-7),
+    originalInputId: 'in-media',
+    createdById: 'm-suzuki',
+    createdAt: hoursAgo(50),
+    progressHistory: [prog('m-suzuki', '初回校閲済み。指摘箇所を修正中。', 168)],
+    progress: '初回校閲済み。指摘箇所を修正中。',
+  },
+  {
+    id: 't-form',
+    name: 'アンケートフォーム作成',
+    description: 'イベント来場者向けのアンケートフォームを作成する。',
+    projectId: 'p-event',
+    department: 'イベント',
+    assigneeIds: ['m-sato'],
+    deadline: daysFromNow(-2),
+    category: 'イベント',
+    skills: ['リサーチ', '企画'],
+    difficulty: '新人歓迎',
+    priority: '低',
+    status: 'done',
+    completedDate: daysFromNow(-3),
+    lastActivity: daysFromNow(-3),
+    progressHistory: [],
+  },
+  {
+    id: 't-report',
+    name: '前回イベント振り返りレポート',
+    description: '前回イベントの結果と学びをレポートにまとめる。',
+    projectId: 'p-event',
+    department: '運営',
+    assigneeIds: ['m-takahashi'],
+    deadline: daysFromNow(-10),
+    category: '企画',
+    skills: ['ライティング', 'リサーチ'],
+    difficulty: '少し経験必要',
+    priority: '低',
+    status: 'done',
+    completedDate: daysFromNow(-8),
+    lastActivity: daysFromNow(-8),
+    progressHistory: [],
+  },
+  {
+    id: 't-brand',
+    name: 'Cosmo Base ロゴ調整',
+    description: 'ブランドガイドに沿ってロゴのバリエーションを整える。',
+    projectId: 'p-cosmo-base',
+    department: 'デザイン',
+    assigneeIds: ['m-sato'],
+    deadline: daysFromNow(-14),
+    category: 'デザイン',
+    skills: ['デザイン', 'Canva'],
+    difficulty: '少し経験必要',
+    priority: '中',
+    status: 'done',
+    completedDate: daysFromNow(-12),
+    lastActivity: daysFromNow(-12),
+    progressHistory: [],
+  },
+]
+
+// Seed input history: natural-language inputs that generated the tasks above.
+export const SEED_INPUTS: TaskInput[] = [
+  {
+    id: 'in-event',
+    text: '9月4日までにイベント準備を進める。ポスターを作成して、出展企業へ案内メールを送り、必要な備品も確認して購入する。',
+    createdById: 'm-manabe',
+    createdAt: hoursAgo(30),
+    generatedTaskIds: ['t-poster', 't-speaker', 't-supplies'],
+  },
+  {
+    id: 'in-media',
+    text: '今週の宇宙ニュース記事を執筆して、公開前の記事の校閲も行う。',
+    createdById: 'm-suzuki',
+    createdAt: hoursAgo(50),
+    generatedTaskIds: ['t-news', 't-proof'],
+  },
+  {
+    id: 'in-quiz',
+    text: '来週分の毎日宇宙クイズを作成して、Cosmo BaseのSNS告知投稿も用意する。',
+    createdById: 'm-nakamura',
+    createdAt: hoursAgo(28),
+    generatedTaskIds: ['t-quiz', 't-sns'],
+  },
+]
+
+// ---- Demo inputs & parsing ------------------------------------------------
+
+// Original 4-task demo string
+export const DEMO_INPUT = `9月4日までにイベント用のポスターを作成する。Canvaを使える人にお願いしたい。
+出展企業へイベント概要のメールを送る。
+イベント当日の備品リストを作成して不足しているものを購入する。
+Cosmo BaseのSNS告知投稿を作成する。`
+
+// Improvement demo (single sentence → 3 tasks) — item 25
+export const DEMO_INPUT_2 = `9月4日までにイベント準備を進める。ポスターを作成して、出展企業へ案内メールを送り、必要な備品も確認して購入する。`
+
+function mkParsed(
+  name: string,
+  projectId: string,
+  department: Department,
+  deadline: string | null,
+  category: string,
+  skills: string[],
+  difficulty: Difficulty,
+  priority: Priority,
+): ParsedTask {
+  return {
+    id: `parsed-${Math.random().toString(36).slice(2, 9)}`,
+    name,
+    projectId,
+    department,
+    deadline,
+    category,
+    skills,
+    difficulty,
+    priority,
+    assigneeIds: [],
+    approved: true,
+  }
+}
+
+export function buildDemoParse(): ParsedTask[] {
+  return [
+    mkParsed('イベントポスター制作', 'p-event', 'デザイン', '2026-09-04', 'デザイン', ['Canva', 'デザイン', '広報'], '少し経験必要', '高'),
+    mkParsed('出展企業への案内メール送付', 'p-event', '渉外', '2026-09-02', '渉外', ['メール', 'コミュニケーション'], '新人歓迎', '高'),
+    mkParsed('イベント備品リスト作成・購入', 'p-event', 'イベント', '2026-09-03', 'イベント', ['イベント運営', 'リサーチ'], '新人歓迎', '中'),
+    mkParsed('Cosmo Base SNS告知投稿制作', 'p-cosmo-base', '広報', null, '広報', ['SNS', 'デザイン', '広報'], '少し経験必要', '中'),
+  ]
+}
+
+export function buildDemoParse2(): ParsedTask[] {
+  return [
+    mkParsed('イベントポスター制作', 'p-event', 'デザイン', '2026-09-04', 'デザイン', ['Canva', 'デザイン', '広報'], '少し経験必要', '高'),
+    mkParsed('出展企業への案内メール送付', 'p-event', '渉外', '2026-09-02', '渉外', ['メール', 'コミュニケーション'], '新人歓迎', '高'),
+    mkParsed('イベント備品確認・購入', 'p-event', 'イベント', '2026-09-03', 'イベント', ['イベント運営', 'リサーチ'], '新人歓迎', '中'),
+  ]
+}

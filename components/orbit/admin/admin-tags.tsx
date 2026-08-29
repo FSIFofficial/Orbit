@@ -1,0 +1,415 @@
+'use client'
+
+import { useState } from 'react'
+import { useOrbit } from '@/lib/orbit/store'
+import { isRemoteConfigured } from '@/lib/orbit/remote'
+import { useToast } from '@/components/orbit/toast'
+import { Tag, SectionLabel } from '@/components/orbit/primitives'
+import { Button } from '@/components/ui/button'
+import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
+import type { AdminSection } from '@/lib/orbit/types'
+import { Plus, Check } from 'lucide-react'
+
+// dashboard always stays visible (it's the redirect target for a
+// disallowed section — see store.tsx's visibleAdminSections), so there's
+// nothing useful to toggle for it
+const TOGGLEABLE_SECTIONS = ADMIN_SECTIONS.filter((s) => s.key !== 'dashboard')
+
+export function AdminTags() {
+  const {
+    skillOptions,
+    categoryOptions,
+    addSkillOption,
+    removeSkillOption,
+    addCategoryOption,
+    removeCategoryOption,
+    roleLevels,
+    addRoleLevel,
+    removeRoleLevel,
+    rolePermissions,
+    setRolePermissions,
+    jobRequirements,
+    setJobRequirements,
+    skillFieldOptions,
+    addSkillFieldOption,
+    removeSkillFieldOption,
+    skillFieldSkills,
+    setSkillFieldSkills,
+    skillFieldThreshold,
+    setSkillFieldThreshold,
+    orgNotificationEmails,
+    addOrgNotificationEmail,
+    removeOrgNotificationEmail,
+    setDiscordWebhookUrl,
+    isFullAdmin,
+  } = useOrbit()
+  const toast = useToast()
+  const [webhookDraft, setWebhookDraft] = useState('')
+  const [orgEmailDraft, setOrgEmailDraft] = useState('')
+  // every role level except the bottom (first) one is full admin with
+  // unrestricted section access — only the bottom tier's visibility is
+  // configurable (see store.tsx's isFullAdminMember/visibleAdminSections)
+  const nonTopLevels = roleLevels.length <= 1 ? [] : roleLevels.slice(0, 1)
+  // item 17: ポジション要件 — every role, including 一般, has a position
+  const jobTypes = [BASE_ROLE, ...roleLevels]
+
+  return (
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <h1 className="text-xl font-semibold tracking-tight">Tags</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        INPUT画面の「要求スキル」「カテゴリ」や、Membersの「役職」で選べる選択肢です。ここで消すまで残り続けます。
+      </p>
+
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <TagGroup
+          title="要求スキル"
+          options={skillOptions}
+          onAdd={addSkillOption}
+          onRemove={removeSkillOption}
+        />
+        <div>
+          <TagGroup
+            title="要求分野"
+            options={skillFieldOptions}
+            onAdd={addSkillFieldOption}
+            onRemove={removeSkillFieldOption}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            要求スキルの上位グルーピングです（例：デザイン、営業、AI活用）。メンバーに直接
+            割り当てるのは要求スキルのみで、分野は下の「要求分野の構成」で紐づけたスキルの
+            保有率から自動的に判定されます。
+          </p>
+        </div>
+        <TagGroup
+          title="カテゴリ"
+          options={categoryOptions}
+          onAdd={addCategoryOption}
+          onRemove={removeCategoryOption}
+        />
+        <div>
+          <TagGroup
+            title="権限レベル（一般より上）"
+            options={roleLevels}
+            onAdd={addRoleLevel}
+            onRemove={removeRoleLevel}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            すべてのメンバーの初期値は「一般」です。ここで追加したレベルはAdmin →
+            Membersの役職選択に使え、レベルを削除するとそれを持っていたメンバーは
+            自動的に「一般」に戻ります。「一般」以外のレベルはすべて管理者画面へのアクセス権を持ちます。
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>要求分野の構成</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          各分野に属する要求スキルを設定します。メンバーがその分野のスキルをしきい値以上
+          保有すると、分野を「取得」したものとして個人ページの人材育成タブに表示されます。
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="skill-field-threshold">
+            取得のしきい値
+          </label>
+          <input
+            id="skill-field-threshold"
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            value={Math.round(skillFieldThreshold * 100)}
+            onChange={(e) => setSkillFieldThreshold(Number(e.target.value) / 100)}
+            className="h-8 w-20 rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
+          />
+          <span className="text-xs text-muted-foreground">%（数字は仮の初期値です）</span>
+        </div>
+        {skillFieldOptions.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            先に「要求分野」の選択肢を追加してください。
+          </p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-4">
+            {skillFieldOptions.map((field) => (
+              <JobRequirementsRow
+                key={field}
+                role={field}
+                skills={skillFieldSkills[field] ?? []}
+                options={skillOptions}
+                onChange={(next) => setSkillFieldSkills(field, next)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>ポジション要件</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          役職ごとに求めるスキルを設定します。個人ページの人材育成タブで、本人の現在のスキルとの比較が表示されます。
+        </p>
+        <div className="mt-4 flex flex-col gap-4">
+          {jobTypes.map((role) => (
+            <JobRequirementsRow
+              key={role}
+              role={role}
+              skills={jobRequirements[role] ?? []}
+              options={skillOptions}
+              onChange={(next) => setJobRequirements(role, next)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {nonTopLevels.length > 0 && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-4">
+          <SectionLabel>権限レベルごとの表示範囲</SectionLabel>
+          <p className="mt-1 text-xs text-muted-foreground">
+            「{roleLevels[0]}」以外のレベルは常にすべてのセクションにアクセスできます。
+            「{roleLevels[0]}」は、管理者画面でどのセクションを見せるか個別に選べます。未設定の場合は
+            Members・Tags以外の全セクションが既定で表示されます。
+          </p>
+          <div className="mt-4 flex flex-col gap-4">
+            {nonTopLevels.map((role) => (
+              <RolePermissionRow
+                key={role}
+                role={role}
+                sections={rolePermissions[role] ?? DEFAULT_NON_TOP_SECTIONS}
+                onChange={(next) => setRolePermissions(role, next)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isFullAdmin && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-4">
+          <SectionLabel>団体メール</SectionLabel>
+          <p className="mt-1 text-xs text-muted-foreground">
+            登録すると、承認依頼・確認待ちなどの管理者向け通知が、個々のメンバーの
+            「新規タスク通知」設定に関わらず常にここに追加で届きます。団体で共有している
+            メーリングリストやグループアドレスの登録を想定しています（幹部・事業責任者が管理）。
+          </p>
+          {!isRemoteConfigured && (
+            <p className="mt-1 text-xs text-warning">
+              スプレッドシート連携（GASのWeb App URL）が未設定のため、ここで保存しても
+              どこにも反映されません。
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {orgNotificationEmails.map((email) => (
+              <Tag key={email} onRemove={() => removeOrgNotificationEmail(email)}>
+                {email}
+              </Tag>
+            ))}
+            {orgNotificationEmails.length === 0 && (
+              <p className="text-sm text-muted-foreground">まだ登録されていません。</p>
+            )}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              value={orgEmailDraft}
+              onChange={(e) => setOrgEmailDraft(e.target.value)}
+              placeholder="info@example.com"
+              type="email"
+              className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            />
+            <Button
+              className="h-9 shrink-0"
+              disabled={!orgEmailDraft.trim()}
+              onClick={() => {
+                addOrgNotificationEmail(orgEmailDraft.trim())
+                setOrgEmailDraft('')
+              }}
+            >
+              <Plus className="size-4" />
+              追加
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>Discord Webhook 連携</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          設定すると、タスクが確認待ちになったとき・期限超過タスクの日次サマリーが
+          指定したDiscordチャンネルに通知されます。Discordのチャンネル設定 → 連携サービス
+          → ウェブフックで発行したURLを貼り付けて保存してください。
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          このURLは書き込み専用です（保存後、画面上に表示されることはありません）。
+          流出すると誰でもそのDiscordチャンネルに投稿できてしまうため、公開される
+          スプレッドシートには保存せず、Apps Script側だけが読める場所に保管しています
+          （詳しくは gas/README.md を参照）。
+        </p>
+        {!isRemoteConfigured && (
+          <p className="mt-1 text-xs text-warning">
+            スプレッドシート連携（GASのWeb App URL）が未設定のため、ここで保存しても
+            どこにも反映されません。
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            value={webhookDraft}
+            onChange={(e) => setWebhookDraft(e.target.value)}
+            placeholder="https://discord.com/api/webhooks/..."
+            className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+          />
+          <Button
+            className="h-9 shrink-0"
+            disabled={!webhookDraft.trim() || !isRemoteConfigured}
+            onClick={() => {
+              setDiscordWebhookUrl(webhookDraft.trim())
+              setWebhookDraft('')
+              toast('Discord Webhook URLを保存しました')
+            }}
+          >
+            保存
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RolePermissionRow({
+  role,
+  sections,
+  onChange,
+}: {
+  role: string
+  sections: AdminSection[]
+  onChange: (next: AdminSection[]) => void
+}) {
+  const toggle = (key: AdminSection) => {
+    onChange(sections.includes(key) ? sections.filter((s) => s !== key) : [...sections, key])
+  }
+  return (
+    <div>
+      <div className="text-sm font-medium">{role}</div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {TOGGLEABLE_SECTIONS.map((s) => {
+          const checked = sections.includes(s.key)
+          return (
+            <button
+              key={s.key}
+              onClick={() => toggle(s.key)}
+              className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                checked
+                  ? 'border-primary/30 bg-primary-muted text-accent-foreground'
+                  : 'border-border text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              {checked && <Check className="size-3" strokeWidth={3} />}
+              {s.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function JobRequirementsRow({
+  role,
+  skills,
+  options,
+  onChange,
+}: {
+  role: string
+  skills: string[]
+  options: string[]
+  onChange: (next: string[]) => void
+}) {
+  const toggle = (skill: string) => {
+    onChange(skills.includes(skill) ? skills.filter((s) => s !== skill) : [...skills, skill])
+  }
+  return (
+    <div>
+      <div className="text-sm font-medium">{role}</div>
+      {options.length === 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          先に「要求スキル」の選択肢を追加してください。
+        </p>
+      ) : (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {options.map((s) => {
+            const checked = skills.includes(s)
+            return (
+              <button
+                key={s}
+                onClick={() => toggle(s)}
+                className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                  checked
+                    ? 'border-primary/30 bg-primary-muted text-accent-foreground'
+                    : 'border-border text-muted-foreground hover:bg-secondary'
+                }`}
+              >
+                {checked && <Check className="size-3" strokeWidth={3} />}
+                {s}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TagGroup({
+  title,
+  options,
+  onAdd,
+  onRemove,
+}: {
+  title: string
+  options: string[]
+  onAdd: (name: string) => void
+  onRemove: (name: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+
+  const submit = () => {
+    const v = draft.trim()
+    if (v) onAdd(v)
+    setDraft('')
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <SectionLabel>{title}</SectionLabel>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {options.length === 0 && (
+          <span className="text-sm text-muted-foreground">選択肢がありません</span>
+        )}
+        {options.map((o) => (
+          <Tag key={o} onRemove={() => onRemove(o)}>
+            {o}
+          </Tag>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-1.5">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder="新しい選択肢を追加"
+          className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim()}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
+          aria-label="追加"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
