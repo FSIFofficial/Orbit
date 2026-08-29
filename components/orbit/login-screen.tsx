@@ -6,22 +6,51 @@ import { useOrbit } from '@/lib/orbit/store'
 import { Modal } from './modal'
 import { Avatar, OrbitMark } from './primitives'
 import { ChevronRight, TriangleAlert } from 'lucide-react'
+import {
+  isGoogleOAuthConfigured,
+  requestGoogleLoginToken,
+  fetchGoogleUserInfo,
+} from '@/lib/orbit/google-sheet-sync'
 
 export function LoginScreen() {
   const { login, members } = useOrbit()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
 
   const demoUsers = members
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     setError(false)
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
+    setLoginError(null)
+
+    if (!isGoogleOAuthConfigured()) {
       setPickerOpen(true)
-    }, 700)
+      return
+    }
+
+    setLoading(true)
+    try {
+      const token = await requestGoogleLoginToken()
+      const userInfo = await fetchGoogleUserInfo(token)
+      const email = userInfo.email.toLowerCase()
+      const matched = members.find((m) =>
+        (m.email ?? '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .includes(email),
+      )
+      if (matched) {
+        login(matched.id)
+      } else {
+        setLoginError(`${userInfo.email} はOrbitに登録されていません。`)
+      }
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -68,8 +97,24 @@ export function LoginScreen() {
             </div>
           )}
 
+          {loginError && (
+            <div className="mt-3 text-xs text-destructive">
+              <div className="flex items-center justify-center gap-1.5">
+                <TriangleAlert className="size-3.5 shrink-0" />
+                {loginError}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setLoginError(null); setPickerOpen(true) }}
+                className="mt-1.5 w-full text-center text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                デモユーザーとしてログイン
+              </button>
+            </div>
+          )}
+
           <p className="mt-4 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            MVP Demo
+            {isGoogleOAuthConfigured() ? 'Powered by Google' : 'MVP Demo'}
           </p>
         </div>
       </div>
