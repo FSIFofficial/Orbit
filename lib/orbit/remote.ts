@@ -328,7 +328,20 @@ export async function fetchRemoteData(): Promise<RemoteData> {
   ])
   const projects = projectRows.map(mapProjectRow)
   const projectsById = new Map(projects.map((p) => [p.id, p]))
-  const members = memberRows.map((r) => mapMemberRow(r, projectsById))
+  const members = memberRows.map((r) => {
+    const m = mapMemberRow(r, projectsById)
+    // Apply locally-cached avatar URL when the published CSV is still stale
+    // (Google Sheets can lag several minutes after a GAS write). Once the CSV
+    // catches up and returns the URL itself, the cached value is redundant but
+    // harmless, and the CSV value wins (overrides the local one) once it's set.
+    if (!m.avatarUrl) {
+      try {
+        const cached = localStorage.getItem(`orbit-avatar-url-${m.id}`)
+        if (cached) m.avatarUrl = cached
+      } catch {}
+    }
+    return m
+  })
   const tasks = taskRows.map(mapTaskRow)
   return { members, projects, tasks }
 }
