@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react'
 
+
 export function Header() {
   const {
     currentUser,
@@ -44,11 +45,9 @@ export function Header() {
   const { openTask } = useTaskDrawer()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -57,9 +56,6 @@ export function Header() {
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false)
-      }
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false)
       }
     }
     document.addEventListener('mousedown', onClick)
@@ -170,82 +166,6 @@ export function Header() {
 
         {/* right */}
         <div className="flex min-w-0 items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={toggle}
-            className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            aria-label={theme === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'}
-            title={theme === 'dark' ? 'ライトモード' : 'ダークモード'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="size-[18px]" />
-            ) : (
-              <Moon className="size-[18px]" />
-            )}
-          </button>
-          <div className="relative" ref={searchRef}>
-            <button
-              type="button"
-              onClick={() => setSearchOpen((o) => !o)}
-              className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="検索"
-              aria-expanded={searchOpen}
-              title="タスクを検索"
-            >
-              <Search className="size-[18px]" />
-            </button>
-            {searchOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-80 overflow-hidden rounded-xl border border-border bg-popover shadow-lg animate-in fade-in slide-in-from-top-1">
-                <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
-                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="タスク名・コメント・成果物・振り返りを検索"
-                    className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                  />
-                  {query && (
-                    <button onClick={() => setQuery('')} aria-label="クリア">
-                      <X className="size-3.5 text-muted-foreground" />
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-96 overflow-y-auto orbit-scroll">
-                  {!query.trim() ? (
-                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                      キーワードを入力してください
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                      該当するタスクがありません
-                    </div>
-                  ) : (
-                    searchResults.map(({ task: t, snippet }) => (
-                      <button
-                        key={t.id}
-                        onClick={() => {
-                          setSearchOpen(false)
-                          openTask(t.id)
-                        }}
-                        className="flex w-full flex-col items-start gap-0.5 border-b border-border px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-secondary"
-                      >
-                        <span className="flex items-center gap-1.5 text-sm font-medium">
-                          {t.name}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {getProject(t.projectId)?.name}
-                          </span>
-                        </span>
-                        {snippet !== t.name && (
-                          <span className="line-clamp-1 text-xs text-muted-foreground">{snippet}</span>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -332,7 +252,57 @@ export function Header() {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-56 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
+              <div className="absolute right-0 top-full mt-1.5 w-72 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
+                {/* Search */}
+                <div className="px-1 pb-1">
+                  <div className="flex items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5">
+                    <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="タスクを検索…"
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                    {query && (
+                      <button onClick={() => setQuery('')} aria-label="クリア">
+                        <X className="size-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                  {query.trim() && (
+                    <div className="mt-1 max-h-56 overflow-y-auto orbit-scroll rounded-lg">
+                      {searchResults.length === 0 ? (
+                        <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                          該当するタスクがありません
+                        </div>
+                      ) : (
+                        searchResults.map(({ task: t, snippet }) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setMenuOpen(false)
+                              setQuery('')
+                              openTask(t.id)
+                            }}
+                            className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-secondary"
+                          >
+                            <span className="flex items-center gap-1.5 text-sm font-medium">
+                              {t.name}
+                              <span className="text-xs font-normal text-muted-foreground">
+                                {getProject(t.projectId)?.name}
+                              </span>
+                            </span>
+                            {snippet !== t.name && (
+                              <span className="line-clamp-1 text-xs text-muted-foreground">{snippet}</span>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="my-1 h-px bg-border" />
+                {/* User info */}
                 <div className="flex items-center gap-2.5 px-2.5 py-2">
                   <Avatar member={currentUser} size={34} />
                   <div className="min-w-0">
@@ -345,6 +315,11 @@ export function Header() {
                   </div>
                 </div>
                 <div className="my-1 h-px bg-border" />
+                {/* Theme toggle */}
+                <MenuItem onClick={toggle}>
+                  {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                  {theme === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'}
+                </MenuItem>
                 <MenuItem
                   onClick={() => {
                     setMenuOpen(false)
