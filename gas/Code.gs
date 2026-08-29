@@ -1123,7 +1123,9 @@ function uploadAvatar(memberId, dataUrl, filename, folderId) {
   // Drive's own "uc?export=view" (which can trigger a virus-scan
   // interstitial) or "thumbnail?id=" (rate-limited more aggressively) URLs
   var url = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w256-h256-c'
-  updateMemberFields(memberId, { avatar_url: url })
+  console.log('uploadAvatar: memberId=' + memberId + ' url=' + url)
+  var writeResult = updateMemberFields(memberId, { avatar_url: url })
+  console.log('uploadAvatar: updateMemberFields result=' + JSON.stringify(writeResult))
   return { url: url }
 }
 
@@ -1598,4 +1600,34 @@ function ensureSheetHeaders(ss, sheetName, requiredHeaders) {
   var startCol = lastCol + 1
   sheet.getRange(1, startCol, 1, missing.length).setValues([missing])
   console.log('➕ ' + sheetName + ': ' + missing.length + ' 列追加 — ' + missing.join(', '))
+}
+
+// Membersシートの avatar_url 書き込みが正常に動くかテストする。
+// GASエディタで "debugAvatarWrite" を選び ▶ 実行 → ログで結果を確認。
+// 引数の memberId は実際のメンバーIDに変えてから実行すること。
+function debugAvatarWrite() {
+  var TEST_MEMBER_ID = '1' // ← 実際のメンバーIDに変更してください
+
+  var sheet = getSheet(SHEET_MEMBERS)
+  var headers = headerRow(sheet)
+  console.log('📋 Membersヘッダー: ' + headers.join(' | '))
+
+  var avatarCol = headers.indexOf('avatar_url')
+  console.log('avatar_url 列インデックス: ' + avatarCol + (avatarCol === -1 ? ' ❌ 列が見つかりません' : ' ✅'))
+
+  var idCol = headers.indexOf('id')
+  var lastRow = sheet.getLastRow()
+  var ids = idCol >= 0 ? sheet.getRange(2, idCol + 1, Math.max(lastRow - 1, 0), 1).getValues() : []
+  var found = false
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(TEST_MEMBER_ID)) { found = true; break }
+  }
+  console.log('メンバーID ' + TEST_MEMBER_ID + ' の行: ' + (found ? '✅ 見つかりました' : '❌ 見つかりません'))
+
+  if (avatarCol !== -1 && found) {
+    var testUrl = 'https://example.com/test-avatar.png'
+    updateMemberFields(TEST_MEMBER_ID, { avatar_url: testUrl })
+    console.log('✅ テスト書き込み完了: avatar_url = ' + testUrl)
+    console.log('スプレッドシートで avatar_url 列を確認してください。')
+  }
 }

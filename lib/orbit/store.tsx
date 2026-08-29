@@ -2523,6 +2523,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
             : m,
         ),
       )
+      try { localStorage.removeItem(`orbit-avatar-url-${memberId}`) } catch {}
       if (isRemoteConfigured) runRemote(remoteApi.updateAvatar(memberId, avatarColor, trimmedInitials))
     },
     [runRemote],
@@ -2540,6 +2541,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         .uploadAvatarImage(memberId, dataUrl, filename)
         .then(({ url }) => {
           setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, avatarUrl: url } : m)))
+          // CSV cache can lag several minutes after GAS writes the URL to the
+          // sheet — persist the URL locally so it survives page reloads until
+          // the CSV catches up.
+          try { localStorage.setItem(`orbit-avatar-url-${memberId}`, url) } catch {}
           setRemoteError(null)
         })
         .catch((err) => {
