@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useToast } from '@/components/orbit/toast'
@@ -30,7 +30,19 @@ import {
   Loader2,
   Trash2,
   FolderKanban,
+  Link2,
+  RefreshCw,
 } from 'lucide-react'
+import {
+  isGoogleOAuthConfigured,
+  requestSheetsToken,
+  extractSpreadsheetId,
+  verifySheetAccess,
+  syncTasksToSheet,
+  loadPersonalSheetId,
+  savePersonalSheetId,
+  type SyncRow,
+} from '@/lib/orbit/google-sheet-sync'
 
 type Tab = 'overview' | 'growth' | 'career' | 'calendar'
 
@@ -109,6 +121,12 @@ export function PersonDetail({ id }: { id: string }) {
   const [initialsDraft, setInitialsDraft] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [personalSheetId, setPersonalSheetId] = useState('')
+  const [sheetInput, setSheetInput] = useState('')
+  const [sheetTitle, setSheetTitle] = useState<string | null>(null)
+  const [sheetStatus, setSheetStatus] = useState<'idle' | 'verifying' | 'syncing'>('idle')
+  const [sheetError, setSheetError] = useState<string | null>(null)
+  const [sheetSyncedAt, setSheetSyncedAt] = useState<Date | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const member = getMember(id)
 
@@ -153,6 +171,79 @@ export function PersonDetail({ id }: { id: string }) {
   }
   const removeEmail = (email: string) => {
     updateEmail(member.id, emails.filter((e) => e !== email).join(','))
+  }
+
+  useEffect(() => {
+    const saved = loadPersonalSheetId(member.id)
+    setPersonalSheetId(saved)
+    setSheetInput(saved)
+  }, [member.id])
+
+  const handleSheetConnect = async () => {
+    const id = extractSpreadsheetId(sheetInput.trim())
+    if (!id) {
+      setSheetError('有効なスプレッドシートのURLまたはIDを入力してください')
+      return
+    }
+    setSheetStatus('verifying')
+    setSheetError(null)
+    try {
+      const token = await requestSheetsToken()
+      const result = await verifySheetAccess(id, token)
+      if (!result.ok) {
+        setSheetError(result.error ?? 'アクセスできませんでした')
+        setSheetStatus('idle')
+        return
+      }
+      savePersonalSheetId(member.id, id)
+      setPersonalSheetId(id)
+      setSheetTitle(result.title ?? null)
+      setSheetStatus('idle')
+      toast('スプレッドシートを連携しました')
+    } catch (e) {
+      setSheetError(e instanceof Error ? e.message : '認証に失敗しました')
+      setSheetStatus('idle')
+    }
+  }
+
+  const handleSheetSync = async () => {
+    setSheetStatus('syncing')
+    setSheetError(null)
+    try {
+      const token = await requestSheetsToken(true)
+      const rows: SyncRow[] = mine.map((t) => ({
+        taskName: t.name,
+        project: getProject(t.projectId)?.name ?? '',
+        department: member.affiliation,
+        assignees: t.assigneeIds.map((aid) => members.find((m) => m.id === aid)?.name ?? aid).join(', '),
+        status: t.status,
+        priority: t.priority,
+        difficulty: t.difficulty,
+        category: t.category,
+        skills: t.skills.join(', '),
+        startDate: t.startDate ?? '',
+        deadline: t.deadline ?? '',
+        completedDate: t.completedDate ?? '',
+        progress: String(t.progress ?? ''),
+        description: t.description ?? '',
+      }))
+      await syncTasksToSheet(personalSheetId, token, rows)
+      setSheetSyncedAt(new Date())
+      toast('スプレッドシートに同期しました')
+    } catch (e) {
+      setSheetError(e instanceof Error ? e.message : '同期に失敗しました')
+    } finally {
+      setSheetStatus('idle')
+    }
+  }
+
+  const handleSheetDisconnect = () => {
+    savePersonalSheetId(member.id, '')
+    setPersonalSheetId('')
+    setSheetInput('')
+    setSheetTitle(null)
+    setSheetError(null)
+    setSheetSyncedAt(null)
   }
 
   const mine = tasks.filter((t) => t.assigneeIds.includes(member.id))
@@ -409,6 +500,85 @@ export function PersonDetail({ id }: { id: string }) {
             <Bell className="size-3.5" />
             新規タスク通知 {member.notify ? 'ON' : 'OFF'}
           </button>
+        </div>
+      )}
+
+      {/* Personal Google Sheets sync — self only */}
+      {isSelf && isGoogleOAuthConfigured() && (
+        <div className="mt-4 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <Link2 className="size-4 text-muted-foreground" />
+            <SectionLabel>個人スプレッドシート連携</SectionLabel>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            自分のGoogle スプレッドシートにタスク一覧を同期します。シートIDは自分だけのブラウザに保存され、他の人には公開されません。
+          </p>
+
+          {personalSheetId ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-xs font-medium text-accent-foreground">
+                <Check className="size-3.5 text-primary" strokeWidth={3} />
+                {sheetTitle ?? personalSheetId}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                disabled={sheetStatus !== 'idle'}
+                onClick={handleSheetSync}
+              >
+                {sheetStatus === 'syncing' ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                {sheetStatus === 'syncing' ? '同期中…' : '今すぐ同期'}
+              </Button>
+              <button
+                type="button"
+                onClick={handleSheetDisconnect}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-3.5" />
+                連携解除
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                value={sheetInput}
+                onChange={(e) => setSheetInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                  if (e.key === 'Enter') { e.preventDefault(); handleSheetConnect() }
+                }}
+                placeholder="スプレッドシートのURLまたはID"
+                className="h-8 min-w-0 flex-1 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
+              />
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={sheetStatus !== 'idle' || !sheetInput.trim()}
+                onClick={handleSheetConnect}
+              >
+                {sheetStatus === 'verifying' ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Link2 className="size-3.5" />
+                )}
+                {sheetStatus === 'verifying' ? '確認中…' : '連携する'}
+              </Button>
+            </div>
+          )}
+
+          {sheetError && (
+            <p className="mt-2 text-xs text-destructive">{sheetError}</p>
+          )}
+          {sheetSyncedAt && !sheetError && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              最終同期：{sheetSyncedAt.toLocaleTimeString('ja-JP')}
+            </p>
+          )}
         </div>
       )}
 
