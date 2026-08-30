@@ -46,6 +46,8 @@ import type {
   TaskInput,
   ParsedTask,
   ProgressEntry,
+  NotifyKind,
+  NotifyFrequency,
 } from './types'
 import { canSeeExecTasks, BASE_ROLE, STATUS_LABEL } from './types'
 import { isFullAdminRole, resolveVisibleAdminSections } from './permissions'
@@ -236,6 +238,7 @@ interface OrbitContextValue extends OrbitState {
   addMember: (name: string, email: string, affiliation: string, role: string) => void
   removeMember: (memberId: string) => void
   updateNotify: (memberId: string, notify: boolean) => void
+  updateNotifySettings: (memberId: string, settings: Partial<Record<NotifyKind, NotifyFrequency>>) => void
   updateEmail: (memberId: string, email: string) => void
   updateMemberProjects: (memberId: string, projectIds: string[]) => void
   // true when currentUser holds the highest-ranked role level (unscoped
@@ -1891,6 +1894,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  const updateNotifySettings = useCallback(
+    (memberId: string, settings: Partial<Record<NotifyKind, NotifyFrequency>>) => {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, notifySettings: settings } : m)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateNotifySettings(memberId, settings))
+    },
+    [runRemote],
+  )
+
   const updateEmail = useCallback(
     (memberId: string, email: string) => {
       const trimmed = email.trim()
@@ -2906,6 +2917,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     addMember,
     removeMember,
     updateNotify,
+    updateNotifySettings,
     updateEmail,
     updateMemberProjects,
     isFullAdmin,

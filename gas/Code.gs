@@ -119,6 +119,11 @@ function doPost(e) {
           notify_new_task: body.notify ? 'TRUE' : 'FALSE',
         })
         break
+      case 'updateNotifySettings':
+        result = updateMemberFields(body.memberId, {
+          notify_settings: JSON.stringify(body.settings),
+        })
+        break
       case 'updateRole':
         result = updateMemberFields(body.memberId, { role: body.role })
         break
@@ -541,6 +546,84 @@ function uniqueEmails(list) {
     }
   })
   return out
+}
+
+// Returns the notify frequency for a given member + kind.
+// Falls back to 'immediate' for kinds not configured yet.
+function getNotifyFrequency(memberId, kind) {
+  var row = findRow('Members', memberId)
+  if (!row) return 'immediate'
+  var raw = row.notify_settings
+  if (!raw) return 'immediate'
+  try {
+    var settings = JSON.parse(raw)
+    return settings[kind] || 'immediate'
+  } catch (e) {
+    return 'immediate'
+  }
+}
+
+// Queues a notification for batch delivery. kind is one of:
+// 'new_task' | 'review' | 'mention' | 'rejected' | 'deadline'
+function queueNotification(memberId, kind, subject, body) {
+  var freq = getNotifyFrequency(memberId, kind)
+  if (freq === 'none') return
+  if (freq === 'immediate') {
+    var emails = memberEmailsByIds([memberId])
+    if (emails.length > 0) {
+      MailApp.sendEmail({ to: emails.join(','), subject: subject, body: body })
+    }
+    return
+  }
+  var key = 'notif_queue_' + memberId
+  var props = PropertiesService.getScriptProperties()
+  var existing = props.getProperty(key)
+  var queue = existing ? JSON.parse(existing) : []
+  queue.push({ kind: kind, subject: subject, body: body, ts: new Date().toISOString() })
+  props.setProperty(key, JSON.stringify(queue))
+}
+
+// Time-triggered: send all queued batch notifications.
+// Set up a time-based trigger calling this function every hour.
+function sendBatchNotifications() {
+  var props = PropertiesService.getScriptProperties()
+  var allProps = props.getProperties()
+  var now = new Date()
+  Object.keys(allProps).forEach(function(key) {
+    if (!key.startsWith('notif_queue_')) return
+    var memberId = key.replace('notif_queue_', '')
+    var queue = JSON.parse(allProps[key] || '[]')
+    if (queue.length === 0) return
+
+    var emails = memberEmailsByIds([memberId])
+    if (emails.length === 0) {
+      props.deleteProperty(key)
+      return
+    }
+
+    // Filter by whether enough time has passed for each item based on member frequency
+    var toSend = []
+    var toKeep = []
+    queue.forEach(function(item) {
+      var freq = getNotifyFrequency(memberId, item.kind)
+      if (freq === 'none') return
+      if (freq === 'immediate') { toSend.push(item); return }
+      var hours = freq === '3h' ? 3 : freq === '6h' ? 6 : 24
+      var itemTime = new Date(item.ts)
+      var elapsed = (now - itemTime) / 3600000
+      if (elapsed >= hours) { toSend.push(item) } else { toKeep.push(item) }
+    })
+
+    if (toSend.length > 0) {
+      var combined = toSend.map(function(i) { return '【' + i.subject + '】\n' + i.body }).join('\n\n---\n\n')
+      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit 通知まとめ (' + toSend.length + '件)', body: combined })
+    }
+    if (toKeep.length > 0) {
+      props.setProperty(key, JSON.stringify(toKeep))
+    } else {
+      props.deleteProperty(key)
+    }
+  })
 }
 
 function notifyAdmins(subject, body, preferredEmails) {
@@ -1549,6 +1632,7 @@ function setupOrbit() {
     'transfer_history_json', 'skill_levels_json', 'competencies_json',
     'career_aspiration', 'desired_future_role', 'career_plan',
     'training_history_json', 'development_plan_json', 'one_on_ones_json',
+    'notify_settings',
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived',
@@ -1570,6 +1654,21 @@ function setupOrbit() {
   ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
   ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
   ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
+
+  // --- バッチ通知トリガーの設定 ---
+  try {
+    var triggers = ScriptApp.getProjectTriggers()
+    var hasBatch = triggers.some(function(t) { return t.getHandlerFunction() === 'sendBatchNotifications' })
+    if (!hasBatch) {
+      ScriptApp.newTrigger('sendBatchNotifications')
+        .timeBased()
+        .everyHours(1)
+        .create()
+      console.log('✅ sendBatchNotifications トリガー作成')
+    } else {
+      console.log('✅ sendBatchNotifications トリガー既存')
+    }
+  } catch (e) { console.error('❌ トリガー設定: ' + e) }
 
   console.log('🚀 setupOrbit 完了')
 }
