@@ -126,6 +126,7 @@ export function TaskDetailDrawer({
     updateSchedule,
     updateDependsOn,
     updateReviewer,
+    updateReviewers,
     updateTaskDetails,
     setBlocker,
     addDeliverable,
@@ -170,6 +171,7 @@ export function TaskDetailDrawer({
     .filter(Boolean) as Task[]
   const isAdmin = !!currentUser && isAdminRole(currentUser.role)
   const reviewer = getMember(task?.reviewerId ?? null) ?? null
+  const reviewers = (task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])).map((id) => getMember(id)).filter(Boolean) as ReturnType<typeof getMember>[]
 
   return (
     <>
@@ -183,6 +185,7 @@ export function TaskDetailDrawer({
             dependsOnTasks={dependsOnTasks}
             creator={getMember(task.createdById ?? null) ?? null}
             reviewer={reviewer}
+            reviewers={reviewers}
             members={members}
             projects={projects}
             projectName={getProject(task.projectId)?.name ?? ''}
@@ -494,30 +497,19 @@ export function TaskDetailDrawer({
           </button>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
-          担当者とは別に、完了確認を行う人を指定できます。
+          複数選択できます。担当者とは別に、完了確認を行う人を指定してください。
         </p>
         <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
-          <button
-            onClick={() => {
-              if (task) updateReviewer(task.id, null)
-              setReviewerOpen(false)
-            }}
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary',
-              !task?.reviewerId && 'bg-primary-muted',
-            )}
-          >
-            <Avatar member={null} size={28} />
-            未設定
-          </button>
           {members.map((m) => {
-            const checked = task?.reviewerId === m.id
+            const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
+            const checked = currentIds.includes(m.id)
             return (
               <button
                 key={m.id}
                 onClick={() => {
-                  if (task) updateReviewer(task.id, m.id)
-                  setReviewerOpen(false)
+                  if (!task) return
+                  const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
+                  updateReviewers(task.id, next)
                 }}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
@@ -534,6 +526,15 @@ export function TaskDetailDrawer({
             )
           })}
         </div>
+        <button
+          onClick={() => {
+            if (task) updateReviewers(task.id, [])
+            setReviewerOpen(false)
+          }}
+          className="mt-2 w-full rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
+        >
+          すべて解除
+        </button>
       </Modal>
 
       {/* Blocker note */}
@@ -1103,6 +1104,7 @@ function DrawerBody({
   dependsOnTasks,
   creator,
   reviewer,
+  reviewers,
   members,
   projects,
   projectName,
@@ -1140,6 +1142,7 @@ function DrawerBody({
   dependsOnTasks: Task[]
   creator: Member | null
   reviewer: Member | null
+  reviewers: (Member | undefined)[]
   members: Member[]
   projects: Project[]
   projectName: string
@@ -1313,12 +1316,14 @@ function DrawerBody({
             )}
           </Row>
           <Row label="確認者">
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              {reviewer ? (
-                <span className="inline-flex items-center gap-2">
-                  <Avatar member={reviewer} size={22} />
-                  {reviewer.displayName || reviewer.name}
-                </span>
+            <span className="inline-flex flex-wrap items-center gap-1.5 text-sm">
+              {reviewers.length > 0 ? (
+                reviewers.map((m) => m && (
+                  <span key={m.id} className="inline-flex items-center gap-1.5">
+                    <Avatar member={m} size={22} />
+                    {m.displayName || m.name}
+                  </span>
+                ))
               ) : (
                 <span className="text-muted-foreground">未設定</span>
               )}
@@ -2198,6 +2203,7 @@ const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
   textarea: '複数行テキスト',
   select: '単一選択',
   checkbox: '複数選択',
+  image: '画像アップロード',
 }
 
 function formAnswerText(v: FormAnswerValue | undefined): string {
@@ -2378,6 +2384,32 @@ function FormSection({
                         })}
                       </div>
                     )}
+                    {f.type === 'image' && (
+                      <div className="flex flex-col gap-1.5">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="text-sm"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            const reader = new FileReader()
+                            reader.onload = (ev) => {
+                              const dataUrl = ev.target?.result as string
+                              setResponseDraft((prev) => ({ ...prev, [f.id]: dataUrl }))
+                            }
+                            reader.readAsDataURL(file)
+                          }}
+                        />
+                        {responseDraft[f.id] && (
+                          <img
+                            src={responseDraft[f.id] as string}
+                            alt="プレビュー"
+                            className="max-h-40 rounded-md object-contain"
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2420,7 +2452,11 @@ function FormSection({
                       return (
                         <td key={mid} className="border-b border-border/60 px-1.5 py-1">
                           {answer != null && formAnswerText(answer) ? (
-                            formAnswerText(answer)
+                            f.type === 'image' ? (
+                              <img src={answer as string} alt="回答画像" className="max-h-20 rounded object-contain" />
+                            ) : (
+                              formAnswerText(answer)
+                            )
                           ) : (
                             <span className="text-muted-foreground">未回答</span>
                           )}

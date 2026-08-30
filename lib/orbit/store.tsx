@@ -278,6 +278,7 @@ interface OrbitContextValue extends OrbitState {
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
+  updateReviewers: (id: string, reviewerIds: string[]) => void
   setBlocker: (id: string, note: string | null) => void
   updateEstimatedHours: (id: string, hours: number | null) => void
   updateActualHours: (id: string, hours: number | null) => void
@@ -2168,6 +2169,25 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [appendHistory, runRemote],
   )
 
+  const updateReviewers = useCallback(
+    (id: string, reviewerIds: string[]) => {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? appendHistory(
+                { ...t, reviewerIds, reviewerId: reviewerIds[0] },
+                'reviewer',
+                (t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])).join('、'),
+                reviewerIds.join('、'),
+              )
+            : t,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updateReviewers(id, reviewerIds))
+    },
+    [appendHistory, runRemote],
+  )
+
   // "困っている/作業が止まっている" flag, independent of status (item 7:
   // ブロッカー管理) — pass null/empty to clear
   const setBlocker = useCallback(
@@ -2946,6 +2966,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateSchedule,
     updateDependsOn,
     updateReviewer,
+    updateReviewers,
     setBlocker,
     updateEstimatedHours,
     updateActualHours,

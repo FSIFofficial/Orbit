@@ -1010,6 +1010,7 @@ const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
   text: '一行テキスト',
   textarea: '複数行テキスト',
   select: '単一選択',
+  image: '画像アップロード',
   checkbox: '複数選択',
 }
 

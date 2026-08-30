@@ -276,6 +276,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     dependsOnIds: splitTags(r.depends_on_ids),
     visibility: r.visibility === '幹部' ? '幹部' : 'all',
     reviewerId: r.reviewer_id || undefined,
+    reviewerIds: r.reviewer_ids ? splitTags(r.reviewer_ids) : (r.reviewer_id ? [r.reviewer_id] : undefined),
     blocker: r.blocker_note ? { note: r.blocker_note, since: r.blocker_since || '' } : undefined,
     deliverables: parseJsonArray<TaskDeliverable>(r.deliverables_json),
     history: parseJsonArray<TaskHistoryEntry>(r.history_json),
@@ -574,6 +575,8 @@ export const remoteApi = {
     postToGas('updateMemberProjects', { memberId, projectIds }),
   updateReviewer: (taskId: string, reviewerId: string | null) =>
     postToGas('updateReviewer', { taskId, reviewerId }),
+  updateReviewers: (taskId: string, reviewerIds: string[]) =>
+    postToGas('updateReviewers', { taskId, reviewerIds }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>
