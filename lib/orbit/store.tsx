@@ -228,7 +228,8 @@ interface OrbitContextValue extends OrbitState {
   approveTask: (id: string) => void
   removeTask: (id: string) => void
   rejectTask: (id: string, reason?: string) => void
-  addProject: (name: string, description: string, type?: string) => void
+  addProject: (name: string, description: string, type?: string, parentId?: string) => void
+  updateProjectParent: (projectId: string, parentId: string | null) => void
   removeProject: (projectId: string) => void
   updateProjectMembers: (projectId: string, memberIds: string[]) => void
   updateProjectOwner: (projectId: string, ownerId: string | null) => void
@@ -1725,9 +1726,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   const addProject = useCallback(
-    (name: string, description: string, type?: string) => {
+    (name: string, description: string, type?: string, parentId?: string) => {
       const tempProjectId = `p-${Math.random().toString(36).slice(2, 9)}`
-      setProjects((prev) => [...prev, { id: tempProjectId, name, description, type }])
+      setProjects((prev) => [...prev, { id: tempProjectId, name, description, type, parentId }])
 
       const templates = type ? projectTemplates[type] ?? [] : []
       const today = new Date().toISOString().slice(0, 10)
@@ -1754,7 +1755,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
       if (isRemoteConfigured) {
         remoteApi
-          .createProject(name, description, type)
+          .createProject(name, description, type, parentId)
           .then(({ id }) => {
             setProjects((prev) => prev.map((p) => (p.id === tempProjectId ? { ...p, id } : p)))
             if (templateTasks.length > 0) {
@@ -1829,6 +1830,16 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         prev.map((p) => (p.id === projectId ? { ...p, ownerId: ownerId ?? undefined } : p)),
       )
       if (isRemoteConfigured) runRemote(remoteApi.updateProjectOwner(projectId, ownerId))
+    },
+    [runRemote],
+  )
+
+  const updateProjectParent = useCallback(
+    (projectId: string, parentId: string | null) => {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? { ...p, parentId: parentId ?? undefined } : p)),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updateProjectParent(projectId, parentId))
     },
     [runRemote],
   )
@@ -2959,6 +2970,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     removeProject,
     updateProjectMembers,
     updateProjectOwner,
+    updateProjectParent,
     updateProjectDetails,
     activeProjects,
     setProjectArchived,

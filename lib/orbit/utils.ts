@@ -42,10 +42,16 @@ export function deadlineLevel(task: Task): {
   return { level: 'none', label: '', days }
 }
 
+// YYYY-MM と YYYY-MM-DD の両形式を安全にパースする（YYYY-MM は UTCの1日として扱う）
+function parseJoinedAt(joinedAt: string): Date {
+  const normalized = joinedAt.length === 7 ? joinedAt + '-01' : joinedAt
+  return new Date(normalized)
+}
+
 // 所属歴 — 「経験年数」（自己申告の概数）とは別に、joinedAt からの正確な
-// 期間を「○年○ヶ月」で表示する
+// 期間を「○年○ヶ月」で表示する。YYYY-MM / YYYY-MM-DD どちらも対応。
 export function formatTenure(joinedAt: string): string {
-  const start = new Date(joinedAt)
+  const start = parseJoinedAt(joinedAt)
   const now = new Date()
   let years = now.getFullYear() - start.getFullYear()
   let months = now.getMonth() - start.getMonth()
@@ -61,7 +67,7 @@ export function formatTenure(joinedAt: string): string {
 // 所属歴を年数（小数）で返す — 人材検索フィルタ（Admin > Members）で
 // 「経験年数」（自己申告の概数）の代わりに所属日ベースで絞り込むために使う
 export function tenureYears(joinedAt: string): number {
-  const start = new Date(joinedAt).getTime()
+  const start = parseJoinedAt(joinedAt).getTime()
   const now = Date.now()
   if (Number.isNaN(start)) return 0
   return Math.max(0, (now - start) / (365.25 * 24 * 60 * 60 * 1000))
