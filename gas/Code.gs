@@ -236,6 +236,9 @@ function doPost(e) {
       case 'updateProjectOwner':
         result = updateProjectFields(body.projectId, { owner_id: body.ownerId || '' })
         break
+      case 'updateProjectParent':
+        result = updateProjectFields(body.projectId, { parent_id: body.parentId || '' })
+        break
       case 'updateProjectDetails':
         result = updateProjectFields(body.projectId, {
           description: body.description || '',
@@ -1025,7 +1028,7 @@ function syncCalendarForTask(taskId) {
 
 // ---- Projects ---------------------------------------------------------------
 
-function createProject(name, description, type) {
+function createProject(name, description, type, parentId) {
   var sheet = getSheet(SHEET_PROJECTS)
   var headers = headerRow(sheet)
   var id = String(nextIntId(sheet, headers))
@@ -1034,6 +1037,7 @@ function createProject(name, description, type) {
     if (h === 'name') return name
     if (h === 'description') return description || ''
     if (h === 'type') return type || ''
+    if (h === 'parent_id') return parentId || ''
     return ''
   })
   sheet.appendRow(row)
@@ -1638,7 +1642,7 @@ function setupOrbit() {
     'notify_settings',
   ]
   var PROJECTS_HEADERS = [
-    'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived',
+    'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
   ]
   var TASKS_HEADERS = [
     'id', 'project_id', 'title', 'description', 'status', 'assign_type',

@@ -8,7 +8,7 @@ import { Tag, SectionLabel } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection } from '@/lib/orbit/types'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, ChevronUp, ChevronDown } from 'lucide-react'
 
 // dashboard always stays visible (it's the redirect target for a
 // disallowed section — see store.tsx's visibleAdminSections), so there's
@@ -26,6 +26,7 @@ export function AdminTags() {
     roleLevels,
     addRoleLevel,
     removeRoleLevel,
+    reorderRoleLevel,
     rolePermissions,
     setRolePermissions,
     jobRequirements,
@@ -87,17 +88,37 @@ export function AdminTags() {
           onRemove={removeCategoryOption}
         />
         <div>
-          <TagGroup
-            title="権限レベル（一般より上）"
-            options={roleLevels}
-            onAdd={addRoleLevel}
-            onRemove={removeRoleLevel}
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            すべてのメンバーの初期値は「一般」です。ここで追加したレベルはAdmin →
-            Membersの役職選択に使え、レベルを削除するとそれを持っていたメンバーは
-            自動的に「一般」に戻ります。「一般」以外のレベルはすべて管理者画面へのアクセス権を持ちます。
+          <SectionLabel>権限レベル（一般より上）</SectionLabel>
+          <p className="mt-1 text-xs text-muted-foreground">
+            上から順に高いポジションです。一番下のレベルのみ権限が制限され、それ以外はすべて全管理者権限を持ちます。
           </p>
+          <div className="mt-3 flex flex-col gap-1">
+            {roleLevels.map((level, i) => (
+              <div key={level} className="flex items-center gap-2">
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => reorderRoleLevel(level, 'up')}
+                    disabled={i === 0}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-20"
+                  >
+                    <ChevronUp className="size-3.5" />
+                  </button>
+                  <button
+                    onClick={() => reorderRoleLevel(level, 'down')}
+                    disabled={i === roleLevels.length - 1}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-20"
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                </div>
+                <Tag onRemove={() => removeRoleLevel(level)}>{level}</Tag>
+                {i === roleLevels.length - 1 && roleLevels.length > 1 && (
+                  <span className="text-xs text-muted-foreground">（権限制限あり）</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <RoleLevelAdd onAdd={addRoleLevel} />
         </div>
       </div>
 
@@ -351,6 +372,35 @@ function JobRequirementsRow({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function RoleLevelAdd({ onAdd }: { onAdd: (name: string) => void }) {
+  const [draft, setDraft] = useState('')
+  const submit = () => {
+    const v = draft.trim()
+    if (v) { onAdd(v); setDraft('') }
+  }
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing || e.keyCode === 229) return
+          if (e.key === 'Enter') { e.preventDefault(); submit() }
+        }}
+        placeholder="レベルを追加"
+        className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+      />
+      <button
+        onClick={submit}
+        disabled={!draft.trim()}
+        className="flex size-8 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
+      >
+        <Plus className="size-4" />
+      </button>
     </div>
   )
 }

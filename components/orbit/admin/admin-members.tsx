@@ -8,7 +8,7 @@ import { Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check } from 'lucide-react'
+import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload } from 'lucide-react'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
 import { tenureYears } from '@/lib/orbit/utils'
@@ -54,6 +54,39 @@ export function AdminMembers() {
   const [newEmail, setNewEmail] = useState('')
   const [newAffiliation, setNewAffiliation] = useState('')
   const [newRole, setNewRole] = useState<Role>(BASE_ROLE)
+
+  const [csvPreview, setCsvPreview] = useState<{ name: string; email: string; affiliation: string; role: Role }[] | null>(null)
+
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+      if (lines.length < 2) return
+      // detect if first row is a header (contains 氏名 or name-like text)
+      const startIdx = /氏名|name|名前/i.test(lines[0]) ? 1 : 0
+      const rows = lines.slice(startIdx).map((line) => {
+        const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
+        const name = cols[0] ?? ''
+        const email = cols[1] ?? ''
+        const affiliation = cols[2] ?? ''
+        const role = (cols[3] && ROLES.includes(cols[3] as Role)) ? cols[3] as Role : BASE_ROLE
+        return { name, email, affiliation, role }
+      }).filter((r) => r.name)
+      if (rows.length) setCsvPreview(rows)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleBulkAdd = () => {
+    if (!csvPreview) return
+    csvPreview.forEach((r) => addMember(r.name, r.email, r.affiliation, r.role))
+    toast(`${csvPreview.length}人を一括登録しました`)
+    setCsvPreview(null)
+  }
 
   const handleAddMember = () => {
     const name = newName.trim()
@@ -144,7 +177,52 @@ export function AdminMembers() {
             登録
           </Button>
         </div>
+        <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
+            <Upload className="size-3.5" />
+            CSVで一括登録
+            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvUpload} />
+          </label>
+          <span className="text-xs text-muted-foreground">形式: 氏名,メール,所属,役職（1行目ヘッダー可）</span>
+        </div>
       </div>
+
+      {csvPreview && (
+        <Modal onClose={() => setCsvPreview(null)}>
+          <div className="flex flex-col gap-4 p-5">
+            <div className="text-sm font-semibold">CSV プレビュー（{csvPreview.length}人）</div>
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground">
+                    <th className="pb-1 pr-3 text-left font-medium">氏名</th>
+                    <th className="pb-1 pr-3 text-left font-medium">メール</th>
+                    <th className="pb-1 pr-3 text-left font-medium">所属</th>
+                    <th className="pb-1 text-left font-medium">役職</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvPreview.map((r, i) => (
+                    <tr key={i} className="border-b border-border/40">
+                      <td className="py-1 pr-3">{r.name}</td>
+                      <td className="py-1 pr-3 text-muted-foreground">{r.email || '—'}</td>
+                      <td className="py-1 pr-3 text-muted-foreground">{r.affiliation || '—'}</td>
+                      <td className="py-1 text-muted-foreground">{r.role}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCsvPreview(null)}>キャンセル</Button>
+              <Button onClick={handleBulkAdd}>
+                <UserPlus className="size-4" />
+                {csvPreview.length}人を登録
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <div className="relative max-w-sm flex-1">

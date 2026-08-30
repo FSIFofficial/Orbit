@@ -236,6 +236,7 @@ function mapProjectRow(r: Record<string, string>): Project {
     type: r.type || undefined,
     memberIds: memberIds.length > 0 ? memberIds : undefined,
     ownerId: r.owner_id || undefined,
+    parentId: r.parent_id || undefined,
     archived: r.archived === 'TRUE',
   }
 }
@@ -526,8 +527,8 @@ export const remoteApi = {
   removeTask: (taskId: string) => postToGas('removeTask', { taskId }),
   notifyTaskRejected: (creatorId: string | undefined, taskName: string, reason: string | undefined) =>
     postToGas('notifyTaskRejected', { creatorId, taskName, reason }),
-  createProject: (name: string, description: string, type?: string) =>
-    postToGas<{ id: string }>('createProject', { name, description, type }),
+  createProject: (name: string, description: string, type?: string, parentId?: string) =>
+    postToGas<{ id: string }>('createProject', { name, description, type, parentId }),
   removeProject: (projectId: string) => postToGas('removeProject', { projectId }),
   removeMember: (memberId: string) => postToGas('removeMember', { memberId }),
   updateNotify: (memberId: string, notify: boolean) =>
@@ -587,6 +588,8 @@ export const remoteApi = {
     postToGas('updateProjectMembers', { projectId, memberIds }),
   updateProjectOwner: (projectId: string, ownerId: string | null) =>
     postToGas('updateProjectOwner', { projectId, ownerId }),
+  updateProjectParent: (projectId: string, parentId: string | null) =>
+    postToGas('updateProjectParent', { projectId, parentId }),
   updateProjectDetails: (projectId: string, description: string, type: string | undefined) =>
     postToGas('updateProjectDetails', { projectId, description, type }),
   updateProjectArchived: (projectId: string, archived: boolean) =>

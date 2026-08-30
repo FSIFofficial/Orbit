@@ -41,6 +41,7 @@ export function AdminProjects() {
     removeProject,
     updateProjectMembers,
     updateProjectOwner,
+    updateProjectParent,
     updateProjectDetails,
     getProjectMembers,
     projectTypes,
@@ -73,6 +74,7 @@ export function AdminProjects() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('')
+  const [parentId, setParentId] = useState('')
   const [newType, setNewType] = useState('')
   const [newTemplateName, setNewTemplateName] = useState('')
   const [newTemplateDesc, setNewTemplateDesc] = useState('')
@@ -80,7 +82,7 @@ export function AdminProjects() {
   const handleCreate = () => {
     const trimmed = name.trim()
     if (!trimmed) return
-    addProject(trimmed, description.trim(), type || undefined)
+    addProject(trimmed, description.trim(), type || undefined, parentId || undefined)
     const templateCount = type ? (projectTemplates[type]?.length ?? 0) : 0
     toast(
       templateCount > 0
@@ -90,6 +92,7 @@ export function AdminProjects() {
     setName('')
     setDescription('')
     setType('')
+    setParentId('')
   }
 
   const activeList = useMemo(() => projects.filter((p) => !p.archived), [projects])
@@ -153,6 +156,19 @@ export function AdminProjects() {
               </select>
             </div>
           </div>
+          <div className="mt-2">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">上位プロジェクト（任意）</label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary sm:w-80"
+            >
+              <option value="">なし（最上位）</option>
+              {activeList.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
           <Button className="mt-3 h-9" disabled={!name.trim()} onClick={handleCreate}>
             <Plus className="size-4" />
             プロジェクトを追加
@@ -166,6 +182,7 @@ export function AdminProjects() {
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
               {isFullAdmin && <th className="w-8 px-2 py-2.5" />}
               <th className="px-4 py-2.5 font-medium">プロジェクト</th>
+              <th className="px-4 py-2.5 font-medium">上位</th>
               <th className="px-4 py-2.5 font-medium">種類</th>
               <th className="px-4 py-2.5 font-medium">概要</th>
               <th className="px-4 py-2.5 font-medium">担当者</th>
@@ -178,6 +195,7 @@ export function AdminProjects() {
             {activeList.map((p) => {
               const pm = getProjectMembers(p.id)
               const owner = members.find((m) => m.id === p.ownerId)
+              const parentProject = projects.find((pp) => pp.id === p.parentId)
               const taskCount = visibleTasks.filter((t) => t.projectId === p.id).length
               return (
                 <tr
@@ -197,7 +215,37 @@ export function AdminProjects() {
                       <GripVertical className="size-3.5" />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {p.parentId && <span className="mr-1 text-muted-foreground">└</span>}
+                    {p.name}
+                  </td>
+                  <td className="px-4 py-3">
+                    {parentProject ? (
+                      <div className="flex items-center gap-1">
+                        <span className="max-w-[120px] truncate text-xs text-muted-foreground">{parentProject.name}</span>
+                        {isFullAdmin && (
+                          <button
+                            onClick={() => updateProjectParent(p.id, null)}
+                            className="text-muted-foreground hover:text-foreground"
+                            title="上位プロジェクトを解除"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ) : isFullAdmin ? (
+                      <select
+                        value=""
+                        onChange={(e) => e.target.value && updateProjectParent(p.id, e.target.value)}
+                        className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
+                      >
+                        <option value="">設定</option>
+                        {activeList.filter((pp) => pp.id !== p.id).map((pp) => (
+                          <option key={pp.id} value={pp.id}>{pp.name}</option>
+                        ))}
+                      </select>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     {p.type ? <Tag>{p.type}</Tag> : <span className="text-muted-foreground">—</span>}
                   </td>

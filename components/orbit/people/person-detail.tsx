@@ -415,8 +415,8 @@ export function PersonDetail({ id }: { id: string }) {
             {editingJoinedAt ? (
               <input
                 autoFocus
-                type="date"
-                defaultValue={member.joinedAt ?? ''}
+                type="month"
+                defaultValue={member.joinedAt ? member.joinedAt.slice(0, 7) : ''}
                 onBlur={(e) => {
                   updateJoinedAt(member.id, e.target.value || null)
                   setEditingJoinedAt(false)
@@ -426,7 +426,7 @@ export function PersonDetail({ id }: { id: string }) {
             ) : (
               <p className="text-xs text-muted-foreground">
                 {member.joinedAt
-                  ? `所属歴：${formatTenure(member.joinedAt)}（${member.joinedAt}〜）`
+                  ? `所属歴：${formatTenure(member.joinedAt)}（${member.joinedAt.slice(0, 7)}〜）`
                   : '所属開始日が未設定です'}
               </p>
             )}
