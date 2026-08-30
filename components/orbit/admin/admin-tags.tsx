@@ -189,8 +189,7 @@ export function AdminTags() {
         </div>
       </div>
 
-      {nonTopLevels.length > 0 && (
-        <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
           <SectionLabel>権限レベルごとの表示範囲</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
             「制限あり」に設定したレベルのみ表示されます。未設定の場合は Members・Tags 以外の全セクションが既定で表示されます。
@@ -211,7 +210,6 @@ export function AdminTags() {
             ))}
           </div>
         </div>
-      )}
 
       {isFullAdmin && (
         <div className="mt-6 rounded-lg border border-border bg-card p-4">
