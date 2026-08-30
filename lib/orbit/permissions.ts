@@ -6,15 +6,13 @@
 import { ADMIN_SECTIONS, BASE_ROLE, DEFAULT_NON_TOP_SECTIONS, STATUS_ORDER } from './types'
 import type { AdminSection, Role, TaskImportance, TaskStatus } from './types'
 
-// Every configured role level except the single bottom-most one (see
-// roleLevels — default bottom level is 班長) is full admin, with identical
-// maximal privileges. Only the bottom-most tier is scoped to its own
-// project_ids. With a single configured tier, that tier is trivially full
-// admin. See store.tsx's isFullAdminMember for the Member-object wrapper.
-export function isFullAdminRole(role: Role | null | undefined, roleLevels: string[]): boolean {
+// A role is full admin when it is neither BASE_ROLE nor in the explicit
+// restrictedRoles list (configured per-role in the Tags admin screen).
+// An empty restrictedRoles means all configured roles are full admin.
+// See store.tsx's isFullAdminMember for the Member-object wrapper.
+export function isFullAdminRole(role: Role | null | undefined, restrictedRoles: string[]): boolean {
   if (!role || role === BASE_ROLE) return false
-  if (roleLevels.length <= 1) return true
-  return role !== roleLevels[0]
+  return !restrictedRoles.includes(role)
 }
 
 // Which admin-screen sections a role can see — falls back to
@@ -23,10 +21,10 @@ export function isFullAdminRole(role: Role | null | undefined, roleLevels: strin
 // visibleAdminSections for the currentUser-bound wrapper.
 export function resolveVisibleAdminSections(
   role: Role | null | undefined,
-  roleLevels: string[],
+  restrictedRoles: string[],
   rolePermissions: Record<string, AdminSection[]>,
 ): AdminSection[] {
-  if (isFullAdminRole(role, roleLevels)) return ADMIN_SECTIONS.map((s) => s.key)
+  if (isFullAdminRole(role, restrictedRoles)) return ADMIN_SECTIONS.map((s) => s.key)
   if (!role || role === BASE_ROLE) return []
   const sections = rolePermissions[role] ?? DEFAULT_NON_TOP_SECTIONS
   // dashboard is the redirect target for a disallowed section, so it must

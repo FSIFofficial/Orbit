@@ -27,6 +27,8 @@ export function AdminTags() {
     addRoleLevel,
     removeRoleLevel,
     reorderRoleLevel,
+    restrictedRoles,
+    toggleRestrictedRole,
     rolePermissions,
     setRolePermissions,
     jobRequirements,
@@ -47,10 +49,6 @@ export function AdminTags() {
   const toast = useToast()
   const [webhookDraft, setWebhookDraft] = useState('')
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
-  // every role level except the bottom (first) one is full admin with
-  // unrestricted section access — only the bottom tier's visibility is
-  // configurable (see store.tsx's isFullAdminMember/visibleAdminSections)
-  const nonTopLevels = roleLevels.length <= 1 ? [] : roleLevels.slice(0, 1)
   // item 17: ポジション要件 — every role, including 一般, has a position
   const jobTypes = [BASE_ROLE, ...roleLevels]
 
@@ -90,33 +88,43 @@ export function AdminTags() {
         <div>
           <SectionLabel>権限レベル（一般より上）</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            上から順に高いポジションです。一番下のレベルのみ権限が制限され、それ以外はすべて全管理者権限を持ちます。
+            「制限あり���にしたレベルは、見せるセクションを下の「権限レベルごとの表示範囲」で個別に設定できます。それ以外は全管理者権限を持ちます。
           </p>
           <div className="mt-3 flex flex-col gap-1">
-            {roleLevels.map((level, i) => (
-              <div key={level} className="flex items-center gap-2">
-                <div className="flex flex-col">
+            {roleLevels.map((level, i) => {
+              const isRestricted = restrictedRoles.includes(level)
+              return (
+                <div key={level} className="flex items-center gap-2">
+                  <div className="flex flex-col">
+                    <button
+                      onClick={() => reorderRoleLevel(level, 'up')}
+                      disabled={i === 0}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    >
+                      <ChevronUp className="size-3.5" />
+                    </button>
+                    <button
+                      onClick={() => reorderRoleLevel(level, 'down')}
+                      disabled={i === roleLevels.length - 1}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </button>
+                  </div>
+                  <Tag onRemove={() => removeRoleLevel(level)}>{level}</Tag>
                   <button
-                    onClick={() => reorderRoleLevel(level, 'up')}
-                    disabled={i === 0}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    onClick={() => toggleRestrictedRole(level)}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      isRestricted
+                        ? 'bg-warning/15 text-warning hover:bg-warning/25'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
                   >
-                    <ChevronUp className="size-3.5" />
-                  </button>
-                  <button
-                    onClick={() => reorderRoleLevel(level, 'down')}
-                    disabled={i === roleLevels.length - 1}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-20"
-                  >
-                    <ChevronDown className="size-3.5" />
+                    {isRestricted ? '制限あり' : '制限なし'}
                   </button>
                 </div>
-                <Tag onRemove={() => removeRoleLevel(level)}>{level}</Tag>
-                {i === roleLevels.length - 1 && roleLevels.length > 1 && (
-                  <span className="text-xs text-muted-foreground">（権限制限あり）</span>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
           <RoleLevelAdd onAdd={addRoleLevel} />
         </div>
@@ -185,12 +193,15 @@ export function AdminTags() {
         <div className="mt-6 rounded-lg border border-border bg-card p-4">
           <SectionLabel>権限レベルごとの表示範囲</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            「{roleLevels[0]}」以外のレベルは常にすべてのセクションにアクセスできます。
-            「{roleLevels[0]}」は、管理者画面でどのセクションを見せるか個別に選べます。未設定の場合は
-            Members・Tags以外の全セクションが既定で表示されます。
+            「制限あり」に設定したレベルのみ表示されます。未設定の場合は Members・Tags 以外の全セクションが既定で表示されます。
           </p>
+          {restrictedRoles.length === 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              制限ありのレベルがありません。上のリストで「制限なし」ボタンをクリックして制限ありに変更してください。
+            </p>
+          )}
           <div className="mt-4 flex flex-col gap-4">
-            {nonTopLevels.map((role) => (
+            {restrictedRoles.filter((r) => roleLevels.includes(r)).map((role) => (
               <RolePermissionRow
                 key={role}
                 role={role}

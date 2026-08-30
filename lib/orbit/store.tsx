@@ -150,9 +150,12 @@ interface OrbitContextValue extends OrbitState {
   addRoleLevel: (name: string) => void
   removeRoleLevel: (name: string) => void
   reorderRoleLevel: (name: string, direction: 'up' | 'down') => void
+  // roles with restricted section visibility — all others are full admin
+  restrictedRoles: string[]
+  toggleRestrictedRole: (role: string) => void
   // per-role-level admin-screen section visibility (see types.ts's
-  // AdminSection/DEFAULT_NON_TOP_SECTIONS); the top role level always sees
-  // everything (isFullAdmin), so it's not represented here
+  // AdminSection/DEFAULT_NON_TOP_SECTIONS); only roles in restrictedRoles
+  // are affected; full-admin roles always see everything
   rolePermissions: Record<string, AdminSection[]>
   setRolePermissions: (role: string, sections: AdminSection[]) => void
   // admin-screen sections currentUser's role is allowed to see
@@ -339,6 +342,8 @@ const SKILL_FIELD_THRESHOLD_STORAGE_KEY = 'orbit-skill-field-threshold'
 const ORG_NOTIFICATION_EMAILS_STORAGE_KEY = 'orbit-org-notification-emails'
 // プロジェクトの表示順 — project_order のローカルフォールバック
 const PROJECT_ORDER_STORAGE_KEY = 'orbit-project-order'
+// 制限付きロール — restricted_roles のローカルフォールバック
+const RESTRICTED_ROLES_STORAGE_KEY = 'orbit-restricted-roles'
 // メンション通知の既読管理 — 端末ローカルのみ（サーバーには保存しない）。
 // currentUserId -> 既読にしたコメントID配列、で複数メンバーを同一端末で
 // 切り替えて使う場合にも既読状態が混ざらないようにする
@@ -406,6 +411,16 @@ function loadRolePermissions(): Record<string, AdminSection[]> {
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
+  }
+}
+
+function loadRestrictedRoles(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(RESTRICTED_ROLES_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
   }
 }
 
@@ -524,6 +539,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [skillOptions, setSkillOptions] = useState<string[]>(DEFAULT_SKILL_OPTIONS)
   const [categoryOptions, setCategoryOptions] = useState<string[]>(DEFAULT_CATEGORY_OPTIONS)
   const [roleLevels, setRoleLevels] = useState<string[]>(DEFAULT_ROLE_LEVELS)
+  const [restrictedRoles, setRestrictedRolesState] = useState<string[]>([])
   const [rolePermissions, setRolePermissionsState] = useState<Record<string, AdminSection[]>>({})
   const [projectTemplates, setProjectTemplates] = useState<Record<string, ProjectTemplateTask[]>>({})
   const [taskSetTemplates, setTaskSetTemplates] = useState<TaskSetTemplate[]>([])
@@ -591,6 +607,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       }
       setProjectTemplates(loadProjectTemplates())
       setRolePermissionsState(loadRolePermissions())
+      setRestrictedRolesState(loadRestrictedRoles())
       setTaskSetTemplates(loadTaskSetTemplates())
       setRecurringRules(loadRecurringRules())
       setJobRequirementsState(loadJobRequirements())
@@ -640,6 +657,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setRoleLevels(s.roleLevels.length ? uniq(s.roleLevels) : DEFAULT_ROLE_LEVELS)
         setProjectTemplates(s.projectTemplates)
         setRolePermissionsState(s.rolePermissions)
+        setRestrictedRolesState(s.restrictedRoles)
         setTaskSetTemplates(s.taskSetTemplates)
         setRecurringRules(s.recurringRules)
         setJobRequirementsState(s.jobRequirements)
@@ -690,6 +708,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setRoleLevels(settings.roleLevels.length ? uniq(settings.roleLevels) : DEFAULT_ROLE_LEVELS)
           setProjectTemplates(settings.projectTemplates)
           setRolePermissionsState(settings.rolePermissions)
+          setRestrictedRolesState(settings.restrictedRoles)
           setTaskSetTemplates(settings.taskSetTemplates)
           setRecurringRules(settings.recurringRules)
           setJobRequirementsState(settings.jobRequirements)
@@ -850,6 +869,16 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
   }, [rolePermissions, hydrated])
+
+  // persist restricted roles (device-local, same caveat)
+  useEffect(() => {
+    if (!hydrated || isSettingsConfigured) return
+    try {
+      window.localStorage.setItem(RESTRICTED_ROLES_STORAGE_KEY, JSON.stringify(restrictedRoles))
+    } catch {
+      /* ignore */
+    }
+  }, [restrictedRoles, hydrated])
 
   // persist task-set templates and recurring-task rules (device-local, same caveat)
   useEffect(() => {
@@ -1111,6 +1140,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           runRemote(remoteApi.updateSetting('role_permissions', JSON.stringify(nextPerms)))
         return nextPerms
       })
+      setRestrictedRolesState((prev) => {
+        const next = prev.filter((r) => r !== name)
+        if (next.length !== prev.length && isSettingsConfigured)
+          runRemote(remoteApi.updateSetting('restricted_roles', next.join(',')))
+        return next
+      })
     },
     [roleLevels, runRemote],
   )
@@ -1127,6 +1162,17 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isSettingsConfigured) runRemote(remoteApi.updateSetting('role_levels', next.join(',')))
     },
     [roleLevels, runRemote],
+  )
+
+  const toggleRestrictedRole = useCallback(
+    (role: string) => {
+      setRestrictedRolesState((prev) => {
+        const next = prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+        if (isSettingsConfigured) runRemote(remoteApi.updateSetting('restricted_roles', next.join(',')))
+        return next
+      })
+    },
+    [runRemote],
   )
 
   const setRolePermissions = useCallback(
@@ -2711,26 +2757,21 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [projects, visibleTasks, members],
   )
 
-  // Every configured role level except the single bottom-most one (see
-  // roleLevels — default bottom level is 班長) is full admin, with
-  // identical maximal privileges: unrestricted admin-section visibility,
-  // project creation/deletion/template management, escalated (重要/
-  // 対外公開) task approval authority, and unscoped project/task
-  // visibility in adminProjects/adminTasks/adminPendingTasks below.
-  // Only the bottom-most tier is scoped to its own project_ids. With a
-  // single configured tier, that tier is trivially full admin.
+  // Roles in restrictedRoles have limited section visibility and scoped
+  // project/task access. All other configured roles (and any role not in the
+  // list) are full admin with unrestricted access. An empty restrictedRoles
+  // means every role is full admin.
   const isFullAdminMember = useCallback(
-    (member: Member | null | undefined) => isFullAdminRole(member?.role, roleLevels),
-    [roleLevels],
+    (member: Member | null | undefined) => isFullAdminRole(member?.role, restrictedRoles),
+    [restrictedRoles],
   )
   const isFullAdmin = useMemo(() => isFullAdminMember(currentUser), [isFullAdminMember, currentUser])
 
-  // which admin-screen sections the current (non-top) admin role can see —
-  // falls back to DEFAULT_NON_TOP_SECTIONS (everything but Members/Tags,
-  // matching the old fixed behavior) when no explicit choice was configured
+  // which admin-screen sections the current role can see — falls back to
+  // DEFAULT_NON_TOP_SECTIONS when no explicit choice was configured
   const visibleAdminSections = useMemo<AdminSection[]>(
-    () => resolveVisibleAdminSections(currentUser?.role, roleLevels, rolePermissions),
-    [currentUser, roleLevels, rolePermissions],
+    () => resolveVisibleAdminSections(currentUser?.role, restrictedRoles, rolePermissions),
+    [currentUser, restrictedRoles, rolePermissions],
   )
 
   // Admin > Projectsのドラッグ並び替え(projectOrder)を反映した表示順。
@@ -2915,6 +2956,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     addRoleLevel,
     removeRoleLevel,
     reorderRoleLevel,
+    restrictedRoles,
+    toggleRestrictedRole,
     rolePermissions,
     setRolePermissions,
     visibleAdminSections,

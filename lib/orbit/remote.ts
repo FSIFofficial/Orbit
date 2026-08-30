@@ -371,6 +371,9 @@ export interface RemoteSettings {
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定。載っていないIDは末尾に元の順序のまま追加される
   projectOrder: string[]
+  // 制限付きロール — Tags画面で「制限あり」に設定されたロール名のリスト。
+  // リストにないロールは全管理者権限を持つ
+  restrictedRoles: string[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -438,6 +441,7 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     skillFieldThreshold: Number.isFinite(skillFieldThreshold) ? skillFieldThreshold : null,
     orgNotificationEmails: splitTags(byKey.get('org_notification_emails')),
     projectOrder: splitTags(byKey.get('project_order')),
+    restrictedRoles: splitTags(byKey.get('restricted_roles')),
   }
 }
 
