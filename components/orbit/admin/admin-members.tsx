@@ -33,6 +33,7 @@ export function AdminMembers() {
     skillOptions,
     addSkillOption,
     roleLevels,
+    restrictedRoles,
     addMember,
     isFullAdmin,
   } = useOrbit()
@@ -48,7 +49,6 @@ export function AdminMembers() {
   const [managementOnly, setManagementOnly] = useState(false)
   const [desiredArea, setDesiredArea] = useState('')
   const ROLES: Role[] = [BASE_ROLE, ...roleLevels]
-  const isTopRole = (role: Role) => roleLevels.length <= 1 || role !== roleLevels[0]
 
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -332,7 +332,7 @@ export function AdminMembers() {
                     </td>
                     {isFullAdmin && (
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        {m.role !== BASE_ROLE && !isTopRole(m.role) ? (
+                        {m.role !== BASE_ROLE && restrictedRoles.includes(m.role) ? (
                           <button
                             onClick={() => setAssigningProjects(m)}
                             className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
