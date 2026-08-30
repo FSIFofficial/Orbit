@@ -149,6 +149,7 @@ interface OrbitContextValue extends OrbitState {
   roleLevels: string[]
   addRoleLevel: (name: string) => void
   removeRoleLevel: (name: string) => void
+  reorderRoleLevel: (name: string, direction: 'up' | 'down') => void
   // per-role-level admin-screen section visibility (see types.ts's
   // AdminSection/DEFAULT_NON_TOP_SECTIONS); the top role level always sees
   // everything (isFullAdmin), so it's not represented here
@@ -1109,6 +1110,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           runRemote(remoteApi.updateSetting('role_permissions', JSON.stringify(nextPerms)))
         return nextPerms
       })
+    },
+    [roleLevels, runRemote],
+  )
+
+  const reorderRoleLevel = useCallback(
+    (name: string, direction: 'up' | 'down') => {
+      const idx = roleLevels.indexOf(name)
+      if (idx === -1) return
+      const next = [...roleLevels]
+      const swap = direction === 'up' ? idx - 1 : idx + 1
+      if (swap < 0 || swap >= next.length) return
+      ;[next[idx], next[swap]] = [next[swap], next[idx]]
+      setRoleLevels(next)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('role_levels', next.join(',')))
     },
     [roleLevels, runRemote],
   )
@@ -2888,6 +2903,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     roleLevels,
     addRoleLevel,
     removeRoleLevel,
+    reorderRoleLevel,
     rolePermissions,
     setRolePermissions,
     visibleAdminSections,
