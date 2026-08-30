@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
-import { Modal } from './modal'
-import { Avatar, OrbitMark } from './primitives'
-import { ChevronRight, TriangleAlert } from 'lucide-react'
+import { OrbitMark } from './primitives'
+import { TriangleAlert } from 'lucide-react'
 import {
   isGoogleOAuthConfigured,
   requestGoogleLoginToken,
@@ -14,19 +13,16 @@ import {
 
 export function LoginScreen() {
   const { login, members } = useOrbit()
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
-
-  const demoUsers = members
 
   const handleGoogle = async () => {
     setError(false)
     setLoginError(null)
 
     if (!isGoogleOAuthConfigured()) {
-      setPickerOpen(true)
+      setLoginError('Google OAuthが設定されていません。管理者にお問い合わせください。')
       return
     }
 
@@ -98,63 +94,17 @@ export function LoginScreen() {
           )}
 
           {loginError && (
-            <div className="mt-3 text-xs text-destructive">
-              <div className="flex items-center justify-center gap-1.5">
-                <TriangleAlert className="size-3.5 shrink-0" />
-                {loginError}
-              </div>
-              <button
-                type="button"
-                onClick={() => { setLoginError(null); setPickerOpen(true) }}
-                className="mt-1.5 w-full text-center text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                デモユーザーとしてログイン
-              </button>
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-destructive">
+              <TriangleAlert className="size-3.5 shrink-0" />
+              {loginError}
             </div>
           )}
 
           <p className="mt-4 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {isGoogleOAuthConfigured() ? 'Powered by Google' : 'MVP Demo'}
+            Powered by Google
           </p>
         </div>
       </div>
-
-      <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} labelledBy="picker-title">
-        <h2 id="picker-title" className="text-base font-semibold">
-          デモユーザーを選択
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          プロトタイプを体験するユーザーを選んでください。
-        </p>
-        <div className="mt-4 flex flex-col gap-2">
-          {demoUsers.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => login(u.id)}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-border-strong hover:bg-secondary"
-            >
-              <Avatar member={u} size={40} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{u.displayName || u.name}</span>
-                  <span
-                    className={
-                      u.role !== '一般'
-                        ? 'rounded bg-primary-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-foreground'
-                        : 'rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground'
-                    }
-                  >
-                    {u.role}
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground">{u.affiliation}</div>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </button>
-          ))}
-        </div>
-      </Modal>
     </main>
   )
 }

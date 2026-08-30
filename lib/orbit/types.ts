@@ -112,6 +112,10 @@ export interface Member {
   // whether this member should receive an email when a new task is
   // registered and needs approval — see store.tsx's notifyRecipients
   notify?: boolean
+  // per-notification-kind email frequency settings (see NotifyFrequency /
+  // NotifyKind below). Absent keys fall back to 'immediate' for admins,
+  // 'immediate' for mention/rejected, 'none' for others.
+  notifySettings?: Partial<Record<NotifyKind, NotifyFrequency>>
   // shown instead of `name` throughout the UI when set (item: display name)
   displayName?: string
   // dates (YYYY-MM-DD) this member has marked themselves unavailable on
@@ -547,6 +551,17 @@ export const PRIORITY_LINE: Record<Priority, string> = {
   中: 'var(--priority-medium)',
   低: 'var(--priority-low)',
 }
+
+// Email notification frequency per notification kind.
+// 'immediate': send right away (current default behaviour)
+// '3h' / '6h' / '1d': batch and send at most once per window
+// 'none': never send
+export type NotifyFrequency = 'immediate' | '3h' | '6h' | '1d' | 'none'
+
+// Kinds of email notifications a member can configure independently.
+// new_task / review are primarily admin-facing; mention / rejected / deadline
+// apply to all members.
+export type NotifyKind = 'new_task' | 'review' | 'mention' | 'rejected' | 'deadline'
 
 // An in-app notification item — derived on the fly from current task/member
 // state (see store.tsx's `notifications`), not persisted.

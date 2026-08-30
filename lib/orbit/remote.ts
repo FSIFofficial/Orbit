@@ -35,6 +35,8 @@ import type {
   TaskStatus,
   TrainingRecord,
   TransferRecord,
+  NotifyFrequency,
+  NotifyKind,
 } from './types'
 import { STATUS_LABEL, isAdminRole } from './types'
 
@@ -200,6 +202,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     skills: [...will, ...judgment],
     email: r.email || undefined,
     notify: /^(true|1|yes)$/i.test((r.notify_new_task || '').trim()),
+    notifySettings: parseJsonObject<Partial<Record<NotifyKind, NotifyFrequency>>>(r.notify_settings),
     displayName: r.display_name || undefined,
     unavailableDates: splitTags(r.unavailable_dates),
     reportsToId: r.reports_to_id || undefined,
@@ -528,6 +531,8 @@ export const remoteApi = {
   removeMember: (memberId: string) => postToGas('removeMember', { memberId }),
   updateNotify: (memberId: string, notify: boolean) =>
     postToGas('updateNotify', { memberId, notify }),
+  updateNotifySettings: (memberId: string, settings: Partial<Record<NotifyKind, NotifyFrequency>>) =>
+    postToGas('updateNotifySettings', { memberId, settings }),
   updateRole: (memberId: string, role: Role) => postToGas('updateRole', { memberId, role }),
   updateReportsTo: (memberId: string, reportsToId: string | null) =>
     postToGas('updateReportsTo', { memberId, reportsToId }),

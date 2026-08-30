@@ -12,7 +12,7 @@ import { CareerTab } from '@/components/orbit/people/career-tab'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
 import { formatDeadlineFull, formatTenure, memberSkillFieldProgress } from '@/lib/orbit/utils'
-import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL } from '@/lib/orbit/types'
+import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
 import { cn } from '@/lib/utils'
 import {
@@ -90,6 +90,7 @@ export function PersonDetail({ id }: { id: string }) {
     driveEnabled,
     updateEmail,
     updateNotify,
+    updateNotifySettings,
     updateMentor,
     jobRequirements,
     skillOptions,
@@ -488,18 +489,10 @@ export function PersonDetail({ id }: { id: string }) {
               className="h-7 w-48 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
             />
           </div>
-          <button
-            onClick={() => updateNotify(member.id, !member.notify)}
-            className={cn(
-              'mt-3 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
-              member.notify
-                ? 'border-primary/30 bg-primary-muted text-accent-foreground'
-                : 'border-border text-muted-foreground hover:bg-secondary',
-            )}
-          >
-            <Bell className="size-3.5" />
-            新規タスク通知 {member.notify ? 'ON' : 'OFF'}
-          </button>
+          <NotifySettingsTable
+            member={member}
+            onUpdate={(settings) => updateNotifySettings(member.id, settings)}
+          />
         </div>
       )}
 
@@ -1170,6 +1163,80 @@ export function PersonDetail({ id }: { id: string }) {
           </Button>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+const NOTIFY_KINDS: { kind: NotifyKind; label: string }[] = [
+  { kind: 'new_task', label: '新規タスク' },
+  { kind: 'review', label: 'レビュー依頼' },
+  { kind: 'mention', label: 'メンション' },
+  { kind: 'rejected', label: '差し戻し' },
+  { kind: 'deadline', label: '締切リマインド' },
+]
+
+const NOTIFY_FREQS: { value: NotifyFrequency; label: string }[] = [
+  { value: 'immediate', label: 'その都度' },
+  { value: '3h', label: '3時間' },
+  { value: '6h', label: '6時間' },
+  { value: '1d', label: '1日' },
+  { value: 'none', label: 'なし' },
+]
+
+function NotifySettingsTable({
+  member,
+  onUpdate,
+}: {
+  member: Member
+  onUpdate: (settings: Partial<Record<NotifyKind, NotifyFrequency>>) => void
+}) {
+  const settings = member.notifySettings ?? {}
+
+  const toggle = (kind: NotifyKind, freq: NotifyFrequency) => {
+    const current = settings[kind] ?? 'none'
+    onUpdate({ ...settings, [kind]: current === freq ? 'none' : freq })
+  }
+
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[420px] text-xs">
+        <thead>
+          <tr>
+            <th className="pb-1.5 pr-3 text-left font-medium text-muted-foreground">通知種別</th>
+            {NOTIFY_FREQS.map((f) => (
+              <th key={f.value} className="pb-1.5 px-1 text-center font-medium text-muted-foreground whitespace-nowrap">
+                {f.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {NOTIFY_KINDS.map(({ kind, label }) => {
+            const current = settings[kind] ?? 'none'
+            return (
+              <tr key={kind} className="border-t border-border/50">
+                <td className="py-1.5 pr-3 text-left font-medium">{label}</td>
+                {NOTIFY_FREQS.map((f) => (
+                  <td key={f.value} className="py-1.5 px-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => toggle(kind, f.value)}
+                      className={cn(
+                        'h-6 min-w-[36px] rounded px-1.5 text-[11px] font-medium transition-colors',
+                        current === f.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80',
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
