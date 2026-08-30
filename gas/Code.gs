@@ -164,6 +164,12 @@ function doPost(e) {
       case 'updateReviewer':
         result = updateTaskFields(body.taskId, { reviewer_id: body.reviewerId || '' })
         break
+      case 'updateReviewers':
+        result = updateTaskFields(body.taskId, {
+          reviewer_ids: (body.reviewerIds || []).join(','),
+          reviewer_id: (body.reviewerIds && body.reviewerIds[0]) || '',
+        })
+        break
       case 'setBlocker':
         result = updateTaskFields(body.taskId, {
           blocker_note: body.note || '',
@@ -745,24 +751,21 @@ function memberEmailsByIds(memberIds) {
 // Emails members who were @mentioned in a task comment. commentText is
 // passed straight from the client (not re-read from the sheet) since the
 // comment was just appended in the same request.
+// Respects each member's 'mention' frequency setting via queueNotification.
 function notifyMention(taskId, commentText, memberIds) {
   try {
     var task = findRow(SHEET_TASKS, taskId)
     if (!task) return
-    var emails = memberEmailsByIds(memberIds)
-    if (emails.length === 0) {
-      console.warn('notifyMention: no email on file for memberIds ' + memberIds.join(',') + ' — nothing sent')
-      return
-    }
-    MailApp.sendEmail({
-      to: emails.join(','),
-      subject: '[Orbit] コメントでメンションされました',
-      body:
-        'タスク「' + task.title + '」のコメントであなたがメンションされました。\n\n' +
-        (commentText || '') +
-        '\n\nOrbitで確認してください。',
+    if (!memberIds || memberIds.length === 0) return
+    var subject = '[Orbit] コメントでメンションされました'
+    var body =
+      'タスク「' + task.title + '」のコメントであなたがメンションされました。\n\n' +
+      (commentText || '') +
+      '\n\nOrbitで確認してください。'
+    memberIds.forEach(function(mid) {
+      queueNotification(mid, 'mention', subject, body)
     })
-    console.log('notifyMention: sent to ' + emails.join(','))
+    console.log('notifyMention: queued for memberIds ' + memberIds.join(','))
   } catch (err) {
     console.error('notifyMention failed: ' + err)
   }
@@ -1642,7 +1645,7 @@ function setupOrbit() {
     'assignee_id', 'creator_id', 'created_at', 'start_date', 'due_date', 'due_time',
     'visibility', 'department', 'category', 'skills', 'difficulty', 'priority',
     'last_activity', 'original_input_id', 'approval_status', 'estimated_hours',
-    'importance', 'reviewer_id', 'depends_on_ids',
+    'importance', 'reviewer_id', 'reviewer_ids', 'depends_on_ids',
     'progress_note', 'progress_history_json',
     'deliverables_json', 'history_json', 'comments_json',
     'retrospective_json', 'schedule_json', 'form_json',

@@ -54,6 +54,18 @@ export function exportTasksToExcel(tasks: Task[], projects: Project[], members: 
   downloadWorkbook(wb, `Orbit_タスク一覧_${today}.xlsx`)
 }
 
+// プロジェクト単位でタスクをExcelに書き出す
+export function exportProjectTasksToExcel(project: Project, tasks: Task[], projects: Project[], members: Member[]) {
+  const projectTasks = tasks.filter((t) => t.projectId === project.id)
+  const rows = taskRows(projectTasks, projects, members)
+  const sheet = XLSX.utils.json_to_sheet(rows)
+  sheet['!cols'] = autoWidth(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, sheet, 'タスク')
+  const today = new Date().toISOString().slice(0, 10)
+  downloadWorkbook(wb, `Orbit_${project.name}_${today}.xlsx`)
+}
+
 // 管理者向け：タスク・プロジェクト・メンバーを別シートにまとめた全データエクスポート
 export function exportAllDataToExcel(tasks: Task[], projects: Project[], members: Member[]) {
   const wb = XLSX.utils.book_new()

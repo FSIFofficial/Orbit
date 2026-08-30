@@ -368,7 +368,8 @@ export interface Task {
   importance?: TaskImportance
   // distinct from assigneeIds — who signs off on this task (pairs with the
   // 'review' status). Unset = no particular reviewer, any admin can review.
-  reviewerId?: string
+  reviewerId?: string // deprecated — kept for backward compat read
+  reviewerIds?: string[] // replaces reviewerId; multiple reviewers can all confirm
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved
@@ -428,7 +429,7 @@ export interface TaskSchedule {
 // メンバーに回答してもらう。招待者全員が回答し終えると自動的に
 // status: 'done' になり、作成者へ回答結果とともに通知が飛ぶ
 // （store.tsx の respondToForm / gas/Code.gs の notifyFormResult）
-export type FormFieldType = 'text' | 'textarea' | 'select' | 'checkbox'
+export type FormFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'image'
 
 export interface FormFieldDef {
   id: string
