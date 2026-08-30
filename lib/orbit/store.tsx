@@ -2848,13 +2848,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (!isRemoteConfigured || remoteStatus === 'ready' || remoteStatus === 'error') &&
     settingsReady
 
+  const membersWithFacts = useMemo(() => {
+    const doneTasks = tasks.filter((t) => t.status === 'done' && t.category)
+    return members.map((m) => {
+      const myDone = doneTasks.filter((t) => t.assigneeIds.includes(m.id))
+      const counts: Record<string, number> = {}
+      myDone.forEach((t) => { counts[t.category] = (counts[t.category] ?? 0) + 1 })
+      const facts = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, count]) => ({ label, count }))
+      return facts.length > 0 ? { ...m, facts } : m
+    })
+  }, [members, tasks])
+
   const value: OrbitContextValue = {
     currentUserId,
     tasks,
     visibleTasks,
     pendingTasks,
     archivedTasks,
-    members,
+    members: membersWithFacts,
     projects: orderedProjects,
     inputs,
     mode,
