@@ -44,6 +44,7 @@ export function LoginScreen() {
       if (matched) {
         login(matched.id)
       } else {
+        setGasAuthToken(null)
         setLoginError(`${userInfo.email} はOrbitに登録されていません。`)
       }
     } catch {
