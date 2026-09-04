@@ -624,6 +624,12 @@ export const remoteApi = {
       filename,
       folderId: DRIVE_FOLDER_ID,
     }),
+  uploadOrgLogo: (dataUrl: string, filename: string) =>
+    postToGas<{ url: string }>('uploadOrgLogo', {
+      dataUrl,
+      filename,
+      folderId: DRIVE_FOLDER_ID,
+    }),
   addMember: (name: string, email: string, affiliation: string, role: Role) =>
     postToGas<{ id: string }>('addMember', { name, email, affiliation, role }),
   updateEmail: (memberId: string, email: string) => postToGas('updateEmail', { memberId, email }),

@@ -341,6 +341,7 @@ interface OrbitContextValue extends OrbitState {
   removeComment: (id: string, commentId: string) => void
   updateAvatar: (memberId: string, avatarColor: string, initials: string) => void
   uploadAvatarImage: (memberId: string, dataUrl: string, filename: string) => Promise<void>
+  uploadOrgLogo: (dataUrl: string, filename: string) => Promise<void>
   notifications: import('./types').NotificationItem[]
   getMember: (id: string | null) => Member | undefined
   getProject: (id: string) => Project | undefined
@@ -404,6 +405,8 @@ const RESTRICTED_ROLES_STORAGE_KEY = 'orbit-restricted-roles'
 const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
 const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
 const SLACK_WEBHOOK_STORAGE_KEY = 'orbit-slack-webhook-url'
+const ORG_NAME_STORAGE_KEY = 'orbit-org-name'
+const ORG_LOGO_URL_STORAGE_KEY = 'orbit-org-logo-url'
 
 function loadState(): Partial<OrbitState> | null {
   if (typeof window === 'undefined') return null
@@ -613,9 +616,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 配信先。個々のメンバーのnotify_new_task設定に関わらず常に通知される
   // （gas/Code.gsのnotifyAdmins()参照）
   const [orgNotificationEmails, setOrgNotificationEmails] = useState<string[]>([])
-  // 団体名・ロゴ — Admin > タグ設定から登録
-  const [orgName, setOrgNameState] = useState<string>('')
-  const [orgLogoUrl, setOrgLogoUrlState] = useState<string>('')
+  // 団体名・ロゴ — SettingsCSV + localStorageキャッシュで復元
+  const [orgName, setOrgNameState] = useState<string>(() => {
+    try { return typeof window !== 'undefined' ? (window.localStorage.getItem(ORG_NAME_STORAGE_KEY) ?? '') : '' } catch { return '' }
+  })
+  const [orgLogoUrl, setOrgLogoUrlState] = useState<string>(() => {
+    try { return typeof window !== 'undefined' ? (window.localStorage.getItem(ORG_LOGO_URL_STORAGE_KEY) ?? '') : '' } catch { return '' }
+  })
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定する、org全体で共有の表示順
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
@@ -753,8 +760,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSkillFieldSkillsState(s.skillFieldSkills)
         setSkillFieldThresholdState(s.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
         setOrgNotificationEmails(s.orgNotificationEmails)
-        if (s.orgName) setOrgNameState(s.orgName)
-        if (s.orgLogoUrl) setOrgLogoUrlState(s.orgLogoUrl)
+        if (s.orgName) { setOrgNameState(s.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, s.orgName) } catch {} }
+        if (s.orgLogoUrl) { setOrgLogoUrlState(s.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, s.orgLogoUrl) } catch {} }
         setProjectOrderState(s.projectOrder)
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
@@ -813,8 +820,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSkillFieldSkillsState(settings.skillFieldSkills)
           setSkillFieldThresholdState(settings.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
           setOrgNotificationEmails(settings.orgNotificationEmails)
-          if (settings.orgName) setOrgNameState(settings.orgName)
-          if (settings.orgLogoUrl) setOrgLogoUrlState(settings.orgLogoUrl)
+          if (settings.orgName) { setOrgNameState(settings.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, settings.orgName) } catch {} }
+          if (settings.orgLogoUrl) { setOrgLogoUrlState(settings.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, settings.orgLogoUrl) } catch {} }
           setProjectOrderState(settings.projectOrder)
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
@@ -1139,6 +1146,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const setOrgName = useCallback(
     (name: string) => {
       setOrgNameState(name)
+      try { localStorage.setItem(ORG_NAME_STORAGE_KEY, name) } catch {}
       if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_name', name))
     },
     [runRemote],
@@ -1146,9 +1154,30 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const setOrgLogoUrl = useCallback(
     (url: string) => {
       setOrgLogoUrlState(url)
+      try {
+        if (url) localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, url)
+        else localStorage.removeItem(ORG_LOGO_URL_STORAGE_KEY)
+      } catch {}
       if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_logo_url', url))
     },
     [runRemote],
+  )
+  const uploadOrgLogo = useCallback(
+    (dataUrl: string, filename: string): Promise<void> => {
+      if (!isDriveConfigured) return Promise.resolve()
+      return remoteApi
+        .uploadOrgLogo(dataUrl, filename)
+        .then(({ url }) => {
+          setOrgLogoUrlState(url)
+          try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, url) } catch {}
+          setRemoteError(null)
+        })
+        .catch((err) => {
+          reportRemoteError(err)
+          throw err
+        })
+    },
+    [reportRemoteError, runRemote],
   )
 
   // プロジェクトの表示順 — Admin > Projectsのドラッグ並び替えから呼ばれる
@@ -3607,6 +3636,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     removeComment,
     updateAvatar,
     uploadAvatarImage,
+    uploadOrgLogo,
     notifications,
     getMember,
     getProject,

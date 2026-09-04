@@ -339,6 +339,7 @@ function authorizeAction(acting, action, body) {
     'removeProject',           // プロジェクト削除は代表のみ
     'updateDiscordWebhookUrl', // システム設定は代表のみ
     'updateSetting',           // システム設定は代表のみ
+    'uploadOrgLogo',           // 団体ロゴアップロードは代表のみ
     'addMember',               // メンバー追加は代表のみ
     'updateEmail',             // 他人のメールアドレス変更は代表のみ
     'updateJoinedAt',          // 所属開始日の編集は代表のみ（人事記録）
@@ -732,6 +733,9 @@ function doPost(e) {
         break
       case 'updateSetting':
         result = updateSetting(body.key, body.value)
+        break
+      case 'uploadOrgLogo':
+        result = uploadOrgLogo(body.dataUrl, body.filename, body.folderId)
         break
       case 'updateDiscordWebhookUrl':
         result = updateDiscordWebhookUrl(body.url)
@@ -1709,6 +1713,35 @@ function uploadAvatar(memberId, dataUrl, filename, folderId) {
   console.log('uploadAvatar: memberId=' + memberId + ' url=' + url)
   var writeResult = updateMemberFields(memberId, { avatar_url: url })
   console.log('uploadAvatar: updateMemberFields result=' + JSON.stringify(writeResult))
+  return { url: url }
+}
+
+// 団体ロゴをDriveにアップロードし、Settingsシートのorg_logo_urlを更新する。
+// uploadAvatarと異なりMembersシートは変更しない。
+function uploadOrgLogo(dataUrl, filename, folderId) {
+  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
+  if (!match) throw new Error('Expected a base64 data URL')
+  var mimeType = match[1]
+  var base64Data = match[2]
+
+  var folder = DriveApp.getFolderById(folderId)
+  var namePrefix = 'org_logo_'
+
+  var existing = folder.getFiles()
+  while (existing.hasNext()) {
+    var f = existing.next()
+    if (f.getName().indexOf(namePrefix) === 0) f.setTrashed(true)
+  }
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename)
+  var file = folder.createFile(blob)
+  file.setName(namePrefix + Date.now())
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+
+  var url = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w256-h256-c'
+  console.log('uploadOrgLogo: url=' + url)
+  updateSetting('org_logo_url', url)
   return { url: url }
 }
 
