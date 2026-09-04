@@ -45,7 +45,8 @@ import {
   type SyncRow,
 } from '@/lib/orbit/google-sheet-sync'
 
-type Tab = 'overview' | 'growth' | 'career' | 'calendar'
+type Tab = 'overview' | 'tasks' | 'growth' | 'career' | 'calendar'
+type TaskView = 'list' | 'board' | 'calendar'
 
 // Downscales/crops an uploaded image to a square JPEG data URL so avatar
 // uploads stay small and consistent, regardless of the source photo's size.
@@ -115,10 +116,12 @@ export function PersonDetail({ id }: { id: string }) {
     quizDefinitions,
     submitQuizResult,
     oneOnOneQuestions,
+    notifications,
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
   const [tab, setTab] = useState<Tab>('overview')
+  const [taskView, setTaskView] = useState<TaskView>('list')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [editingJoinedAt, setEditingJoinedAt] = useState(false)
@@ -590,6 +593,7 @@ export function PersonDetail({ id }: { id: string }) {
         {(
           [
             ['overview', 'Overview'],
+            ['tasks', 'タスク'],
             ...(isSelf || isAdmin ? [['growth', '人材育成']] : []),
             ...(isSelf || isAdmin ? [['career', '経歴・キャリア']] : []),
             ['calendar', 'Calendar'],
@@ -832,6 +836,135 @@ export function PersonDetail({ id }: { id: string }) {
         </div>
       )}
 
+      {/* Tab 2: タスク — ボード/リスト/カレンダーの3表示切り替え
+          ※ここのカレンダーはタスク期限表示。Tab 5 CalendarはGCal連携（別物）。 */}
+      {tab === 'tasks' && (
+        <div className="mt-5 flex flex-col gap-4">
+          {/* サブビュー切り替え */}
+          <div className="flex items-center gap-1.5">
+            {(['list', 'board', 'calendar'] as TaskView[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setTaskView(v)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  taskView === v
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground',
+                )}
+              >
+                {v === 'list' ? 'リスト' : v === 'board' ? 'ボード' : 'カレンダー'}
+              </button>
+            ))}
+          </div>
+
+          {/* リスト表示 */}
+          {taskView === 'list' && (
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/50 text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-2.5 font-medium">タスク</th>
+                    <th className="px-4 py-2.5 font-medium">プロジェクト</th>
+                    <th className="px-4 py-2.5 font-medium">難易度</th>
+                    <th className="px-4 py-2.5 font-medium">ステータス</th>
+                    <th className="px-4 py-2.5 font-medium">期限</th>
+                    <th className="px-4 py-2.5 font-medium">依存</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((t) => (
+                    <tr
+                      key={t.id}
+                      onClick={() => setOpenTaskId(t.id)}
+                      className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-secondary/50"
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">{t.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{getProject(t.projectId)?.name}</td>
+                      <td className="px-4 py-3">
+                        <DifficultyBadge difficulty={t.difficulty} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={t.status} />
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                        {t.deadline ? formatDeadlineFull(t.deadline) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {(t.dependsOnIds ?? []).length > 0
+                          ? `${(t.dependsOnIds ?? []).length}件`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {history.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                        担当タスクがありません。
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ボード表示 — ワークフロー（未着手→進行中→確認待ち→完了）のKanban */}
+          {taskView === 'board' && (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {(['todo', 'in_progress', 'in_review', 'done'] as const).map((status) => {
+                const label: Record<string, string> = {
+                  todo: '未着手',
+                  in_progress: '進行中',
+                  in_review: '確認待ち',
+                  done: '完了',
+                }
+                const col = mine.filter((t) => t.status === status)
+                return (
+                  <div key={status} className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between rounded-t-lg border border-b-0 border-border bg-secondary/50 px-3 py-2">
+                      <span className="text-xs font-semibold text-muted-foreground">{label[status]}</span>
+                      <span className="text-xs text-muted-foreground">{col.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5 rounded-b-lg border border-t-0 border-border bg-card p-2 min-h-[80px]">
+                      {col.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setOpenTaskId(t.id)}
+                          className="w-full rounded-md border border-border/60 bg-secondary/30 p-2 text-left text-xs hover:bg-secondary/70"
+                        >
+                          <p className="font-medium text-foreground line-clamp-2">{t.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <DifficultyBadge difficulty={t.difficulty} />
+                            {t.deadline && (
+                              <span className="text-muted-foreground">{t.deadline}</span>
+                            )}
+                          </div>
+                          {(t.dependsOnIds ?? []).length > 0 && (
+                            <p className="mt-0.5 text-muted-foreground">
+                              依存: {(t.dependsOnIds ?? []).length}件
+                            </p>
+                          )}
+                        </button>
+                      ))}
+                      {col.length === 0 && (
+                        <p className="px-1 py-2 text-xs text-muted-foreground">なし</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* カレンダー表示 — タスク期限をカレンダーに表示
+              ※ Tab 5 "Calendar" タブのGCalカレンダーとは別物（こちらはタスク期限のみ） */}
+          {taskView === 'calendar' && (
+            <CalendarView tasks={mine} onOpenTask={setOpenTaskId} />
+          )}
+        </div>
+      )}
+
       {tab === 'career' && (
         <CareerTab
           member={member}
@@ -860,6 +993,9 @@ export function PersonDetail({ id }: { id: string }) {
         />
       )}
 
+      {/* Tab 5: Calendar — Googleカレンダー連携統合表示
+          ※ Tab 2「タスク」タブ内のカレンダービュー（タスク期限表示）とは別物。
+            こちらはGCal連携でイベントをOrbitのカレンダーに重ねて表示する。 */}
       {tab === 'calendar' && (
         <div className="mt-5 flex flex-col gap-4">
           {isSelf && (
@@ -907,6 +1043,33 @@ export function PersonDetail({ id }: { id: string }) {
 
       {tab === 'overview' && (
         <>
+      {/* ダッシュボードサマリー */}
+      {isSelf && (() => {
+        // notifications は store でdismissed済みを除外済み — そのまま未読として扱う
+        const approvalNotifs = notifications.filter((n) => n.kind === 'approval')
+        const pendingApprovTasks = tasks.filter((t) => t.pendingApproval && t.createdById === member.id)
+        return (
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-2xl font-semibold tabular-nums">{active}</p>
+              <p className="text-xs text-muted-foreground">進行中のタスク</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-2xl font-semibold tabular-nums">{pendingApprovTasks.length}</p>
+              <p className="text-xs text-muted-foreground">承認待ちタスク</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-2xl font-semibold tabular-nums">{notifications.length}</p>
+              <p className="text-xs text-muted-foreground">未読通知</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-2xl font-semibold tabular-nums">{approvalNotifs.length}</p>
+              <p className="text-xs text-muted-foreground">承認待ち通知</p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Talent sections */}
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         <TalentCard
@@ -1026,81 +1189,18 @@ export function PersonDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Task history */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <SectionLabel>タスク履歴</SectionLabel>
-          {(isSelf || isAdmin) && history.length > 0 && (
-            <button
-              onClick={() => {
-                const headers = ['タスク名', 'プロジェクト', '難易度', 'ステータス', '完了日', 'カテゴリ']
-                const rows = history.map((t) => [
-                  t.name,
-                  getProject(t.projectId)?.name ?? '',
-                  t.difficulty ?? '',
-                  t.status,
-                  t.completedDate ?? '',
-                  t.category ?? '',
-                ])
-                const csv = [headers, ...rows]
-                  .map((r) => r.map((v) => (String(v).includes(',') || String(v).includes('"') ? '"' + String(v).replace(/"/g, '""') + '"' : String(v))).join(','))
-                  .join('\n')
-                const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `tasks-${member.name}.csv`
-                a.click()
-                URL.revokeObjectURL(url)
-              }}
-              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              <Download className="size-3" />
-              CSVダウンロード
-            </button>
-          )}
-        </div>
-        <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-secondary/50 text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium">タスク</th>
-                <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-                <th className="px-4 py-2.5 font-medium">難易度</th>
-                <th className="px-4 py-2.5 font-medium">ステータス</th>
-                <th className="px-4 py-2.5 font-medium">完了日</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((t) => (
-                <tr
-                  key={t.id}
-                  onClick={() => setOpenTaskId(t.id)}
-                  className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-secondary/50"
-                >
-                  <td className="px-4 py-3 font-medium text-foreground">{t.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{getProject(t.projectId)?.name}</td>
-                  <td className="px-4 py-3">
-                    <DifficultyBadge difficulty={t.difficulty} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={t.status} />
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                    {t.status === 'done' ? formatDeadlineFull(t.completedDate ?? null) : '—'}
-                  </td>
-                </tr>
-              ))}
-              {history.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                    担当タスクがありません。
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* タスク詳細はタブ2「タスク」で確認できます */}
+      <div className="mt-4 rounded-xl border border-dashed border-border bg-card/50 px-4 py-3">
+        <p className="text-xs text-muted-foreground">
+          タスク一覧・ボード・カレンダー表示は
+          <button
+            onClick={() => setTab('tasks')}
+            className="mx-1 font-medium text-primary hover:underline"
+          >
+            タスクタブ
+          </button>
+          から確認できます。
+        </p>
       </div>
         </>
       )}

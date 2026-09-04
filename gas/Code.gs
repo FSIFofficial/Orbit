@@ -1992,6 +1992,68 @@ function dailyMaintenance() {
     // best-effort — still run the overdue sweep below
   }
   notifyOverdueTasksToDiscord()
+  notifyOverdueTasksToAssignees()
+}
+
+// 期限超過タスクを担当者本人に個別メール通知する日次スイープ。
+// notifyOverdueTasksToDiscord() と同じ期限超過タスクを洗い出し、
+// assignee_id（カンマ区切り複数可）を分解して担当者ごとに1通まとめる。
+// 通知頻度は各担当者の notify_settings['deadline'] で制御。
+// メールアドレス未登録の担当者はスキップし処理継続（best-effort）。
+function notifyOverdueTasksToAssignees() {
+  try {
+    var sheet = getSheet(SHEET_TASKS)
+    var headers = headerRow(sheet)
+    var titleCol = headers.indexOf('title')
+    var dueCol = headers.indexOf('due_date')
+    var statusCol = headers.indexOf('status')
+    var assigneeCol = headers.indexOf('assignee_id')
+    if (titleCol === -1 || dueCol === -1 || statusCol === -1 || assigneeCol === -1) return
+    var lastRow = sheet.getLastRow()
+    if (lastRow < 2) return
+    var rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+    var today = todayStr()
+
+    // 期限超過タスクを担当者IDごとに集約
+    var byAssignee = {}
+    rows.forEach(function (r) {
+      var due = cellDateStr(r[dueCol])
+      var status = String(r[statusCol] || '')
+      if (!due || due >= today || status === '完了') return
+      var title = String(r[titleCol] || '')
+      var assigneeIds = String(r[assigneeCol] || '')
+        .split(',')
+        .map(function (s) { return s.trim() })
+        .filter(Boolean)
+      assigneeIds.forEach(function (aid) {
+        if (!byAssignee[aid]) byAssignee[aid] = []
+        byAssignee[aid].push({ title: title, due: due })
+      })
+    })
+
+    var assigneeIds = Object.keys(byAssignee)
+    if (assigneeIds.length === 0) return
+
+    assigneeIds.forEach(function (aid) {
+      try {
+        var tasks = byAssignee[aid]
+        var lines = tasks.map(function (t) {
+          return '・' + t.title + '（期限: ' + t.due + '）'
+        })
+        var subject = '[Orbit] 期限超過タスクのお知らせ（' + tasks.length + '件）'
+        var body =
+          '担当しているタスクのうち、期限を超過しているものが' + tasks.length + '件あります。\n\n' +
+          lines.join('\n') +
+          '\n\nOrbitにログインして対応状況を更新してください。'
+        queueNotification(aid, 'deadline', subject, body)
+      } catch (err) {
+        // メンバー1人の通知失敗は他のメンバーの処理に影響させない
+        console.error('notifyOverdueTasksToAssignees: failed for memberId=' + aid + ': ' + err)
+      }
+    })
+  } catch (err) {
+    console.error('notifyOverdueTasksToAssignees failed: ' + err)
+  }
 }
 
 // ---- Discord Webhook 連携 ---------------------------------------------------

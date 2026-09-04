@@ -395,6 +395,9 @@ export interface RemoteSettings {
   expenseCategories: import('./types').ExpenseCategory[]
   // カスタムフォーム定義 — Settings キー "custom_form_defs"
   customFormDefs: import('./types').CustomFormDef[]
+  // 団体名・ロゴ — Settings キー "org_name" / "org_logo_url"
+  orgName: string
+  orgLogoUrl: string
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -461,6 +464,8 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     skillFieldSkills,
     skillFieldThreshold: Number.isFinite(skillFieldThreshold) ? skillFieldThreshold : null,
     orgNotificationEmails: splitTags(byKey.get('org_notification_emails')),
+    orgName: byKey.get('org_name') ?? '',
+    orgLogoUrl: byKey.get('org_logo_url') ?? '',
     projectOrder: splitTags(byKey.get('project_order')),
     restrictedRoles: splitTags(byKey.get('restricted_roles')),
     skillLevelThresholds: (() => {

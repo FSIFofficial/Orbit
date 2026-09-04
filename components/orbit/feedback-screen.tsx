@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
-import { MessageSquare, Send, CheckCircle2 } from 'lucide-react'
+import { MessageSquare, Send, CheckCircle2, ImagePlus, X } from 'lucide-react'
 
 const FORM_URL =
   'https://docs.google.com/forms/u/0/d/e/1FAIpQLSdiyZI93Tvf-lFOxy49H48mMh2MOgQCsxbZvkoQk07x_P-3sA/formResponse'
@@ -52,26 +52,42 @@ export function FeedbackScreen() {
   const { goBack } = useNav()
 
   const [orgName, setOrgName] = useState('')
-  const [yourName, setYourName] = useState('')
+  const [yourName, setYourName] = useState('') // お名前は任意 — デフォルト空欄
   const [contactType, setContactType] = useState('')
+  const [otherDetail, setOtherDetail] = useState('') // 「その他」選択時の追加テキスト
   const [features, setFeatures] = useState<string[]>([])
   const [detail, setDetail] = useState('')
   const [steps, setSteps] = useState('')
   const [severity, setSeverity] = useState('')
   const [wantReply, setWantReply] = useState('')
   const [email, setEmail] = useState('')
+  const [screenshots, setScreenshots] = useState<{ name: string; dataUrl: string }[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(ORG_NAME_KEY) : null
     setOrgName(saved ?? '')
+    // お名前は任意のため事前記入しない — ユーザーが必要なら入力
     if (currentUser) {
-      setYourName(currentUser.displayName || currentUser.name)
       setEmail(currentUser.email ?? '')
     }
   }, [currentUser])
+
+  const addScreenshot = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      setScreenshots((prev) => [...prev, { name: file.name, dataUrl }])
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeScreenshot = (i: number) => {
+    setScreenshots((prev) => prev.filter((_, idx) => idx !== i))
+  }
 
   const toggleFeature = (f: string) => {
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]))
@@ -81,7 +97,7 @@ export function FeedbackScreen() {
     e.preventDefault()
     if (!contactType) { setError('ご連絡の種類を選択してください'); return }
     if (!detail.trim()) { setError('詳細を入力してください'); return }
-    if (!severity) { setError('困り具合を選択してください'); return }
+    if (contactType === '不具合の報告' && !severity) { setError('困り具合を選択してください'); return }
     if (!wantReply) { setError('返信希望を選択してください'); return }
     setError('')
     setSubmitting(true)
@@ -90,12 +106,23 @@ export function FeedbackScreen() {
       try { localStorage.setItem(ORG_NAME_KEY, orgName) } catch { /* ignore */ }
     }
 
+    // 「その他」の場合はその内容をcontactTypeとして送信
+    const effectiveContactType = contactType === 'その他' && otherDetail.trim()
+      ? `その他: ${otherDetail.trim()}`
+      : contactType
+
+    // スクリーンショット添付は現在Googleフォーム経由では未対応のため
+    // ファイル名のみ詳細テキストに付記する
+    const screenshotNote = screenshots.length > 0
+      ? `\n\n[添付スクリーンショット: ${screenshots.map((s) => s.name).join(', ')}]`
+      : ''
+
     const body = new URLSearchParams()
     body.append('entry.1307138965', orgName)
     body.append('entry.25271577', yourName)
-    body.append('entry.619897353', contactType)
+    body.append('entry.619897353', effectiveContactType)
     for (const f of features) body.append('entry.897435869', f)
-    body.append('entry.2125058687', detail)
+    body.append('entry.2125058687', detail + screenshotNote)
     body.append('entry.1872882494', steps)
     body.append('entry.1612805599', severity)
     body.append('entry.2009922288', wantReply)
@@ -182,6 +209,15 @@ export function FeedbackScreen() {
               </button>
             ))}
           </div>
+          {/* 「その他」選択時にテキストボックスを表示 */}
+          {contactType === 'その他' && (
+            <input
+              value={otherDetail}
+              onChange={(e) => setOtherDetail(e.target.value)}
+              placeholder="どのような内容かを教えてください"
+              className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          )}
         </Field>
 
         {/* 対象の機能・画面 */}
@@ -215,35 +251,87 @@ export function FeedbackScreen() {
           />
         </Field>
 
-        {/* 再現手順 */}
-        <Field label="再現手順（不具合の場合）">
-          <textarea
-            value={steps}
-            onChange={(e) => setSteps(e.target.value)}
-            placeholder="例: 1. ○○画面を開く 2. △△ボタンを押す 3. エラーが出る"
-            rows={3}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+        {/* スクリーンショット */}
+        <Field label="スクリーンショット（任意）">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              Array.from(e.target.files ?? []).forEach(addScreenshot)
+              e.target.value = ''
+            }}
           />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-2 rounded-lg border border-dashed border-border-strong bg-secondary/40 px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <ImagePlus className="size-4" />
+            画像を追加する
+          </button>
+          {screenshots.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-3">
+              {screenshots.map((s, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={s.dataUrl}
+                    alt={s.name}
+                    className="h-20 w-20 rounded-lg border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeScreenshot(i)}
+                    className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-white shadow"
+                    aria-label="削除"
+                  >
+                    <X className="size-3" />
+                  </button>
+                  <p className="mt-0.5 max-w-[80px] truncate text-[10px] text-muted-foreground">{s.name}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            ※ 現在ファイル添付はプレビューのみ（フォーム送信には含まれません）。不具合の詳細が分かる画像はDiscordやメールで別途共有してください。
+          </p>
         </Field>
 
-        {/* 困り具合 */}
-        <Field label="困り具合" required>
-          <div className="space-y-2">
-            {SEVERITY_OPTIONS.map((s) => (
-              <label key={s} className="flex cursor-pointer items-center gap-2.5">
-                <input
-                  type="radio"
-                  name="severity"
-                  value={s}
-                  checked={severity === s}
-                  onChange={() => setSeverity(s)}
-                  className="size-4 accent-primary"
-                />
-                <span className="text-sm">{s}</span>
-              </label>
-            ))}
-          </div>
-        </Field>
+        {/* 再現手順・困り具合 — 不具合の報告を選んだ方のみ表示 */}
+        {contactType === '不具合の報告' && (
+          <>
+            <Field label="再現手順">
+              <textarea
+                value={steps}
+                onChange={(e) => setSteps(e.target.value)}
+                placeholder="例: 1. ○○画面を開く 2. △△ボタンを押す 3. エラーが出る"
+                rows={3}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </Field>
+
+            <Field label="困り具合" required>
+              <div className="space-y-2">
+                {SEVERITY_OPTIONS.map((s) => (
+                  <label key={s} className="flex cursor-pointer items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="severity"
+                      value={s}
+                      checked={severity === s}
+                      onChange={() => setSeverity(s)}
+                      className="size-4 accent-primary"
+                    />
+                    <span className="text-sm">{s}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </>
+        )}
 
         {/* 返信希望 */}
         <Field label="返信を希望しますか" required>

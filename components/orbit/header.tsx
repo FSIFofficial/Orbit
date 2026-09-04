@@ -44,6 +44,8 @@ export function Header() {
     visibleTasks: tasks,
     getProject,
     markMentionSeen,
+    orgName,
+    orgLogoUrl,
   } = useOrbit()
   const { screen, go, goBack, canGoBack } = useNav()
   const { theme, toggle } = useTheme()
@@ -137,8 +139,15 @@ export function Header() {
             onClick={() => handleMode('output')}
             className="flex shrink-0 items-center gap-2"
           >
-            <OrbitMark size={22} />
-            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">Orbit</span>
+            {orgLogoUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={orgLogoUrl} alt={orgName || 'ロゴ'} className="size-[22px] rounded object-contain" />
+            ) : (
+              <OrbitMark size={22} />
+            )}
+            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">
+              {orgName || 'Orbit'}
+            </span>
           </button>
         </div>
 
