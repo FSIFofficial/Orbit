@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload } from 'lucide-react'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
-import { tenureYears } from '@/lib/orbit/utils'
+import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
 
 function workload(count: number): { label: string; className: string } {
   if (count <= 2) return { label: '稼働少なめ', className: 'text-muted-foreground' }
@@ -297,7 +297,9 @@ export function AdminMembers() {
                         <Avatar member={m} size={30} />
                         <div>
                           <div className="font-medium">{m.displayName || m.name}</div>
-                          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {m.departmentPath ? formatDepartmentPath(m.departmentPath) : m.affiliation}
+                          </div>
                         </div>
                       </div>
                     </td>

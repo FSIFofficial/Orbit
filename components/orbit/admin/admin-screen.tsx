@@ -9,10 +9,11 @@ import { AdminProjects } from './admin-projects'
 import { AdminMembers } from './admin-members'
 import { AdminAnalytics } from './admin-analytics'
 import { AdminTags } from './admin-tags'
+import { AdminOrgTree } from './admin-org-tree'
 import { useOrbit } from '@/lib/orbit/store'
 import { OrbitMark } from '../primitives'
 import type { AdminSection } from '@/lib/orbit/types'
-import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags } from 'lucide-react'
+import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network } from 'lucide-react'
 
 type Section = AdminSection
 
@@ -24,6 +25,7 @@ const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: 'members', label: 'Members', icon: <Users className="size-4" /> },
   { key: 'analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
   { key: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
+  { key: 'org', label: 'Org Tree', icon: <Network className="size-4" /> },
 ]
 
 export function AdminScreen({ section }: { section: Section }) {
@@ -123,6 +125,7 @@ export function AdminScreen({ section }: { section: Section }) {
           {section === 'members' && <AdminMembers />}
           {section === 'analytics' && <AdminAnalytics />}
           {section === 'tags' && <AdminTags />}
+          {section === 'org' && <AdminOrgTree />}
         </div>
       </div>
     </div>

@@ -1,5 +1,33 @@
 import type { Member, Task } from './types'
 
+export function parseDepartmentPath(path: string): string[] {
+  return path.split('>').map((s) => s.trim()).filter(Boolean)
+}
+
+export function formatDepartmentPath(path: string): string {
+  return parseDepartmentPath(path).join(' ＞ ')
+}
+
+export function getDepartmentTops(departmentPath: string, members: Member[]): Member[] {
+  return members.filter((m) => {
+    if (m.departmentPath !== departmentPath) return false
+    if (!m.reportsToId) return true
+    const manager = members.find((x) => x.id === m.reportsToId)
+    return !manager || manager.departmentPath !== departmentPath
+  })
+}
+
+/** Finds dept tops for members whose departmentPath contains `segment` as any component. */
+export function getDepartmentTopsBySegment(segment: string, members: Member[]): Member[] {
+  const matched = members.filter(
+    (m) => m.departmentPath && parseDepartmentPath(m.departmentPath).includes(segment),
+  )
+  const paths = Array.from(new Set(matched.map((m) => m.departmentPath as string)))
+  return paths.flatMap((p) => getDepartmentTops(p, members)).filter(
+    (m, i, arr) => arr.findIndex((x) => x.id === m.id) === i,
+  )
+}
+
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }

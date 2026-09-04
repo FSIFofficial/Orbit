@@ -411,6 +411,11 @@ export function PersonDetail({ id }: { id: string }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {member.role !== BASE_ROLE ? member.role : member.affiliation}
           </p>
+          {member.departmentPath && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')}
+            </p>
+          )}
           <div className="mt-1 flex items-center gap-1.5">
             {editingJoinedAt ? (
               <input
