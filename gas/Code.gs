@@ -395,6 +395,28 @@ function authorizeAction(acting, action, body) {
       if (checkPermissionOverride(acting, action, body)) return
       throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
     }
+    // 班長（代表以外の管理者）はプロジェクトスコープに制限する。
+    // acting.project_ids に対象プロジェクトが含まれなければ permission_overrides でのみ許可。
+    var actingProjectIds = acting.project_ids ? String(acting.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean) : []
+    if (actingProjectIds.length > 0) {
+      // 対象プロジェクトIDを特定する
+      var targetProjectId = null
+      if (body.projectId) {
+        // プロジェクト操作（createProject/updateProjectDetails/updateProjectMembers 等）
+        targetProjectId = String(body.projectId)
+      } else if (body.taskId) {
+        // タスク操作: タスクの project_id を引く
+        try {
+          var taskObj = findRow(SHEET_TASKS, String(body.taskId))
+          if (taskObj) targetProjectId = String(taskObj.project_id || '')
+        } catch(e) {}
+      }
+      // project_id が特定できた場合のみスコープチェック（特定できない操作は通過させる）
+      if (targetProjectId && actingProjectIds.indexOf(targetProjectId) < 0) {
+        if (checkPermissionOverride(acting, action, body)) return
+        throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
+      }
+    }
     return
   }
 
@@ -831,10 +853,10 @@ function doPost(e) {
         result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
         break
       case 'submitQuizResult':
-        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], acting)
+        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], actingMember)
         break
       case 'submitExpenseApplication':
-        result = saveExpenseApplication(body.application, acting)
+        result = saveExpenseApplication(body.application, actingMember)
         break
       case 'approveExpenseStep':
         result = processExpenseStep(body.applicationId, body.stepId, body.actorId, 'approved', body.comment)
@@ -846,7 +868,7 @@ function doPost(e) {
         result = setExpenseStatus(body.applicationId, 'withdrawn')
         break
       case 'submitCustomForm':
-        result = saveCustomFormSubmission(body.submission, acting)
+        result = saveCustomFormSubmission(body.submission, actingMember)
         break
       case 'approveFormStep':
         result = processFormStep(body.submissionId, body.stepId, body.actorId, 'approved', body.comment)
@@ -2374,7 +2396,7 @@ var SHEET_EXPENSES = 'Expenses'
 var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
 
 function ensureExpensesSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
   var sheet = ss.getSheetByName(SHEET_EXPENSES)
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_EXPENSES)
@@ -2384,7 +2406,7 @@ function ensureExpensesSheet() {
 }
 
 function ensureFormSubmissionsSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
   var sheet = ss.getSheetByName(SHEET_FORM_SUBMISSIONS)
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_FORM_SUBMISSIONS)
@@ -2586,16 +2608,6 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
   return { ok: true }
-}
-
-function getSettingValue(key) {
-  var sheet = getSheet('Settings')
-  if (!sheet) return null
-  var data = sheet.getDataRange().getValues()
-  for (var i = 0; i < data.length; i++) {
-    if (String(data[i][0]) === key) return String(data[i][1] || '')
-  }
-  return null
 }
 
 // ---- Phase 6: スキル一括更新 ----
