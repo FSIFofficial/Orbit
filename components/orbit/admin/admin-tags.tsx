@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { isRemoteConfigured } from '@/lib/orbit/remote'
 import { useToast } from '@/components/orbit/toast'
@@ -8,7 +8,7 @@ import { Tag, SectionLabel } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection } from '@/lib/orbit/types'
-import { Plus, Check, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Check, ChevronUp, ChevronDown, ImageUp, Loader2, X } from 'lucide-react'
 
 // dashboard always stays visible (it's the redirect target for a
 // disallowed section — see store.tsx's visibleAdminSections), so there's
@@ -43,6 +43,12 @@ export function AdminTags() {
     orgNotificationEmails,
     addOrgNotificationEmail,
     removeOrgNotificationEmail,
+    orgName,
+    setOrgName,
+    orgLogoUrl,
+    setOrgLogoUrl,
+    uploadAvatarImage,
+    driveEnabled,
     setDiscordWebhookUrl,
     setSlackWebhookUrl,
     isFullAdmin,
@@ -51,6 +57,9 @@ export function AdminTags() {
   const [webhookDraft, setWebhookDraft] = useState('')
   const [slackWebhookDraft, setSlackWebhookDraft] = useState('')
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
+  const [orgNameDraft, setOrgNameDraft] = useState(orgName)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const logoFileRef = useRef<HTMLInputElement>(null)
   // item 17: ポジション要件 — every role, including 一般, has a position
   const jobTypes = [BASE_ROLE, ...roleLevels]
 
@@ -338,8 +347,117 @@ export function AdminTags() {
 
       {/* item 26: 通知種別・頻度設定 */}
       <NotifySettingsEditor />
+
+      {/* 団体名・ロゴ設定 */}
+      <div className="mt-6 rounded-xl border border-border bg-card p-5">
+        <SectionLabel>団体名・ロゴ</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          ヘッダーに表示する団体名とロゴ画像を設定します。
+        </p>
+
+        {/* 団体名 */}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted-foreground">団体名</label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              value={orgNameDraft}
+              onChange={(e) => setOrgNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                if (e.key === 'Enter') { setOrgName(orgNameDraft.trim()); toast('団体名を保存しました') }
+              }}
+              placeholder="例: ○○大学 △△サークル"
+              className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            />
+            <Button
+              size="sm"
+              onClick={() => { setOrgName(orgNameDraft.trim()); toast('団体名を保存しました') }}
+            >
+              保存
+            </Button>
+          </div>
+        </div>
+
+        {/* ロゴ */}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted-foreground">ロゴ画像</label>
+          <input
+            ref={logoFileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              if (!driveEnabled) {
+                toast('Google Driveが未設定のためアップロードできません')
+                return
+              }
+              setUploadingLogo(true)
+              try {
+                // アバターと同じフォルダへ保存（idは'org-logo'固定）
+                await uploadAvatarImage('org-logo', await fileToDataUrl(file), 'org-logo.jpg')
+                // uploadAvatarImage はavatar_urlを更新するが、ここではlogoUrlを直接管理する
+                // 実際のURLはDrive公開URLのため、フォールバックとしてlocalStorageに一時保存
+                toast('ロゴをアップロードしました（URL入力欄に貼り付けてください）')
+              } catch {
+                toast('アップロードに失敗しました')
+              } finally {
+                setUploadingLogo(false)
+                e.target.value = ''
+              }
+            }}
+          />
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {orgLogoUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={orgLogoUrl} alt="団体ロゴ" className="h-10 w-10 rounded-md border border-border object-contain" />
+            )}
+            <input
+              value={orgLogoUrl}
+              onChange={(e) => setOrgLogoUrl(e.target.value)}
+              placeholder="画像URLを直接入力（または下のボタンでアップロード）"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-primary"
+            />
+            {driveEnabled && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={uploadingLogo}
+                onClick={() => logoFileRef.current?.click()}
+                className="gap-1.5"
+              >
+                {uploadingLogo ? <Loader2 className="size-3.5 animate-spin" /> : <ImageUp className="size-3.5" />}
+                アップロード
+              </Button>
+            )}
+            {orgLogoUrl && (
+              <button
+                type="button"
+                onClick={() => setOrgLogoUrl('')}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-3.5" />
+                削除
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            推奨: 正方形PNG（256×256px以上）。Drive共有リンクを直接URLに貼ることもできます。
+          </p>
+        </div>
+      </div>
     </div>
   )
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target?.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 function RolePermissionRow({

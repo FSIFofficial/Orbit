@@ -199,6 +199,10 @@ interface OrbitContextValue extends OrbitState {
   orgNotificationEmails: string[]
   addOrgNotificationEmail: (email: string) => void
   removeOrgNotificationEmail: (email: string) => void
+  orgName: string
+  setOrgName: (name: string) => void
+  orgLogoUrl: string
+  setOrgLogoUrl: (url: string) => void
   setDiscordWebhookUrl: (url: string) => void
   addRecurringRule: (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   removeRecurringRule: (ruleId: string) => void
@@ -609,6 +613,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 配信先。個々のメンバーのnotify_new_task設定に関わらず常に通知される
   // （gas/Code.gsのnotifyAdmins()参照）
   const [orgNotificationEmails, setOrgNotificationEmails] = useState<string[]>([])
+  // 団体名・ロゴ — Admin > タグ設定から登録
+  const [orgName, setOrgNameState] = useState<string>('')
+  const [orgLogoUrl, setOrgLogoUrlState] = useState<string>('')
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定する、org全体で共有の表示順
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
@@ -741,6 +748,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSkillFieldSkillsState(s.skillFieldSkills)
         setSkillFieldThresholdState(s.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
         setOrgNotificationEmails(s.orgNotificationEmails)
+        if (s.orgName) setOrgNameState(s.orgName)
+        if (s.orgLogoUrl) setOrgLogoUrlState(s.orgLogoUrl)
         setProjectOrderState(s.projectOrder)
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
@@ -799,6 +808,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSkillFieldSkillsState(settings.skillFieldSkills)
           setSkillFieldThresholdState(settings.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
           setOrgNotificationEmails(settings.orgNotificationEmails)
+          if (settings.orgName) setOrgNameState(settings.orgName)
+          if (settings.orgLogoUrl) setOrgLogoUrlState(settings.orgLogoUrl)
           setProjectOrderState(settings.projectOrder)
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
@@ -1118,6 +1129,21 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         runRemote(remoteApi.updateSetting('org_notification_emails', next.join(',')))
     },
     [orgNotificationEmails, runRemote],
+  )
+
+  const setOrgName = useCallback(
+    (name: string) => {
+      setOrgNameState(name)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_name', name))
+    },
+    [runRemote],
+  )
+  const setOrgLogoUrl = useCallback(
+    (url: string) => {
+      setOrgLogoUrlState(url)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_logo_url', url))
+    },
+    [runRemote],
   )
 
   // プロジェクトの表示順 — Admin > Projectsのドラッグ並び替えから呼ばれる
@@ -3474,6 +3500,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     orgNotificationEmails,
     addOrgNotificationEmail,
     removeOrgNotificationEmail,
+    orgName,
+    setOrgName,
+    orgLogoUrl,
+    setOrgLogoUrl,
     setDiscordWebhookUrl,
     addRecurringRule,
     removeRecurringRule,
