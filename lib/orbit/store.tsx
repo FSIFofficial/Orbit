@@ -10,11 +10,17 @@ import {
 } from 'react'
 import type {
   AdminSection,
+  ApprovalRecord,
+  ApprovalStep,
   CareerHistoryEntry,
   Competency,
+  CustomFormDef,
+  CustomFormSubmission,
   Department,
   DevelopmentPlanEntry,
   EvaluationRecord,
+  ExpenseApplication,
+  ExpenseCategory,
   Member,
   OneOnOneRecord,
   Project,
@@ -298,7 +304,6 @@ interface OrbitContextValue extends OrbitState {
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
-  updateReviewers: (id: string, reviewerIds: string[]) => void
   setBlocker: (id: string, note: string | null) => void
   updateEstimatedHours: (id: string, hours: number | null) => void
   updateActualHours: (id: string, hours: number | null) => void
@@ -334,6 +339,27 @@ interface OrbitContextValue extends OrbitState {
   // this project" definition admin-projects.tsx uses, so the workspace
   // (project-view/project-detail) shows the same assignments as Admin does
   getProjectMembers: (projectId: string) => Member[]
+  // ---- Phase 5: 経費申請・カスタムフォーム --------------------------------
+  expenseCategories: import('./types').ExpenseCategory[]
+  expenseApplications: import('./types').ExpenseApplication[]
+  customFormDefs: import('./types').CustomFormDef[]
+  customFormSubmissions: import('./types').CustomFormSubmission[]
+  updateExpenseCategories: (categories: import('./types').ExpenseCategory[]) => void
+  submitExpenseApplication: (
+    application: Omit<import('./types').ExpenseApplication, 'id' | 'approvals' | 'currentStepIndex' | 'status' | 'createdAt'>,
+  ) => void
+  approveExpenseStep: (applicationId: string, stepId: string, comment?: string) => void
+  rejectExpense: (applicationId: string, reason: string) => void
+  withdrawExpense: (applicationId: string) => void
+  updateCustomFormDefs: (forms: import('./types').CustomFormDef[]) => void
+  submitCustomForm: (
+    formId: string,
+    answers: Record<string, string | number>,
+  ) => void
+  approveFormStep: (submissionId: string, stepId: string, comment?: string) => void
+  rejectFormSubmission: (submissionId: string, reason: string) => void
+  // タスク確認ターゲット更新
+  updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
 }
 
 const OrbitContext = createContext<OrbitContextValue | null>(null)
@@ -584,6 +610,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
   const [skillLevelThresholds, setSkillLevelThresholds] = useState<SkillLevelThresholds>({})
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
+  const [expenseApplications, setExpenseApplications] = useState<ExpenseApplication[]>([])
+  const [customFormDefs, setCustomFormDefs] = useState<CustomFormDef[]>([])
+  const [customFormSubmissions, setCustomFormSubmissions] = useState<CustomFormSubmission[]>([])
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
@@ -689,6 +719,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
         if (s.radarAxes) setRadarAxes(s.radarAxes)
+        if (s.expenseCategories) setExpenseCategories(s.expenseCategories)
+        if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -745,6 +777,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
           if (settings.radarAxes) setRadarAxes(settings.radarAxes)
+          if (settings.expenseCategories) setExpenseCategories(settings.expenseCategories)
+          if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
         }
         setRemoteError(null)
       })
@@ -1188,6 +1222,158 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [quizDefinitions, reportRemoteError],
+  )
+
+  // ---- Phase 5: 経費申請・カスタムフォーム コールバック --------------------
+
+  const updateExpenseCategories = useCallback(
+    (categories: ExpenseCategory[]) => {
+      setExpenseCategories(categories)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('expense_categories', JSON.stringify(categories)))
+    },
+    [runRemote],
+  )
+
+  const submitExpenseApplication = useCallback(
+    (application: Omit<ExpenseApplication, 'id' | 'approvals' | 'currentStepIndex' | 'status' | 'createdAt'>) => {
+      const newApp: ExpenseApplication = {
+        ...application,
+        id: crypto.randomUUID(),
+        approvals: [],
+        currentStepIndex: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }
+      setExpenseApplications((prev) => [newApp, ...prev])
+      if (isRemoteConfigured) runRemote(remoteApi.submitExpenseApplication(newApp))
+    },
+    [runRemote],
+  )
+
+  const approveExpenseStep = useCallback(
+    (applicationId: string, stepId: string, comment?: string) => {
+      const actorId = currentUserId ?? ''
+      setExpenseApplications((prev) =>
+        prev.map((app) => {
+          if (app.id !== applicationId) return app
+          const record: ApprovalRecord = {
+            stepId,
+            memberId: actorId,
+            at: new Date().toISOString(),
+            action: 'approved',
+            comment,
+          }
+          const approvals = [...app.approvals, record]
+          const step = app.approvalSteps[app.currentStepIndex]
+          const stepApprovals = approvals.filter((a) => a.stepId === step?.id && a.action === 'approved')
+          const needed =
+            step?.requiredCount === 'all'
+              ? (app.approvalSteps[app.currentStepIndex] ? Infinity : 1)
+              : (typeof step?.requiredCount === 'number' ? step.requiredCount : 1)
+          const nextStepIndex = stepApprovals.length >= needed ? app.currentStepIndex + 1 : app.currentStepIndex
+          const status = nextStepIndex >= app.approvalSteps.length ? 'approved' : 'pending'
+          return { ...app, approvals, currentStepIndex: nextStepIndex, status }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.approveExpenseStep(applicationId, stepId, actorId, comment))
+    },
+    [currentUserId, runRemote],
+  )
+
+  const rejectExpense = useCallback(
+    (applicationId: string, reason: string) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId ? { ...app, status: 'rejected', rejectionReason: reason } : app,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.rejectExpense(applicationId, reason))
+    },
+    [runRemote],
+  )
+
+  const withdrawExpense = useCallback(
+    (applicationId: string) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId ? { ...app, status: 'withdrawn' } : app,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.withdrawExpense(applicationId))
+    },
+    [runRemote],
+  )
+
+  const updateCustomFormDefs = useCallback(
+    (forms: CustomFormDef[]) => {
+      setCustomFormDefs(forms)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('custom_form_defs', JSON.stringify(forms)))
+    },
+    [runRemote],
+  )
+
+  const submitCustomForm = useCallback(
+    (formId: string, answers: Record<string, string | number>) => {
+      const form = customFormDefs.find((f) => f.id === formId)
+      if (!form || !currentUserId) return
+      const submission: CustomFormSubmission = {
+        id: crypto.randomUUID(),
+        formId,
+        submitterId: currentUserId,
+        answers,
+        approvals: [],
+        currentStepIndex: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }
+      setCustomFormSubmissions((prev) => [submission, ...prev])
+      if (isRemoteConfigured) runRemote(remoteApi.submitCustomForm(submission))
+    },
+    [customFormDefs, currentUserId, runRemote],
+  )
+
+  const approveFormStep = useCallback(
+    (submissionId: string, stepId: string, comment?: string) => {
+      const actorId = currentUserId ?? ''
+      setCustomFormSubmissions((prev) =>
+        prev.map((sub) => {
+          if (sub.id !== submissionId) return sub
+          const form = customFormDefs.find((f) => f.id === sub.formId)
+          const record: ApprovalRecord = {
+            stepId,
+            memberId: actorId,
+            at: new Date().toISOString(),
+            action: 'approved',
+            comment,
+          }
+          const approvals = [...sub.approvals, record]
+          const step = form?.approvalSteps[sub.currentStepIndex]
+          const stepApprovals = approvals.filter((a) => a.stepId === step?.id && a.action === 'approved')
+          const needed =
+            step?.requiredCount === 'all'
+              ? Infinity
+              : (typeof step?.requiredCount === 'number' ? step.requiredCount : 1)
+          const nextStepIndex = stepApprovals.length >= needed ? sub.currentStepIndex + 1 : sub.currentStepIndex
+          const totalSteps = form?.approvalSteps.length ?? 0
+          const status = nextStepIndex >= totalSteps ? 'approved' : 'pending'
+          return { ...sub, approvals, currentStepIndex: nextStepIndex, status }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.approveFormStep(submissionId, stepId, actorId, comment))
+    },
+    [currentUserId, customFormDefs, runRemote],
+  )
+
+  const rejectFormSubmission = useCallback(
+    (submissionId: string, reason: string) => {
+      setCustomFormSubmissions((prev) =>
+        prev.map((sub) =>
+          sub.id === submissionId ? { ...sub, status: 'rejected', rejectionReason: reason } : sub,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.rejectFormSubmission(submissionId, reason))
+    },
+    [runRemote],
   )
 
   const login = useCallback((userId: string) => {
@@ -2387,12 +2573,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   const updateReviewers = useCallback(
-    (id: string, reviewerIds: string[]) => {
+    (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => {
       setTasks((prev) =>
         prev.map((t) =>
           t.id === id
             ? appendHistory(
-                { ...t, reviewerIds, reviewerId: reviewerIds[0] },
+                { ...t, reviewerIds, reviewerId: reviewerIds[0], requiredApprovals },
                 'reviewer',
                 (t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])).join('、'),
                 reviewerIds.join('、'),
@@ -3225,6 +3411,19 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     getProject,
     getInput,
     getProjectMembers,
+    expenseCategories,
+    expenseApplications,
+    customFormDefs,
+    customFormSubmissions,
+    updateExpenseCategories,
+    submitExpenseApplication,
+    approveExpenseStep,
+    rejectExpense,
+    withdrawExpense,
+    updateCustomFormDefs,
+    submitCustomForm,
+    approveFormStep,
+    rejectFormSubmission,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>

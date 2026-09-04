@@ -391,6 +391,10 @@ export interface RemoteSettings {
   quizDefinitions: QuizDefinition[]
   // レーダーチャート軸定義 — Settings キー "radar_axes"
   radarAxes: RadarAxis[]
+  // 経費カテゴリ — Settings キー "expense_categories"
+  expenseCategories: import('./types').ExpenseCategory[]
+  // カスタムフォーム定義 — Settings キー "custom_form_defs"
+  customFormDefs: import('./types').CustomFormDef[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -467,6 +471,12 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     radarAxes: (() => {
       try { const r = byKey.get('radar_axes'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    expenseCategories: (() => {
+      try { const r = byKey.get('expense_categories'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    customFormDefs: (() => {
+      try { const r = byKey.get('custom_form_defs'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
 }
@@ -702,6 +712,22 @@ export const remoteApi = {
   // ---- レーダーチャート軸 ----
   updateRadarAxes: (axes: RadarAxis[]) =>
     postToGas('updateSetting', { key: 'radar_axes', value: JSON.stringify(axes) }),
+  // ---- 経費申請 ----
+  submitExpenseApplication: (application: import('./types').ExpenseApplication) =>
+    postToGas('submitExpenseApplication', { application }),
+  approveExpenseStep: (applicationId: string, stepId: string, actorId: string, comment?: string) =>
+    postToGas('approveExpenseStep', { applicationId, stepId, actorId, comment }),
+  rejectExpense: (applicationId: string, reason: string) =>
+    postToGas('rejectExpense', { applicationId, reason }),
+  withdrawExpense: (applicationId: string) =>
+    postToGas('withdrawExpense', { applicationId }),
+  // ---- カスタムフォーム ----
+  submitCustomForm: (submission: import('./types').CustomFormSubmission) =>
+    postToGas('submitCustomForm', { submission }),
+  approveFormStep: (submissionId: string, stepId: string, actorId: string, comment?: string) =>
+    postToGas('approveFormStep', { submissionId, stepId, actorId, comment }),
+  rejectFormSubmission: (submissionId: string, reason: string) =>
+    postToGas('rejectFormSubmission', { submissionId, reason }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

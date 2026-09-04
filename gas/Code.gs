@@ -380,6 +380,10 @@ function authorizeAction(acting, action, body) {
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
     'awardSkillPoints',     // スキルポイント付与（管理者操作）
+    'approveExpenseStep',   // 経費承認（管理者操作）
+    'rejectExpense',        // 経費却下（管理者操作）
+    'approveFormStep',      // フォーム承認（管理者操作）
+    'rejectFormSubmission', // フォーム却下（管理者操作）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
@@ -443,7 +447,10 @@ function authorizeAction(acting, action, body) {
     'notifyFormResult',
     'updateHistory',
     'updateDeliverables',
-    'submitQuizResult',     // 検定の受験はログイン済み誰でも
+    'submitQuizResult',        // 検定の受験はログイン済み誰でも
+    'submitExpenseApplication',// 経費申請はログイン済み誰でも
+    'withdrawExpense',         // 取り下げは本人（下層でチェック）
+    'submitCustomForm',        // フォーム申請はログイン済み誰でも
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
@@ -809,6 +816,27 @@ function doPost(e) {
         break
       case 'submitQuizResult':
         result = submitQuizResult(body.quizId, body.memberId, body.answers || [], acting)
+        break
+      case 'submitExpenseApplication':
+        result = saveExpenseApplication(body.application, acting)
+        break
+      case 'approveExpenseStep':
+        result = processExpenseStep(body.applicationId, body.stepId, body.actorId, 'approved', body.comment)
+        break
+      case 'rejectExpense':
+        result = setExpenseStatus(body.applicationId, 'rejected', body.reason)
+        break
+      case 'withdrawExpense':
+        result = setExpenseStatus(body.applicationId, 'withdrawn')
+        break
+      case 'submitCustomForm':
+        result = saveCustomFormSubmission(body.submission, acting)
+        break
+      case 'approveFormStep':
+        result = processFormStep(body.submissionId, body.stepId, body.actorId, 'approved', body.comment)
+        break
+      case 'rejectFormSubmission':
+        result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2202,4 +2230,234 @@ function debugAvatarWrite() {
     console.log('✅ テスト書き込み完了: avatar_url = ' + testUrl)
     console.log('スプレッドシートで avatar_url 列を確認してください。')
   }
+}
+
+// ---- Phase 5: 経費申請 -------------------------------------------------------
+
+var SHEET_EXPENSES = 'Expenses'
+var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
+
+function ensureExpensesSheet() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var sheet = ss.getSheetByName(SHEET_EXPENSES)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_EXPENSES)
+    sheet.appendRow(['id', 'applicant_id', 'amount', 'category_id', 'receipt_url', 'justification', 'purpose', 'approval_steps_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
+  }
+  return sheet
+}
+
+function ensureFormSubmissionsSheet() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var sheet = ss.getSheetByName(SHEET_FORM_SUBMISSIONS)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_FORM_SUBMISSIONS)
+    sheet.appendRow(['id', 'form_id', 'submitter_id', 'answers_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
+  }
+  return sheet
+}
+
+function saveExpenseApplication(application, acting) {
+  var sheet = ensureExpensesSheet()
+  sheet.appendRow([
+    application.id,
+    application.applicantId,
+    application.amount,
+    application.categoryId,
+    application.receiptUrl || '',
+    application.justification || '',
+    application.purpose || '',
+    JSON.stringify(application.approvalSteps || []),
+    '[]',
+    0,
+    'pending',
+    application.createdAt || new Date().toISOString(),
+    '',
+  ])
+  // 1次承認者への通知
+  var steps = application.approvalSteps || []
+  if (steps.length > 0) {
+    var firstStep = steps[0]
+    var emails = []
+    if (firstStep.type === 'member' && firstStep.memberId) {
+      emails = memberEmailsByIds([firstStep.memberId])
+    }
+    if (emails.length > 0) {
+      MailApp.sendEmail({
+        to: emails.join(','),
+        subject: 'Orbit: 経費申請が届きました',
+        body: '経費申請が届きました。Orbitから確認・承認してください。\n\n金額: ¥' + application.amount,
+      })
+    }
+  }
+  return { id: application.id }
+}
+
+function findExpenseRow(sheet, applicationId) {
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  if (idCol < 0) return null
+  var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === applicationId) {
+      return { row: i + 2, data: rows[i], headers: headers }
+    }
+  }
+  return null
+}
+
+function processExpenseStep(applicationId, stepId, actorId, action, comment) {
+  var sheet = ensureExpensesSheet()
+  var found = findExpenseRow(sheet, applicationId)
+  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+
+  var headers = found.headers
+  var data = found.data
+  var approvalsCol = headers.indexOf('approvals_json')
+  var stepIndexCol = headers.indexOf('current_step_index')
+  var statusCol = headers.indexOf('status')
+  var stepsCol = headers.indexOf('approval_steps_json')
+
+  var approvals = JSON.parse(String(data[approvalsCol] || '[]'))
+  var steps = JSON.parse(String(data[stepsCol] || '[]'))
+  var currentIdx = Number(data[stepIndexCol]) || 0
+
+  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
+
+  var step = steps[currentIdx]
+  var stepApprovals = approvals.filter(function(a) { return a.stepId === (step ? step.id : '') && a.action === 'approved' })
+  var needed = (step && step.requiredCount === 'all') ? Infinity : (step && typeof step.requiredCount === 'number' ? step.requiredCount : 1)
+  var nextIdx = stepApprovals.length >= needed ? currentIdx + 1 : currentIdx
+  var newStatus = nextIdx >= steps.length ? 'approved' : 'pending'
+
+  sheet.getRange(found.row, approvalsCol + 1).setValue(JSON.stringify(approvals))
+  sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
+  sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
+
+  // 申請者への完了通知
+  if (newStatus === 'approved') {
+    var applicantId = String(data[headers.indexOf('applicant_id')])
+    var emails = memberEmailsByIds([applicantId])
+    if (emails.length > 0) {
+      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が承認されました', body: '経費申請が承認されました。' })
+    }
+  }
+  return { ok: true }
+}
+
+function setExpenseStatus(applicationId, status, reason) {
+  var sheet = ensureExpensesSheet()
+  var found = findExpenseRow(sheet, applicationId)
+  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+
+  var headers = found.headers
+  var statusCol = headers.indexOf('status')
+  var reasonCol = headers.indexOf('rejection_reason')
+  var applicantId = String(found.data[headers.indexOf('applicant_id')])
+
+  sheet.getRange(found.row, statusCol + 1).setValue(status)
+  if (reason && reasonCol >= 0) {
+    sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+  }
+
+  // 却下通知
+  if (status === 'rejected') {
+    var emails = memberEmailsByIds([applicantId])
+    if (emails.length > 0) {
+      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が却下されました', body: '経費申請が却下されました。\n理由: ' + (reason || '—') })
+    }
+  }
+  return { ok: true }
+}
+
+// ---- Phase 5: カスタムフォーム申請 -------------------------------------------
+
+function saveCustomFormSubmission(submission, acting) {
+  var sheet = ensureFormSubmissionsSheet()
+  sheet.appendRow([
+    submission.id,
+    submission.formId,
+    submission.submitterId,
+    JSON.stringify(submission.answers || {}),
+    '[]',
+    0,
+    'pending',
+    submission.createdAt || new Date().toISOString(),
+    '',
+  ])
+  return { id: submission.id }
+}
+
+function findFormSubmissionRow(sheet, submissionId) {
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  if (idCol < 0) return null
+  var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === submissionId) {
+      return { row: i + 2, data: rows[i], headers: headers }
+    }
+  }
+  return null
+}
+
+function processFormStep(submissionId, stepId, actorId, action, comment) {
+  var sheet = ensureFormSubmissionsSheet()
+  var found = findFormSubmissionRow(sheet, submissionId)
+  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+
+  var headers = found.headers
+  var data = found.data
+  var approvalsCol = headers.indexOf('approvals_json')
+  var stepIndexCol = headers.indexOf('current_step_index')
+  var statusCol = headers.indexOf('status')
+
+  var approvals = JSON.parse(String(data[approvalsCol] || '[]'))
+  var currentIdx = Number(data[stepIndexCol]) || 0
+
+  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
+  var stepApprovals = approvals.filter(function(a) { return a.stepId === stepId && a.action === 'approved' })
+
+  // フォーム定義からステップ数を取得（Settingsから読む）
+  var formId = String(data[headers.indexOf('form_id')])
+  var customFormDefs = []
+  try {
+    var raw = getSettingValue('custom_form_defs')
+    if (raw) customFormDefs = JSON.parse(raw)
+  } catch(e) {}
+  var formDef = customFormDefs.filter(function(f) { return f.id === formId })[0]
+  var totalSteps = formDef ? (formDef.approvalSteps || []).length : 0
+  var step = formDef ? (formDef.approvalSteps || [])[currentIdx] : null
+  var needed = (step && step.requiredCount === 'all') ? Infinity : (step && typeof step.requiredCount === 'number' ? step.requiredCount : 1)
+  var nextIdx = stepApprovals.length >= needed ? currentIdx + 1 : currentIdx
+  var newStatus = nextIdx >= totalSteps ? 'approved' : 'pending'
+
+  sheet.getRange(found.row, approvalsCol + 1).setValue(JSON.stringify(approvals))
+  sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
+  sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
+  return { ok: true }
+}
+
+function setFormSubmissionStatus(submissionId, status, reason) {
+  var sheet = ensureFormSubmissionsSheet()
+  var found = findFormSubmissionRow(sheet, submissionId)
+  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+
+  var headers = found.headers
+  var statusCol = headers.indexOf('status')
+  var reasonCol = headers.indexOf('rejection_reason')
+
+  sheet.getRange(found.row, statusCol + 1).setValue(status)
+  if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+  return { ok: true }
+}
+
+function getSettingValue(key) {
+  var sheet = getSheet('Settings')
+  if (!sheet) return null
+  var data = sheet.getDataRange().getValues()
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]) === key) return String(data[i][1] || '')
+  }
+  return null
 }

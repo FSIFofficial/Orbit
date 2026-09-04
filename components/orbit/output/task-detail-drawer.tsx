@@ -562,7 +562,7 @@ export function TaskDetailDrawer({
                         onClick={() => {
                           if (!task) return
                           const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
-                          updateReviewers(task.id, next)
+                          updateReviewers(task.id, next, task.requiredApprovals)
                         }}
                         className={cn(
                           'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
@@ -589,7 +589,7 @@ export function TaskDetailDrawer({
                     onClick={() => {
                       if (!task) return
                       const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
-                      updateReviewers(task.id, next)
+                      updateReviewers(task.id, next, task.requiredApprovals)
                     }}
                     className={cn(
                       'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
@@ -608,9 +608,34 @@ export function TaskDetailDrawer({
             </div>
           )
         })()}
+        {/* 必要承認数の設定 */}
+        {(() => {
+          const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
+          if (currentIds.length < 2) return null
+          const req = task?.requiredApprovals
+          return (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+              <span className="text-xs text-muted-foreground shrink-0">必要な承認数:</span>
+              <select
+                value={req === 'all' ? 'all' : (req ?? 1)}
+                onChange={(e) => {
+                  if (!task) return
+                  const val = e.target.value === 'all' ? 'all' : Number(e.target.value) as number
+                  updateReviewers(task.id, currentIds, val)
+                }}
+                className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
+              >
+                {currentIds.map((_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}人</option>
+                ))}
+                <option value="all">全員</option>
+              </select>
+            </div>
+          )
+        })()}
         <button
           onClick={() => {
-            if (task) updateReviewers(task.id, [])
+            if (task) updateReviewers(task.id, [], undefined)
             setReviewerOpen(false)
           }}
           className="mt-2 w-full rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"

@@ -28,8 +28,12 @@ import {
   SlidersHorizontal,
   User,
   X,
+  Receipt,
+  FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
+import { CustomFormModal } from '@/components/orbit/custom-form-modal'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
 type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency'
@@ -98,13 +102,15 @@ function loadHiddenProjects(userId: string | null | undefined): Set<string> {
 }
 
 export function OutputScreen() {
-  const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks } = useOrbit()
+  const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks, expenseCategories, customFormDefs } = useOrbit()
   const { go } = useNav()
   const [targetOrder, setTargetOrder] = useState<Target[]>(() => loadTargetOrder(currentUser?.id))
   const [target, setTarget] = useState<Target>(() => loadTargetOrder(currentUser?.id)[0])
   const [view, setView] = useState<View>('workflow')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [projectFilter, setProjectFilter] = useState('')
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [formModalOpen, setFormModalOpen] = useState(false)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [cardFields, setCardFields] = useState<Set<KanbanCardField>>(() =>
@@ -238,6 +244,26 @@ export function OutputScreen() {
                 ? 'あなたが担当しているタスクをまとめて確認します。'
                 : '登録済みのタスクを組織の視点で確認します。'}
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {expenseCategories.length > 0 && (
+              <button
+                onClick={() => setExpenseModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Receipt className="size-3.5" />
+                経費申請
+              </button>
+            )}
+            {customFormDefs.length > 0 && (
+              <button
+                onClick={() => setFormModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <FileText className="size-3.5" />
+                フォーム申請
+              </button>
+            )}
           </div>
         </div>
 
@@ -527,6 +553,8 @@ export function OutputScreen() {
       )}
 
       <TaskDetailDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+      {expenseModalOpen && <ExpenseApplicationModal onClose={() => setExpenseModalOpen(false)} />}
+      {formModalOpen && <CustomFormModal onClose={() => setFormModalOpen(false)} />}
     </div>
   )
 }

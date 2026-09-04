@@ -28,6 +28,8 @@ export type AdminSection =
   | 'org'
   | 'quiz'
   | 'radar'
+  | 'expenses'
+  | 'forms'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -40,6 +42,8 @@ export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'org', label: 'Org Tree' },
   { key: 'quiz', label: 'Quiz' },
   { key: 'radar', label: 'Radar' },
+  { key: 'expenses', label: 'Expenses' },
+  { key: 'forms', label: 'Forms' },
 ]
 
 // Members/Tags manage org-wide config (roles, notification routing, the
@@ -456,6 +460,8 @@ export interface Task {
   // 'review' status). Unset = no particular reviewer, any admin can review.
   reviewerId?: string // deprecated — kept for backward compat read
   reviewerIds?: string[] // replaces reviewerId; multiple reviewers can all confirm
+  // 確認待ちに必要な承認数: number = 指定人数, 'all' = 全員
+  requiredApprovals?: number | 'all'
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved
@@ -666,4 +672,95 @@ export interface NotificationItem {
   taskId: string
   // kind: 'mention' のときだけ設定 — 既読化(markMentionSeen)に使う
   commentId?: string
+}
+
+// ---- 多段階承認 (Phase 5) -----------------------------------------------
+
+/**
+ * 承認フローの1ステップ。
+ * type='member' のときは memberId を持ち、指定の個人が承認する。
+ * type='role' のときは role（と任意で department）を持ち、
+ * 該当する役職・部署の誰か1人が承認するとそのステップは完了する。
+ */
+export interface ApprovalStep {
+  id: string
+  type: 'member' | 'role'
+  memberId?: string
+  role?: string
+  department?: string
+  // 'all' = 対象者全員の承認が必要, number = 指定人数で足りる (省略時 'any' = 1人)
+  requiredCount?: number | 'all'
+}
+
+/** 承認/却下の記録 */
+export interface ApprovalRecord {
+  stepId: string
+  memberId: string
+  at: string // ISO datetime
+  action: 'approved' | 'rejected'
+  comment?: string
+}
+
+// ---- 経費申請カテゴリ ---------------------------------------------------
+
+export interface ExpenseCategory {
+  id: string
+  label: string
+  approvalSteps: ApprovalStep[]
+}
+
+// ---- 経費申請 -----------------------------------------------------------
+
+export type ExpenseApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn'
+
+export interface ExpenseApplication {
+  id: string
+  applicantId: string
+  amount: number
+  categoryId: string
+  receiptUrl?: string
+  justification?: string
+  purpose?: string
+  // 作成時点のステップ定義のスナップショット
+  approvalSteps: ApprovalStep[]
+  approvals: ApprovalRecord[]
+  currentStepIndex: number
+  status: ExpenseApplicationStatus
+  createdAt: string
+  updatedAt?: string
+  rejectionReason?: string
+}
+
+// ---- 団体カスタムフォーム -----------------------------------------------
+
+export type CustomFormFieldType = 'text' | 'number' | 'select' | 'date'
+
+export interface CustomFormField {
+  id: string
+  label: string
+  type: CustomFormFieldType
+  options?: string[] // type='select' 用
+  required: boolean
+}
+
+export interface CustomFormDef {
+  id: string
+  title: string
+  description?: string
+  fields: CustomFormField[]
+  approvalSteps: ApprovalStep[]
+}
+
+export type CustomFormSubmissionStatus = 'pending' | 'approved' | 'rejected'
+
+export interface CustomFormSubmission {
+  id: string
+  formId: string
+  submitterId: string
+  answers: Record<string, string | number>
+  approvals: ApprovalRecord[]
+  currentStepIndex: number
+  status: CustomFormSubmissionStatus
+  createdAt: string
+  rejectionReason?: string
 }
