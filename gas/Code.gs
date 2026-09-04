@@ -418,47 +418,43 @@ function authorizeAction(acting, action, body) {
         throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
       }
 
-      // メンバーを対象とするアクション: 対象メンバーの project_ids と acting の共通項をチェック
-      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath']
-      if (memberScopeActions.indexOf(action) >= 0 && body.memberId) {
+      // メンバーを対象とするアクションのスコープチェック:
+      // acting.project_ids に含まれるプロジェクトの member_ids を Projects シートから取得し、
+      // 対象メンバーがそのいずれかに含まれるかで判定する（一般メンバーの project_ids は空欄設計のため）。
+      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath', 'bulkUpdateSkills']
+      if (memberScopeActions.indexOf(action) >= 0) {
+        // acting.project_ids 配下の Projects を1回読んで所属メンバーIDのセットを作る
+        var scopedMemberIdSet = {}
         try {
-          var targetMember = findRow(SHEET_MEMBERS, String(body.memberId))
-          if (targetMember) {
-            var targetMemberProjectIds = targetMember.project_ids
-              ? String(targetMember.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean)
-              : []
-            var hasOverlap = targetMemberProjectIds.some(function(pid) { return actingProjectIds.indexOf(pid) >= 0 })
-            if (!hasOverlap) {
-              if (checkPermissionOverride(acting, action, body)) return
-              throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
-            }
-          }
-        } catch(e) {
-          if (String(e).indexOf('担当プロジェクト') >= 0) throw e
-          // findRow失敗など予期しないエラーは通過させる（安全側: サーバーエラーで弾く）
-        }
-      }
-
-      // bulkUpdateSkills: 配列内の全 memberId についてスコープチェック
-      if (action === 'bulkUpdateSkills' && body.updates) {
-        var updates = body.updates || []
-        for (var i = 0; i < updates.length; i++) {
-          var uid = updates[i] && updates[i].memberId ? String(updates[i].memberId) : null
-          if (!uid) continue
-          try {
-            var uMember = findRow(SHEET_MEMBERS, uid)
-            if (uMember) {
-              var uPids = uMember.project_ids
-                ? String(uMember.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean)
-                : []
-              var uOverlap = uPids.some(function(pid) { return actingProjectIds.indexOf(pid) >= 0 })
-              if (!uOverlap) {
-                if (checkPermissionOverride(acting, action, body)) return
-                throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
+          var projectsSheet = getSheet(SHEET_PROJECTS)
+          var pHeaders = headerRow(projectsSheet)
+          var pIdCol = pHeaders.indexOf('id')
+          var pMemberIdsCol = pHeaders.indexOf('member_ids')
+          if (pIdCol >= 0 && pMemberIdsCol >= 0 && projectsSheet.getLastRow() > 1) {
+            var pRows = projectsSheet.getRange(2, 1, projectsSheet.getLastRow() - 1, pHeaders.length).getValues()
+            pRows.forEach(function(row) {
+              var pid = String(row[pIdCol] || '').trim()
+              if (actingProjectIds.indexOf(pid) >= 0) {
+                var mids = String(row[pMemberIdsCol] || '').split(',').map(function(s) { return s.trim() }).filter(Boolean)
+                mids.forEach(function(mid) { scopedMemberIdSet[mid] = true })
               }
-            }
-          } catch(e) {
-            if (String(e).indexOf('担当プロジェクト') >= 0) throw e
+            })
+          }
+        } catch(e) { /* Projects シート読み込み失敗時は scopedMemberIdSet が空のまま → 全件拒否（安全側） */ }
+
+        // チェック対象の memberId 一覧を取得
+        var memberIdsToCheck = []
+        if (action === 'bulkUpdateSkills') {
+          var bUpdates = body.updates || []
+          bUpdates.forEach(function(u) { if (u && u.memberId) memberIdsToCheck.push(String(u.memberId)) })
+        } else if (body.memberId) {
+          memberIdsToCheck.push(String(body.memberId))
+        }
+
+        for (var mi = 0; mi < memberIdsToCheck.length; mi++) {
+          if (!scopedMemberIdSet[memberIdsToCheck[mi]]) {
+            if (checkPermissionOverride(acting, action, body)) return
+            throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
           }
         }
       }
