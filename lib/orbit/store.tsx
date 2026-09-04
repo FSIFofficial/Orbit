@@ -213,6 +213,12 @@ interface OrbitContextValue extends OrbitState {
   skillCertifiedEvent: { memberName: string; skill: string } | null
   clearSkillCertifiedEvent: () => void
   markMentionSeen: (commentId: string) => void
+  dismissNotification: (notificationId: string) => void
+  setSlackWebhookUrl: (url: string) => void
+  toggleMemberInactive: (memberId: string) => void
+  // item 20: 1on1ワークシート質問項目
+  oneOnOneQuestions: string[]
+  setOneOnOneQuestions: (questions: string[]) => void
   login: (userId: string) => void
   logout: () => void
   setMode: (m: Mode) => void
@@ -391,6 +397,8 @@ const RESTRICTED_ROLES_STORAGE_KEY = 'orbit-restricted-roles'
 // currentUserId -> 既読にしたコメントID配列、で複数メンバーを同一端末で
 // 切り替えて使う場合にも既読状態が混ざらないようにする
 const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
+const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
+const SLACK_WEBHOOK_STORAGE_KEY = 'orbit-slack-webhook-url'
 
 function loadState(): Partial<OrbitState> | null {
   if (typeof window === 'undefined') return null
@@ -605,12 +613,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
   const [onboardedIds, setOnboardedIds] = useState<Set<string>>(new Set())
   const [seenMentionIds, setSeenMentionIds] = useState<Record<string, string[]>>({})
+  // 通知の個別dismiss — userId -> 無視した通知IDの配列。通知はMemoで動的生成
+  // されるので、dismissedは端末ローカルのlocalStorageで管理する（item 7）
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Record<string, string[]>>({})
   const [skillCertifiedEvent, setSkillCertifiedEvent] = useState<{
     memberName: string
     skill: string
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
+  // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
+  const [slackWebhookUrl, setSlackWebhookUrlState] = useState<string>('')
+  // item 20: 1on1ワークシート質問項目 — org管理者が設定できる質問のリスト
+  // localStorageに保存（GAS同期は将来対応）
+  const [oneOnOneQuestions, setOneOnOneQuestionsState] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('orbit-1on1-questions') : null
+      return raw ? JSON.parse(raw) : ['今月の良かったことは？', '困っていることや課題は？', '次回までのアクションは？']
+    } catch {
+      return ['今月の良かったことは？', '困っていることや課題は？', '次回までのアクションは？']
+    }
+  })
   const [skillLevelThresholds, setSkillLevelThresholds] = useState<SkillLevelThresholds>({})
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [expenseApplications, setExpenseApplications] = useState<ExpenseApplication[]>([])
@@ -1378,10 +1401,42 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
-  const login = useCallback((userId: string) => {
-    setCurrentUserId(userId)
-    setModeState('output')
-  }, [])
+  // item 1: 初ログイン時（既存タスクが0件）に初期タスクセットを自動付与。
+  // 団体名や役割は仮値 — 実際はSettingsシートの initial_tasks_json キーで
+  // 上書き可能にすることを想定。ここではハードコードで3件を生成する。
+  const INITIAL_TASKS_KEY = 'orbit-initial-tasks-given'
+  const login = useCallback(
+    (userId: string) => {
+      setCurrentUserId(userId)
+      setModeState('output')
+
+      // 既に初期タスクを付与済みか、タスクが存在する場合はスキップ
+      try {
+        const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
+        const givenIds: string[] = given ? JSON.parse(given) : []
+        if (givenIds.includes(userId)) return
+      } catch { /* ignore */ }
+
+      setTasks((prevTasks) => {
+        if (prevTasks.length > 0) return prevTasks
+        const now = new Date().toISOString()
+        const base = { assigneeIds: [userId], status: 'todo' as const, progressHistory: [] as import('./types').ProgressEntry[], department: '未分類' as const, category: '未分類', skills: [], priority: '中' as const, difficulty: '新人歓迎' as const, deadline: null, createdAt: now, lastActivity: now.slice(0, 10) }
+        const newTasks: import('./types').Task[] = [
+          { ...base, id: `init-${userId}-1`, name: 'Orbitの使い方を確認する', description: 'INPUT→タスク登録→OUTPUT確認の流れを体験してみましょう。', projectId: projects[0]?.id ?? 'default', description: 'まずINPUT画面で「今日やること」を入力し、承認を受けてみましょう。' },
+          { ...base, id: `init-${userId}-2`, name: 'プロフィールを設定する', description: 'ヘッダーのアカウントメニュー →「プロフィール」でWillとスキルを登録しましょう。', projectId: projects[0]?.id ?? 'default' },
+          { ...base, id: `init-${userId}-3`, name: 'チームメンバーのタスクを確認する', description: 'OUTPUT →「一覧」タブで組織のタスク全体を把握しましょう。', projectId: projects[0]?.id ?? 'default' },
+        ]
+        try {
+          const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
+          const givenIds: string[] = given ? JSON.parse(given) : []
+          window.localStorage.setItem(INITIAL_TASKS_KEY, JSON.stringify([...givenIds, userId]))
+        } catch { /* ignore */ }
+        return [...prevTasks, ...newTasks]
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projects],
+  )
 
   const logout = useCallback(() => {
     setCurrentUserId(null)
@@ -3063,6 +3118,54 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const clearSkillCertifiedEvent = useCallback(() => setSkillCertifiedEvent(null), [])
 
+  // 通知の個別dismiss（item 7）— userId単位で管理し、端末ローカルにのみ保持
+  const dismissNotification = useCallback(
+    (notificationId: string) => {
+      if (!currentUserId) return
+      setDismissedNotificationIds((prev) => {
+        const mine = prev[currentUserId] ?? []
+        if (mine.includes(notificationId)) return prev
+        const next = { ...prev, [currentUserId]: [...mine, notificationId] }
+        try {
+          window.localStorage.setItem(DISMISSED_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next))
+        } catch { /* ignore */ }
+        return next
+      })
+    },
+    [currentUserId],
+  )
+
+  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存
+  const setSlackWebhookUrl = useCallback(
+    (url: string) => {
+      try { window.localStorage.setItem(SLACK_WEBHOOK_STORAGE_KEY, url) } catch { /* ignore */ }
+      setSlackWebhookUrlState(url)
+      if (isRemoteConfigured) runRemote(remoteApi.updateSlackWebhookUrl(url))
+    },
+    [runRemote],
+  )
+
+  // item 20: 1on1質問項目を更新
+  const setOneOnOneQuestions = useCallback((questions: string[]) => {
+    setOneOnOneQuestionsState(questions)
+    try { window.localStorage.setItem('orbit-1on1-questions', JSON.stringify(questions)) } catch {}
+  }, [])
+
+  // 活動休止トグル（item 9）— GAS側にも反映する
+  const toggleMemberInactive = useCallback(
+    (memberId: string) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const next = { ...m, inactive: !m.inactive }
+          if (isRemoteConfigured) runRemote(remoteApi.updateMemberInactive(memberId, !!next.inactive))
+          return next
+        }),
+      )
+    },
+    [runRemote],
+  )
+
   const getMember = useCallback(
     (id: string | null) => members.find((m) => m.id === id),
     [members],
@@ -3233,8 +3336,29 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         })
       })
     })
-    return items
-  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds])
+    // item 25: 25日間未アクセスのメンバーを管理者に通知
+    if (isAdmin) {
+      const now = Date.now()
+      const INACTIVE_DAYS = 25
+      members
+        .filter((m) => !m.inactive && m.lastLogin)
+        .forEach((m) => {
+          const last = new Date(m.lastLogin!).getTime()
+          const days = Math.floor((now - last) / 86400000)
+          if (days >= INACTIVE_DAYS) {
+            items.push({
+              id: `inactive-${m.id}`,
+              kind: 'stale',
+              title: `${m.displayName || m.name}が${days}日間未ログイン`,
+              detail: 'Orbitにアクセスがない可能性があります',
+              taskId: '',
+            })
+          }
+        })
+    }
+    const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []
+    return items.filter((n) => !dismissedHere.includes(n.id))
+  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds, dismissedNotificationIds, members])
 
   const projectTypes = useMemo(
     () =>
@@ -3347,6 +3471,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     skillCertifiedEvent,
     clearSkillCertifiedEvent,
     markMentionSeen,
+    dismissNotification,
+    setSlackWebhookUrl,
+    toggleMemberInactive,
+    oneOnOneQuestions,
+    setOneOnOneQuestions,
     login,
     logout,
     setMode,

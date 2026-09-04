@@ -630,6 +630,9 @@ export const remoteApi = {
   // PropertiesService instead (see gas/README.md §4.7), which has no
   // public read path — write-only from the client's perspective.
   updateDiscordWebhookUrl: (url: string) => postToGas('updateDiscordWebhookUrl', { url }),
+  updateSlackWebhookUrl: (url: string) => postToGas('updateSlackWebhookUrl', { url }),
+  updateMemberInactive: (memberId: string, inactive: boolean) =>
+    postToGas('updateMemberInactive', { memberId, inactive }),
   updateMemberProjects: (memberId: string, projectIds: string[]) =>
     postToGas('updateMemberProjects', { memberId, projectIds }),
   updateReviewer: (taskId: string, reviewerId: string | null) =>

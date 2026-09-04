@@ -15,6 +15,9 @@ import { PersonDetail } from './people/person-detail'
 import { ProjectDetail } from './projects/project-detail'
 import { AdminScreen } from './admin/admin-screen'
 import { FeedbackScreen } from './feedback-screen'
+import { ActivityScreen } from './activity-screen'
+import { DailyReportScreen } from './daily-report-screen'
+import { SurveyScreen } from './survey-screen'
 import { TaskDetailDrawer } from './output/task-detail-drawer'
 import { OrbitMark } from './primitives'
 import { TriangleAlert } from 'lucide-react'
@@ -112,6 +115,9 @@ function Router() {
         {screen.name === 'project' && <ProjectDetail id={screen.id} />}
         {screen.name === 'admin' && <AdminScreen section={screen.section} />}
         {screen.name === 'feedback' && <FeedbackScreen />}
+        {screen.name === 'activity' && <ActivityScreen />}
+        {screen.name === 'dailyreport' && <DailyReportScreen />}
+        {screen.name === 'survey' && <SurveyScreen />}
       </div>
       <TaskDetailDrawer taskId={openTaskId} onClose={closeTask} />
     </div>

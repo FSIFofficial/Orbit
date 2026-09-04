@@ -89,9 +89,11 @@ export function StatusDot({ status }: { status: TaskStatus }) {
 }
 
 const difficultyStyles: Record<Difficulty, string> = {
+  誰でも可: 'bg-primary/10 text-primary border-primary/20',
   新人歓迎: 'bg-success-muted text-success border-success-border',
   少し経験必要: 'bg-warning-muted text-warning border-warning-border',
   経験者向け: 'bg-danger-muted text-danger border-danger-border',
+  上級者向け: 'bg-purple-500/10 text-purple-600 border-purple-300 dark:text-purple-400 dark:border-purple-700',
 }
 
 export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {

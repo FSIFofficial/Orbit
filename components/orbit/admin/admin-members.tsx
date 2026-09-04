@@ -8,7 +8,7 @@ import { Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload } from 'lucide-react'
+import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload, Pause, Play } from 'lucide-react'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
 import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
@@ -37,6 +37,7 @@ export function AdminMembers() {
     restrictedRoles,
     addMember,
     isFullAdmin,
+    toggleMemberInactive,
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
@@ -386,6 +387,18 @@ export function AdminMembers() {
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => toggleMemberInactive(m.id)}
+                          title={m.inactive ? '活動再開' : '活動休止'}
+                          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                            m.inactive
+                              ? 'border-amber-300/50 bg-amber-50 text-amber-600 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-400'
+                              : 'border-border text-muted-foreground hover:bg-secondary'
+                          }`}
+                        >
+                          {m.inactive ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                          {m.inactive ? '再開' : '休止'}
+                        </button>
                         {isFullAdmin && <PermissionOverridesButton member={m} />}
                         <button
                           onClick={() => setRemoving(m)}

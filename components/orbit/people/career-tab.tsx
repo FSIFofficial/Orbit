@@ -136,6 +136,8 @@ export function CareerTab({
   updateDevelopmentPlan: (id: string, entries: DevelopmentPlanEntry[]) => void
   updateOneOnOnes: (id: string, entries: OneOnOneRecord[]) => void
   currentUserId: string | null
+  // item 20: 1on1ワークシート質問項目（admin-tagsで設定可能）
+  oneOnOneQuestions?: string[]
   radarAxes?: RadarAxis[]
   quizDefinitions?: QuizDefinition[]
   submitQuizResult?: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
@@ -152,6 +154,7 @@ export function CareerTab({
         skillOptions={skillOptions}
         onSave={updateSkillLevels}
       />
+      <SkillTimelineSection member={member} />
       {radarAxes && radarAxes.length >= 3 && (
         <Section title="スキルレーダーチャート" description="設定された軸ごとのスキルレベルを可視化します。">
           <div className="flex justify-center pt-2">
@@ -192,6 +195,7 @@ export function CareerTab({
         onSave={updateOneOnOnes}
         rid={rid}
         currentUserId={currentUserId}
+        questions={oneOnOneQuestions}
       />
       <EvaluationHistorySection
         member={member}
@@ -354,7 +358,7 @@ function SkillLevelsSection({
 
   const add = () => {
     if (!skill) return
-    onSave(member.id, [...levels, { skill, level }])
+    onSave(member.id, [...levels, { skill, level, acquiredAt: new Date().toISOString() }])
     setSkill('')
     setLevel(1)
   }
@@ -942,6 +946,7 @@ function OneOnOnesSection({
   onSave,
   rid,
   currentUserId,
+  questions,
 }: {
   member: Member
   members: Member[]
@@ -949,16 +954,36 @@ function OneOnOnesSection({
   onSave: CareerTabProps['updateOneOnOnes']
   rid: () => string
   currentUserId: string | null
+  questions?: string[]
 }) {
   const items = member.oneOnOnes ?? []
   const [date, setDate] = useState('')
   const [withId, setWithId] = useState(currentUserId ?? '')
+  // item 20: 質問項目ごとの回答を個別管理し、結合してnotesに保存
+  const effectiveQuestions = questions && questions.length > 0 ? questions : null
+  const [questionAnswers, setQuestionAnswers] = useState<Record<number, string>>({})
   const [notes, setNotes] = useState('')
 
+  const buildNotes = () => {
+    if (effectiveQuestions) {
+      return effectiveQuestions
+        .map((q, i) => `【${q}】\n${questionAnswers[i] ?? ''}`)
+        .join('\n\n')
+    }
+    return notes
+  }
+
+  const canAdd = date && withId && (
+    effectiveQuestions
+      ? effectiveQuestions.some((_, i) => (questionAnswers[i] ?? '').trim())
+      : notes.trim()
+  )
+
   const add = () => {
-    if (!date || !withId || !notes.trim()) return
-    onSave(member.id, [...items, { id: rid(), date, withId, notes: notes.trim() }])
+    if (!canAdd) return
+    onSave(member.id, [...items, { id: rid(), date, withId, notes: buildNotes().trim() }])
     setDate('')
+    setQuestionAnswers({})
     setNotes('')
   }
 
@@ -981,7 +1006,7 @@ function OneOnOnesSection({
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap">{o.notes}</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-xs">{o.notes}</p>
               </EntryRow>
             )
           })}
@@ -1001,18 +1026,37 @@ function OneOnOnesSection({
                 ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="メモ"
-              rows={2}
-              className="flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
-            />
-            <Button size="sm" className="h-8 shrink-0" disabled={!date || !withId || !notes.trim()} onClick={add}>
-              追加
-            </Button>
-          </div>
+          {effectiveQuestions ? (
+            <div className="flex flex-col gap-2">
+              {effectiveQuestions.map((q, i) => (
+                <div key={i}>
+                  <p className="mb-0.5 text-[10px] font-medium text-muted-foreground">{q}</p>
+                  <textarea
+                    value={questionAnswers[i] ?? ''}
+                    onChange={(e) => setQuestionAnswers((prev) => ({ ...prev, [i]: e.target.value }))}
+                    rows={2}
+                    className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              ))}
+              <Button size="sm" className="h-8 self-end" disabled={!canAdd} onClick={add}>
+                追加
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="メモ"
+                rows={2}
+                className="flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
+              />
+              <Button size="sm" className="h-8 shrink-0" disabled={!canAdd} onClick={add}>
+                追加
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Section>
@@ -1147,3 +1191,39 @@ function TransferHistorySection({
 }
 
 type CareerTabProps = Parameters<typeof CareerTab>[0]
+
+const LEVEL_COLORS = ['', '#94a3b8', '#60a5fa', '#34d399', '#f59e0b', '#f43f5e'] // index 1-5
+
+function SkillTimelineSection({ member }: { member: Member }) {
+  const levels = (member.skillLevels ?? []).filter((l) => l.acquiredAt)
+  if (levels.length === 0) return null
+  const sorted = [...levels].sort((a, b) => (a.acquiredAt ?? '').localeCompare(b.acquiredAt ?? ''))
+  const firstDate = new Date(sorted[0].acquiredAt!).getTime()
+  const lastDate = Math.max(Date.now(), new Date(sorted[sorted.length - 1].acquiredAt!).getTime())
+  const range = lastDate - firstDate || 1
+  const fmt = (iso: string) => iso.slice(0, 10)
+
+  return (
+    <Section title="スキル取得タイムライン" description="acquiredAt が記録されているスキルを時系列で表示します。新規追加分から記録されます。">
+      <div className="relative mt-2 pl-2">
+        <div className="absolute left-2 top-0 bottom-0 w-px bg-border" />
+        {sorted.map((l) => {
+          const pct = Math.round(((new Date(l.acquiredAt!).getTime() - firstDate) / range) * 100)
+          return (
+            <div key={l.skill} className="relative mb-3 flex items-start gap-2 pl-5">
+              <div
+                className="absolute left-[5px] top-1.5 size-2 rounded-full border-2 border-background"
+                style={{ backgroundColor: LEVEL_COLORS[l.level] }}
+              />
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-sm font-medium">{l.skill}</span>
+                <span className="text-xs" style={{ color: LEVEL_COLORS[l.level] }}>Lv.{l.level}</span>
+                <span className="text-xs text-muted-foreground">{fmt(l.acquiredAt!)}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Section>
+  )
+}

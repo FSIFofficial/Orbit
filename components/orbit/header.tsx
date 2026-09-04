@@ -12,10 +12,12 @@ import {
   ArrowLeft,
   AtSign,
   Bell,
+  BookOpen,
   CalendarClock,
   CheckCheck,
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
   Clock,
   LogOut,
   MessageSquare,
@@ -25,6 +27,7 @@ import {
   Sun,
   User,
   X,
+  Activity,
 } from 'lucide-react'
 
 
@@ -34,6 +37,7 @@ export function Header() {
     setMode,
     logout,
     notifications,
+    dismissNotification,
     remoteEnabled,
     refreshing,
     refreshAll,
@@ -193,33 +197,45 @@ export function Header() {
                     </div>
                   )}
                   {notifications.map((n) => (
-                    <button
+                    <div
                       key={n.id}
-                      onClick={() => {
-                        setNotifOpen(false)
-                        if (n.kind === 'mention' && n.commentId) markMentionSeen(n.commentId)
-                        if (n.kind === 'approval') {
-                          go({ name: 'admin', section: 'approvals' })
-                          return
-                        }
-                        if (n.taskId) openTask(n.taskId)
-                      }}
-                      className="flex w-full items-start gap-2.5 border-b border-border px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-secondary"
+                      className="flex items-start border-b border-border last:border-0"
                     >
-                      {n.kind === 'deadline' ? (
-                        <CalendarClock className="mt-0.5 size-4 shrink-0 text-warning" />
-                      ) : n.kind === 'stale' ? (
-                        <Clock className="mt-0.5 size-4 shrink-0 text-warning" />
-                      ) : n.kind === 'mention' ? (
-                        <AtSign className="mt-0.5 size-4 shrink-0 text-primary" />
-                      ) : (
-                        <ClipboardCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{n.title}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{n.detail}</p>
-                      </div>
-                    </button>
+                      <button
+                        onClick={() => {
+                          setNotifOpen(false)
+                          if (n.kind === 'mention' && n.commentId) markMentionSeen(n.commentId)
+                          if (n.kind === 'approval') {
+                            go({ name: 'admin', section: 'approvals' })
+                            return
+                          }
+                          if (n.taskId) openTask(n.taskId)
+                        }}
+                        className="flex flex-1 items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-secondary"
+                      >
+                        {n.kind === 'deadline' ? (
+                          <CalendarClock className="mt-0.5 size-4 shrink-0 text-warning" />
+                        ) : n.kind === 'stale' ? (
+                          <Clock className="mt-0.5 size-4 shrink-0 text-warning" />
+                        ) : n.kind === 'mention' ? (
+                          <AtSign className="mt-0.5 size-4 shrink-0 text-primary" />
+                        ) : (
+                          <ClipboardCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{n.title}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{n.detail}</p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => dismissNotification(n.id)}
+                        className="flex size-8 shrink-0 items-center justify-center self-center text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label="通知を閉じる"
+                        title="消す"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -329,6 +345,33 @@ export function Header() {
                 >
                   <User className="size-4" />
                   プロフィール
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'activity' })
+                  }}
+                >
+                  <Activity className="size-4" />
+                  アクティビティ
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'dailyreport' })
+                  }}
+                >
+                  <BookOpen className="size-4" />
+                  日報・週報
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'survey' })
+                  }}
+                >
+                  <ClipboardList className="size-4" />
+                  体験アンケート
                 </MenuItem>
                 <MenuItem
                   onClick={() => {

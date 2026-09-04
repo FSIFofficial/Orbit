@@ -1,10 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { Avatar } from '@/components/orbit/primitives'
 import { useNav } from '@/lib/orbit/nav'
 import { exportProjectTasksToExcel } from '@/lib/orbit/export-excel'
-import { FileSpreadsheet } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react'
 import { Project } from '@/lib/orbit/types'
 
 function ProjectCard({
@@ -15,6 +16,7 @@ function ProjectCard({
   getProjectMembers,
   go,
   depth,
+  hasChildren,
   children,
 }: {
   p: Project
@@ -24,8 +26,10 @@ function ProjectCard({
   getProjectMembers: ReturnType<typeof useOrbit>['getProjectMembers']
   go: ReturnType<typeof useNav>['go']
   depth: number
+  hasChildren: boolean
   children?: React.ReactNode
 }) {
+  const [collapsed, setCollapsed] = useState(false)
   const pt = tasks.filter((t) => t.projectId === p.id)
   const done = pt.filter((t) => t.status === 'done').length
   const waiting = pt.filter((t) => t.status === 'review').length
@@ -35,7 +39,19 @@ function ProjectCard({
   return (
     <div className={depth > 0 ? 'ml-4 border-l-2 border-border/50 pl-4' : ''}>
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:border-border-strong hover:shadow-[0_2px_8px_rgba(16,24,40,0.06)]">
-        <button onClick={() => go({ name: 'project', id: p.id })} className="flex flex-col gap-4 text-left">
+        <div className="flex items-start gap-2">
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label={collapsed ? '展開' : '折りたたむ'}
+            >
+              {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+            </button>
+          )}
+          {!hasChildren && <span className="mt-0.5 size-4 shrink-0" />}
+        <button onClick={() => go({ name: 'project', id: p.id })} className="flex flex-1 flex-col gap-4 text-left">
           <div className="flex items-center gap-2.5">
             <span className={`size-2.5 rounded-full ${depth > 0 ? 'bg-muted-foreground/50' : 'bg-primary/60'}`} />
             <p className="text-sm font-semibold text-foreground">{p.name}</p>
@@ -62,6 +78,7 @@ function ProjectCard({
             ))}
           </div>
         </button>
+        </div>
         <div className="flex justify-end border-t border-border/50 pt-2">
           <button
             onClick={(e) => {
@@ -76,7 +93,7 @@ function ProjectCard({
           </button>
         </div>
       </div>
-      {children && <div className="mt-3 flex flex-col gap-3">{children}</div>}
+      {!collapsed && children && <div className="mt-3 flex flex-col gap-3">{children}</div>}
     </div>
   )
 }
@@ -114,6 +131,7 @@ function ProjectTree({
             getProjectMembers={getProjectMembers}
             go={go}
             depth={depth}
+            hasChildren={children.length > 0}
           >
             {children.length > 0 && (
               <ProjectTree

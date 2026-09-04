@@ -372,32 +372,45 @@ export function TaskDetailDrawer({
                   <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">全メンバー</div>
                 </>
               )}
-              {members.filter((m) => !topIds.has(m.id)).map((m) => {
-                const checked = !!task?.assigneeIds.includes(m.id)
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      if (!task) return
-                      const next = checked
-                        ? task.assigneeIds.filter((id) => id !== m.id)
-                        : [...task.assigneeIds, m.id]
-                      assignTask(task.id, next)
-                    }}
-                    className={cn(
-                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
-                      checked && 'bg-primary-muted',
-                    )}
-                  >
-                    <Avatar member={m} size={28} />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{m.displayName || m.name}</div>
-                      <div className="text-xs text-muted-foreground">{m.affiliation}</div>
-                    </div>
-                    {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
-                  </button>
-                )
-              })}
+              {members
+                .filter((m) => !topIds.has(m.id) && !m.inactive)
+                .map((m) => {
+                  const activeCount = tasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done').length
+                  return { m, activeCount }
+                })
+                .sort((a, b) => a.activeCount - b.activeCount)
+                .map(({ m, activeCount }) => {
+                  const checked = !!task?.assigneeIds.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        if (!task) return
+                        const next = checked
+                          ? task.assigneeIds.filter((id) => id !== m.id)
+                          : [...task.assigneeIds, m.id]
+                        assignTask(task.id, next)
+                      }}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                        checked && 'bg-primary-muted',
+                      )}
+                    >
+                      <Avatar member={m} size={28} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{m.displayName || m.name}</div>
+                        <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                      </div>
+                      <span className={cn(
+                        'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+                        activeCount === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : activeCount <= 2 ? 'bg-secondary text-muted-foreground' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+                      )}>
+                        {activeCount}件
+                      </span>
+                      {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                    </button>
+                  )
+                })}
             </div>
           )
         })()}
@@ -1415,9 +1428,12 @@ function DrawerBody({
   const [commentDraft, setCommentDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  // only an admin can move a task to the final 完了 — an assignee's own
-  // "done" signal is 確認待ち, which emails the admin for confirmation
-  const statusOptions = allowedStatusOptions(isAdmin)
+  // 確認者が設定されている場合、「完了」への変更は確認者本人のみ可（item 17）。
+  // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
+  const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
+  const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
+  const canSetDone = reviewerIds.length === 0 ? isAdmin : isReviewer
+  const statusOptions = allowedStatusOptions(isAdmin).filter((s) => s !== 'done' || canSetDone)
 
   return (
     <div className="flex h-full flex-col">
@@ -1739,6 +1755,12 @@ function DrawerBody({
               <p className="mt-1.5 flex items-center gap-1 text-[11px] text-warning">
                 <TriangleAlert className="size-3" />
                 前提タスクが未完了のため「完了」にできません：{incompleteDeps.map((d) => d.name).join('、')}
+              </p>
+            )}
+            {reviewerIds.length > 0 && !isReviewer && isAdmin && (
+              <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <UserCheck className="size-3" />
+                確認者が設定されています。「完了」への変更は確認者本人のみ行えます。
               </p>
             )}
             {!isAdmin && (

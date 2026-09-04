@@ -1,6 +1,6 @@
 export type TaskStatus = 'todo' | 'progress' | 'support' | 'review' | 'fix' | 'done'
 
-export type Difficulty = '新人歓迎' | '少し経験必要' | '経験者向け'
+export type Difficulty = '誰でも可' | '新人歓迎' | '少し経験必要' | '経験者向け' | '上級者向け'
 
 // 一般 is the fixed, implicit baseline every member starts at — it carries
 // no admin access. Everything above it is an admin-defined permission
@@ -31,9 +31,11 @@ export type AdminSection =
   | 'expenses'
   | 'forms'
   | 'memberdb'
+  | 'leadership'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'leadership', label: '幹部 View' },
   { key: 'approvals', label: 'Approvals' },
   { key: 'assignments', label: 'Assignments' },
   { key: 'projects', label: 'Projects' },
@@ -148,6 +150,12 @@ export interface Member {
   // 含む自己申告の数値）とは別物で、この団体に所属してからの正確な期間を
   // 表示するために使う（person-detail.tsx の「所属歴」）
   joinedAt?: string
+  // 活動休止中フラグ — true のときタスクのおすすめ対象から除外される
+  // (store.tsx の recommendedAssignees/taskRecommendations で inactive 除外)
+  inactive?: boolean
+  // Orbitへの最終アクセス日時（ISO datetime）— GAS側でlogin actionを
+  // 受け取ったときに更新。25日間アクセスなしで管理者に通知（item 25）
+  lastLogin?: string
 
   // ---- talent-management fields (タレントマネジメント) --------------------
   // 人材DB／スキル管理／人材検索／育成・キャリア — wired end-to-end (store.tsx
@@ -248,6 +256,7 @@ export type SkillLevelValue = 1 | 2 | 3 | 4 | 5
 export interface SkillLevel {
   skill: string
   level: SkillLevelValue
+  acquiredAt?: string // ISO date — set when skill is first added
 }
 
 export interface Competency {
@@ -419,6 +428,11 @@ export interface RecurringTaskRule {
   dueInDays?: number // deadline offset in days from the generated task's creation date
   active: boolean
   lastGeneratedDate?: string // YYYY-MM-DD — the last date this rule generated a task for
+  // 「状態起点」— 前回生成されたタスクがこのステータスになったときに次を生成。
+  // 未設定の場合は従来どおり日付起点（毎日/毎週/毎月）で生成する。
+  triggerOnStatus?: TaskStatus
+  // 「例外スキップ日」— これらの日付（YYYY-MM-DD）はタスクを生成しない
+  skipDates?: string[]
 }
 
 export interface Task {
@@ -636,9 +650,11 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
 }
 
 export const DIFFICULTY_LABEL: Difficulty[] = [
+  '誰でも可',
   '新人歓迎',
   '少し経験必要',
   '経験者向け',
+  '上級者向け',
 ]
 
 // Priority accent line color (used on card left edge). Uses CSS vars so it

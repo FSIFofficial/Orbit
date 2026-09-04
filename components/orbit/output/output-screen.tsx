@@ -10,6 +10,7 @@ import { PeopleView } from './people-view'
 import { ProjectView } from './project-view'
 import { DifficultyBoard } from './difficulty-board'
 import { DependencyView } from './dependency-view'
+import { GanttView } from './gantt-view'
 import { TaskDetailDrawer } from './task-detail-drawer'
 import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_LABEL, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
@@ -30,13 +31,14 @@ import {
   X,
   Receipt,
   FileText,
+  BarChart2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
 import { CustomFormModal } from '@/components/orbit/custom-form-modal'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
-type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency'
+type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt'
 
 const DEFAULT_TARGET_ORDER: Target[] = ['mine', 'all', 'people', 'projects', 'archive']
 const TARGET_LABEL: Record<Target, string> = {
@@ -364,6 +366,13 @@ export function OutputScreen() {
               <GitBranch className="size-3.5" />
               依存関係
             </Seg>
+            <Seg
+              active={(target === 'all' || target === 'mine') && view === 'gantt'}
+              onClick={() => selectView('gantt')}
+            >
+              <BarChart2 className="size-3.5" />
+              ガント
+            </Seg>
           </Segment>
 
           {(target === 'all' || target === 'mine') &&
@@ -548,6 +557,9 @@ export function OutputScreen() {
           )}
           {(target === 'all' || target === 'mine') && view === 'dependency' && (
             <DependencyView tasks={dependencyTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
+          )}
+          {(target === 'all' || target === 'mine') && view === 'gantt' && (
+            <GanttView tasks={filteredTasks} onOpenTask={setOpenTaskId} />
           )}
         </>
       )}

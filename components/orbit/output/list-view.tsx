@@ -8,7 +8,8 @@ import { STATUS_LABEL, STATUS_ORDER, DEPARTMENTS } from '@/lib/orbit/types'
 import type { Task } from '@/lib/orbit/types'
 import { formatDeadline, isOverdue } from '@/lib/orbit/utils'
 import { exportTasksToExcel } from '@/lib/orbit/export-excel'
-import { Avatar, StatusBadge, DifficultyBadge, ProjectTag, DepartmentTag } from '@/components/orbit/primitives'
+import { Avatar, DifficultyBadge, ProjectTag, DepartmentTag } from '@/components/orbit/primitives'
+import type { TaskStatus } from '@/lib/orbit/types'
 import { Button } from '@/components/ui/button'
 
 export function ListView({
@@ -18,7 +19,7 @@ export function ListView({
   tasks: Task[]
   onOpenTask: (id: string) => void
 }) {
-  const { projects, members } = useOrbit()
+  const { projects, members, updateTaskStatus } = useOrbit()
   const { go } = useNav()
   const [query, setQuery] = useState('')
   const [projectFilter, setProjectFilter] = useState('all')
@@ -187,8 +188,16 @@ export function ListView({
                   <td className={`px-4 py-3 tabular-nums ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {formatDeadline(t.deadline)}
                   </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={t.status} />
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <select
+                      value={t.status}
+                      onChange={(e) => updateTaskStatus(t.id, e.target.value as TaskStatus)}
+                      className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-xs outline-none hover:border-border focus:border-border-strong"
+                    >
+                      {STATUS_ORDER.map((s) => (
+                        <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{t.category}</td>
                   <td className="px-4 py-3">
