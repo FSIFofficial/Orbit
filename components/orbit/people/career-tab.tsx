@@ -105,6 +105,7 @@ export function CareerTab({
   updateDevelopmentPlan,
   updateOneOnOnes,
   currentUserId,
+  oneOnOneQuestions,
   radarAxes,
   quizDefinitions,
   submitQuizResult,
