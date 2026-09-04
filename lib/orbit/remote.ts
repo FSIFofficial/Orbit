@@ -39,6 +39,7 @@ import type {
   NotifyKind,
 } from './types'
 import { STATUS_LABEL, isAdminRole } from './types'
+import { getGasAuthToken } from './google-sheet-sync'
 
 // NEXT_PUBLIC_ vars are inlined at build time by Next.js. They must be
 // referenced by their literal full name (not a dynamic key) to be inlined.
@@ -471,12 +472,13 @@ export interface CreateTaskPayload {
 
 async function postToGas<T = unknown>(action: string, payload: Record<string, unknown>): Promise<T> {
   if (!GAS_URL) throw new Error('GAS Web App URL is not configured')
+  const authToken = getGasAuthToken()
   const res = await fetch(GAS_URL, {
     method: 'POST',
     // text/plain avoids a CORS preflight (Apps Script doesn't handle
     // OPTIONS); the body is still JSON, parsed server-side with JSON.parse.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload }),
+    body: JSON.stringify({ action, authToken, ...payload }),
   })
   const json = await res.json()
   if (!json.ok) throw new Error(json.error || `GAS action "${action}" failed`)

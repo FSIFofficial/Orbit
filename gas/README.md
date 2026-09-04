@@ -335,6 +335,53 @@ secrets未設定のままだと従来通りローカルのモックデータで�
    なっているか確認してください（§2参照）。「アクセスしているユーザー」になっていると、
    匿名アクセスからのメール送信権限がなく失敗します。
 
+## 5.6. GASエンドポイントの認証設定 (GOOGLE_OAUTH_CLIENT_ID)
+
+`Code.gs` の `doPost` は、すべてのリクエストに対してGoogleアクセストークンを検証します。
+フロントエンドはログイン時に取得したGoogleアクセストークンを `authToken` フィールドとして
+毎回のPOSTに添付します。GAS側はそのトークンをGoogleの `tokeninfo` エンドポイントに送り、
+メールアドレスとオーディエンス（クライアントID）を確認した上でMembersシートと照合します。
+
+### 設定手順
+
+1. **GCPのOAuth 2.0クライアントIDを確認する**
+   Google Cloud Console → 対象プロジェクト → 「APIとサービス」→ 「認証情報」で
+   Webアプリ用の「OAuthクライアントID」を確認します。
+   `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` GitHub SecretにセットしているIDと同じ値です。
+
+2. **Apps Scriptのスクリプトプロパティに登録する**
+   Apps Scriptエディタを開き、「プロジェクトの設定」（歯車アイコン）→「スクリプト プロパティ」
+   →「プロパティを追加」で以下を登録してください。
+
+   | プロパティ名 | 値 |
+   |---|---|
+   | `GOOGLE_OAUTH_CLIENT_ID` | GCPのWebアプリ用クライアントID（例: `123456789-xxxx.apps.googleusercontent.com`） |
+
+3. **登録後に再デプロイする**
+   スクリプトプロパティの変更は実行中のWebアプリにすぐ反映されます（再デプロイ不要）が、
+   念のため「デプロイを管理」→「バージョン新規」で再デプロイすることを推奨します。
+
+### 動作
+
+- `GOOGLE_OAUTH_CLIENT_ID` が未設定の場合、オーディエンス検証はスキップされますが
+  メールアドレスの照合は引き続き行われます（開発環境向けのフォールバック）。
+- トークンが無効・期限切れの場合は `{ ok: false, error: "..." }` が返り、
+  フロントエンドのトースト通知に表示されます。「再ログインしてください」という
+  エラーメッセージが出たら、一度ログアウトして再ログインしてください。
+- アクセストークンの有効期限はGoogleのデフォルトで**1時間**です。長時間操作しない
+  でいると期限切れエラーが出ることがあります。
+
+### 権限チェックの概要
+
+| アクション | 許可条件 |
+|---|---|
+| updateRole, removeMember, removeProject, updateDiscordWebhookUrl, updateSetting, addMember, updateEmail, updateJoinedAt, updateReportsTo, updateMentor, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies, notifyTrainingDecision | 代表のみ |
+| approveTask, updateJudgment, assignTask, updateTaskDetails, updateVisibility, updateReviewer(s), removeTask, createProject, updateProject*, updatePriority, updateDifficulty, updateSchedule, updateDependsOn, setBlocker, notifyTaskRejected, updateSearchProfile | 代表 または 班長（任意の管理者ロール） |
+| updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory, notifyTrainingRequest | 本人 または 管理者 |
+| updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates | 本人のみ |
+| createTasks, updateProgress, updateComments, notifyMention, updateEstimatedHours, updateActualHours, updateRetrospective, updateTaskSchedule, notifyScheduleResult, updateTaskForm, notifyFormResult, updateHistory, updateDeliverables | ログイン済みなら誰でも |
+| updateTaskStatus | ログイン済み かつ 担当者であること |
+
 ## 既知の制約
 
 - 設計ドキュメント §3 が定める「自分の project_ids の範囲に限定」というスコープ制限は

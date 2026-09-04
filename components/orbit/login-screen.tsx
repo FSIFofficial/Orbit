@@ -9,6 +9,7 @@ import {
   isGoogleOAuthConfigured,
   requestGoogleLoginToken,
   fetchGoogleUserInfo,
+  setGasAuthToken,
 } from '@/lib/orbit/google-sheet-sync'
 
 export function LoginScreen() {
@@ -29,6 +30,9 @@ export function LoginScreen() {
     setLoading(true)
     try {
       const token = await requestGoogleLoginToken()
+      // Cache the token so every subsequent GAS write can include it
+      // for server-side authentication without re-prompting the user.
+      setGasAuthToken(token)
       const userInfo = await fetchGoogleUserInfo(token)
       const email = userInfo.email.toLowerCase()
       const matched = members.find((m) =>
