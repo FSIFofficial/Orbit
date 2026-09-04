@@ -20,6 +20,11 @@ var SHEET_TASKS = 'Tasks'
 // fine, updateSetting() creates it on first write.
 var SHEET_SETTINGS = 'Settings'
 var SETTINGS_KEY_RECURRING_RULES = 'recurring_rules'
+// スキルごとのレベルアップ閾値 JSON: { "デフォルト": 100, "デザイン": 150, ... }
+var SETTINGS_KEY_SKILL_LEVEL_THRESHOLDS = 'skill_level_thresholds'
+// 部署ツリー設定 JSON: 部署一覧を静的に管理したい場合に使う（省略時は
+// Members.department_path の実データから動的導出）
+var SETTINGS_KEY_DEPARTMENT_TREE_CONFIG = 'department_tree_config'
 // NOT a Settings-sheet key (that sheet is published as a public CSV) — this
 // is the PropertiesService key the Discord webhook URL is stored under
 // instead. See getDiscordWebhookUrl()/updateDiscordWebhookUrl() below.
@@ -1880,6 +1885,10 @@ function setupOrbit() {
     'career_aspiration', 'desired_future_role', 'career_plan',
     'training_history_json', 'development_plan_json', 'one_on_ones_json',
     'notify_settings',
+    // 組織階層・権限・スキルポイント（新規列）
+    'department_path',          // 例: "事業本部A>事業部1>グループX"
+    'permission_overrides_json',// 例: [{"targetType":"task","targetId":"12","access":"view"}]
+    'skill_points_json',        // 例: {"デザイン":120,"プログラミング":340}
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',

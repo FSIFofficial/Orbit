@@ -171,7 +171,32 @@ export interface Member {
   trainingHistory?: TrainingRecord[]
   developmentPlan?: DevelopmentPlanEntry[]
   oneOnOnes?: OneOnOneRecord[]
+
+  // ---- 組織階層・権限・スキルポイント ----------------------------------------
+
+  // 所属パス ("事業本部A>事業部1>グループX") — ">" 区切りで最上位から記述。
+  // affiliation（プロジェクトから動的導出）とは独立した静的な組織階層情報。
+  departmentPath?: string
+
+  // 個別の例外許可。たとえば「一般メンバーだが特定タスクだけ閲覧可」など
+  // ロールベースの権限チェックに重ねて適用する。
+  permissionOverrides?: PermissionOverride[]
+
+  // スキルごとの累計ポイント。skill_levels_json（確定レベル）とは別で、
+  // レベルアップのベースになる生の累計点を保持する。
+  // 例: { "デザイン": 120, "プログラミング": 340 }
+  skillPoints?: SkillPoints
 }
+
+/** 個別例外許可エントリ (Member.permissionOverrides の要素) */
+export interface PermissionOverride {
+  targetType: 'task' | 'project' | 'department'
+  targetId: string
+  access: 'view' | 'edit' | 'approve'
+}
+
+/** スキル名 → 累計ポイント のマップ */
+export type SkillPoints = Record<string, number>
 
 export interface CareerHistoryEntry {
   id: string
@@ -313,6 +338,25 @@ export interface TaskSetTemplate {
 // this GAS + static-export architecture, so generation is checked
 // client-side on load (store.tsx) against lastGeneratedDate.
 export type RecurrenceFrequency = 'weekly' | 'monthly'
+
+// ---- Settings シートのキー型 -----------------------------------------------
+
+/**
+ * スキルごとのレベルアップ閾値マップ (Settings キー: "skill_level_thresholds")
+ * 例: { "デフォルト": 100, "デザイン": 150, "プログラミング": 200 }
+ * キーが存在しないスキルは "デフォルト" の値を使う。
+ */
+export type SkillLevelThresholds = Record<string, number>
+
+/**
+ * 部署ツリー設定 (Settings キー: "department_tree_config", 省略可)
+ * 省略時は Members.departmentPath の実データから動的導出される。
+ * 例: [{ "path": "事業本部A>事業部1>グループX" }]
+ */
+export interface DepartmentTreeNode {
+  path: string        // ">" 区切りのフルパス
+  label?: string      // 表示名（省略時は path の末尾ノード名を使う）
+}
 
 export interface RecurringTaskRule {
   id: string

@@ -37,6 +37,8 @@ import type {
   TransferRecord,
   NotifyFrequency,
   NotifyKind,
+  PermissionOverride,
+  SkillPoints,
 } from './types'
 import { STATUS_LABEL, isAdminRole } from './types'
 import { getGasAuthToken, refreshGasAuthToken } from './google-sheet-sync'
@@ -225,6 +227,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     trainingHistory: parseJsonArray<TrainingRecord>(r.training_history_json),
     developmentPlan: parseJsonArray<DevelopmentPlanEntry>(r.development_plan_json),
     oneOnOnes: parseJsonArray<OneOnOneRecord>(r.one_on_ones_json),
+    // ---- 組織階層・権限・スキルポイント ----------------------------------------
+    departmentPath: r.department_path || undefined,
+    permissionOverrides: parseJsonArray<PermissionOverride>(r.permission_overrides_json),
+    skillPoints: parseJsonObject<SkillPoints>(r.skill_points_json),
   }
 }
 
