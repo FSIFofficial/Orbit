@@ -18,6 +18,7 @@ import { FeedbackScreen } from './feedback-screen'
 import { ActivityScreen } from './activity-screen'
 import { DailyReportScreen } from './daily-report-screen'
 import { SurveyScreen } from './survey-screen'
+import { OrgSettingsScreen } from './org-settings-screen'
 import { TaskDetailDrawer } from './output/task-detail-drawer'
 import { OrbitMark } from './primitives'
 import { TriangleAlert } from 'lucide-react'
@@ -118,6 +119,7 @@ function Router() {
         {screen.name === 'activity' && <ActivityScreen />}
         {screen.name === 'dailyreport' && <DailyReportScreen />}
         {screen.name === 'survey' && <SurveyScreen />}
+        {screen.name === 'org-settings' && <OrgSettingsScreen />}
       </div>
       <TaskDetailDrawer taskId={openTaskId} onClose={closeTask} />
     </div>

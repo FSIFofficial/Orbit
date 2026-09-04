@@ -13,6 +13,7 @@ import {
   AtSign,
   Bell,
   BookOpen,
+  Building2,
   CalendarClock,
   CheckCheck,
   ChevronDown,
@@ -46,6 +47,7 @@ export function Header() {
     markMentionSeen,
     orgName,
     orgLogoUrl,
+    isFullAdmin,
   } = useOrbit()
   const { screen, go, goBack, canGoBack } = useNav()
   const { theme, toggle } = useTheme()
@@ -139,15 +141,20 @@ export function Header() {
             onClick={() => handleMode('output')}
             className="flex shrink-0 items-center gap-2"
           >
-            {orgLogoUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={orgLogoUrl} alt={orgName || 'ロゴ'} className="size-[22px] rounded object-contain" />
-            ) : (
-              <OrbitMark size={22} />
+            <OrbitMark size={22} />
+            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">Orbit</span>
+            {(orgLogoUrl || orgName) && (
+              <>
+                <span className="hidden text-muted-foreground/40 sm:inline" aria-hidden>|</span>
+                {orgLogoUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={orgLogoUrl} alt={orgName || 'ロゴ'} className="size-[18px] rounded object-contain" />
+                )}
+                {orgName && (
+                  <span className="hidden text-[13px] text-muted-foreground sm:inline">{orgName}</span>
+                )}
+              </>
             )}
-            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">
-              {orgName || 'Orbit'}
-            </span>
           </button>
         </div>
 
@@ -382,6 +389,17 @@ export function Header() {
                   <ClipboardList className="size-4" />
                   体験アンケート
                 </MenuItem>
+                {isFullAdmin && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false)
+                      go({ name: 'org-settings' })
+                    }}
+                  >
+                    <Building2 className="size-4" />
+                    団体設定
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={() => {
                     setMenuOpen(false)

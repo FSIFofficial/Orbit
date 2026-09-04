@@ -623,7 +623,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [seenMentionIds, setSeenMentionIds] = useState<Record<string, string[]>>({})
   // 通知の個別dismiss — userId -> 無視した通知IDの配列。通知はMemoで動的生成
   // されるので、dismissedは端末ローカルのlocalStorageで管理する（item 7）
-  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Record<string, string[]>>({})
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Record<string, string[]>>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(DISMISSED_NOTIFICATIONS_STORAGE_KEY) : null
+      return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+  })
   const [skillCertifiedEvent, setSkillCertifiedEvent] = useState<{
     memberName: string
     skill: string

@@ -70,11 +70,7 @@ export function FeedbackScreen() {
   useEffect(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(ORG_NAME_KEY) : null
     setOrgName(saved ?? '')
-    // お名前は任意のため事前記入しない — ユーザーが必要なら入力
-    if (currentUser) {
-      setEmail(currentUser.email ?? '')
-    }
-  }, [currentUser])
+  }, [])
 
   const addScreenshot = (file: File) => {
     const reader = new FileReader()
@@ -296,7 +292,7 @@ export function FeedbackScreen() {
             </div>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            ※ 現在ファイル添付はプレビューのみ（フォーム送信には含まれません）。不具合の詳細が分かる画像はDiscordやメールで別途共有してください。
+            ※ プレビュー表示のみ（フォーム送信には含まれません）
           </p>
         </Field>
 
@@ -343,7 +339,13 @@ export function FeedbackScreen() {
                   name="wantReply"
                   value={r}
                   checked={wantReply === r}
-                  onChange={() => setWantReply(r)}
+                  onChange={() => {
+                    setWantReply(r)
+                    if (r === '返信してほしい' && currentUser) {
+                      if (!yourName) setYourName(currentUser.displayName || currentUser.name || '')
+                      if (!email) setEmail(currentUser.email ?? '')
+                    }
+                  }}
                   className="size-4 accent-primary"
                 />
                 <span className="text-sm">{r}</span>
@@ -352,16 +354,18 @@ export function FeedbackScreen() {
           </div>
         </Field>
 
-        {/* 連絡先メールアドレス */}
-        <Field label="連絡先メールアドレス">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="返信を希望する場合はご入力ください"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-          />
-        </Field>
+        {/* 連絡先メールアドレス — 返信希望の場合のみ表示 */}
+        {wantReply === '返信してほしい' && (
+          <Field label="連絡先メールアドレス">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="返信先のメールアドレス"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </Field>
+        )}
 
         {error && (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
