@@ -426,6 +426,7 @@ function authorizeAction(acting, action, body) {
     'uploadAvatar',          // 画像アップロードは本人のみ
     'updateDisplayName',     // 表示名変更は本人のみ
     'updateUnavailableDates',// 稼働不可日は本人のみ
+    'updateAbsentDates',    // 不在日は本人のみ
   ]
   if (selfOnly.indexOf(action) >= 0) {
     var selfTargetId = String(body.memberId || '')
@@ -455,6 +456,7 @@ function authorizeAction(acting, action, body) {
     'submitExpenseApplication',// 経費申請はログイン済み誰でも
     'withdrawExpense',         // 取り下げは本人（下層でチェック）
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
+    'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
@@ -634,6 +636,7 @@ function doPost(e) {
         result = updateTaskFields(body.taskId, {
           reviewer_ids: (body.reviewerIds || []).join(','),
           reviewer_id: (body.reviewerIds && body.reviewerIds[0]) || '',
+          required_approvals: body.requiredApprovals != null ? String(body.requiredApprovals) : '',
         })
         break
       case 'setBlocker':
@@ -853,6 +856,12 @@ function doPost(e) {
         break
       case 'bulkUpdateSkills':
         result = bulkUpdateSkillLevels(body.updates || [])
+        break
+      case 'updateAbsentDates':
+        result = updateMemberFields(body.memberId, { absent_dates: (body.dates || []).join(',') })
+        break
+      case 'updateLastLogin':
+        result = updateMemberFields(body.memberId, { last_login: new Date().toISOString() })
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2241,6 +2250,8 @@ function setupOrbit() {
     'permission_overrides_json',// 例: [{"targetType":"task","targetId":"12","access":"view"}]
     'skill_points_json',        // 例: {"デザイン":120,"プログラミング":340}
     'inactive',                 // "TRUE" = 休止中メンバー（一覧から非表示）
+    'absent_dates',            // 不在日リスト（カンマ区切り YYYY-MM-DD）
+    'last_login',              // 最終ログイン日時（ISO datetime）
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -2256,6 +2267,7 @@ function setupOrbit() {
     'retrospective_json', 'schedule_json', 'form_json',
     'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
     'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
+    'required_approvals',  // 承認に必要な確認者数 (数値 or "all")
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 

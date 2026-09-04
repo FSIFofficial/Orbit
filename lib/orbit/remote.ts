@@ -235,6 +235,8 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     permissionOverrides: parseJsonArray<PermissionOverride>(r.permission_overrides_json),
     skillPoints: parseJsonObject<SkillPoints>(r.skill_points_json),
     inactive: r.inactive === 'TRUE' ? true : undefined,
+    absentDates: splitTags(r.absent_dates),
+    lastLogin: r.last_login || undefined,
   }
 }
 
@@ -300,6 +302,9 @@ function mapTaskRow(r: Record<string, string>): Task {
     schedule: parseJsonObject<TaskSchedule>(r.schedule_json),
     form: parseJsonObject<TaskForm>(r.form_json),
     awardedPoints: parseJsonObject<SkillPoints>(r.awarded_points_json),
+    requiredApprovals: r.required_approvals
+      ? r.required_approvals === 'all' ? 'all' : Number(r.required_approvals)
+      : undefined,
   }
 }
 
@@ -651,8 +656,8 @@ export const remoteApi = {
     postToGas('updateMemberProjects', { memberId, projectIds }),
   updateReviewer: (taskId: string, reviewerId: string | null) =>
     postToGas('updateReviewer', { taskId, reviewerId }),
-  updateReviewers: (taskId: string, reviewerIds: string[]) =>
-    postToGas('updateReviewers', { taskId, reviewerIds }),
+  updateReviewers: (taskId: string, reviewerIds: string[], requiredApprovals?: number | 'all') =>
+    postToGas('updateReviewers', { taskId, reviewerIds, requiredApprovals }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>
@@ -747,6 +752,10 @@ export const remoteApi = {
     postToGas('rejectFormSubmission', { submissionId, reason }),
   bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) =>
     postToGas('bulkUpdateSkills', { updates }),
+  updateAbsentDates: (memberId: string, dates: string[]) =>
+    postToGas('updateAbsentDates', { memberId, dates }),
+  updateLastLogin: (memberId: string) =>
+    postToGas('updateLastLogin', { memberId }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to
