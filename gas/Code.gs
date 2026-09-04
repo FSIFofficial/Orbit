@@ -2240,6 +2240,7 @@ function setupOrbit() {
     'department_path',          // 例: "事業本部A>事業部1>グループX"
     'permission_overrides_json',// 例: [{"targetType":"task","targetId":"12","access":"view"}]
     'skill_points_json',        // 例: {"デザイン":120,"プログラミング":340}
+    'inactive',                 // "TRUE" = 休止中メンバー（一覧から非表示）
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -2262,6 +2263,22 @@ function setupOrbit() {
   ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
   ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
   ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
+
+  // --- Settings の初期キーを確保（上書きはしない）---
+  var DEFAULT_SETTINGS = [
+    ['org_name', ''],
+    ['org_logo_url', ''],
+  ]
+  var settingsSheet = ss.getSheetByName(SHEET_SETTINGS)
+  var settingsData = settingsSheet.getLastRow() > 1
+    ? settingsSheet.getRange(2, 1, settingsSheet.getLastRow() - 1, 1).getValues().map(function(r){ return String(r[0]) })
+    : []
+  DEFAULT_SETTINGS.forEach(function(pair) {
+    if (settingsData.indexOf(pair[0]) === -1) {
+      settingsSheet.appendRow(pair)
+      console.log('➕ Settings 初期キー追加: ' + pair[0])
+    }
+  })
 
   // --- バッチ通知トリガーの設定 ---
   try {
