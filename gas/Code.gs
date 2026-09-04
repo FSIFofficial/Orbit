@@ -321,6 +321,17 @@ function submitQuizResult(quizId, memberId, answers, acting) {
  *   本人のみ        — acting on body.memberId === self only
  *   誰でも          — any logged-in member (with extra checks where noted)
  */
+// lib/orbit/permissions.ts の isFullAdminRole と同じ基準:
+// role が空または '一般' なら false、Settings の restricted_roles に含まれていれば false、それ以外は true。
+// 代表は authorizeAction の先頭で早期 return するため、実質的には「restrictedRoles に含まれない班長」を判定する。
+function isActingFullAdmin(acting) {
+  var role = String(acting.role || '').trim()
+  if (!role || role === '一般') return false
+  var restrictedRaw = getSettingValue('restricted_roles') || ''
+  var restricted = restrictedRaw.split(',').map(function(s) { return s.trim() }).filter(Boolean)
+  return restricted.indexOf(role) < 0
+}
+
 function authorizeAction(acting, action, body) {
   var role = acting.role
   // isLeader: true for any role that is not '一般' (i.e. any admin-level role).
@@ -433,6 +444,30 @@ function authorizeAction(acting, action, body) {
       if (!approverCheckPassed) {
         if (checkPermissionOverride(acting, action, body)) return
         throw new Error('この承認ステップの担当者ではありません。')
+      }
+    }
+
+    // approveTask: importance に応じた承認者チェック（lib/orbit/permissions.ts の canApproveTask と同じロジック）
+    if (action === 'approveTask') {
+      var taskForApprove = null
+      try { taskForApprove = findRow(SHEET_TASKS, String(body.taskId || '')) } catch(e) {}
+      if (taskForApprove) {
+        var taskImportance = String(taskForApprove.importance || '').trim()
+        if (taskImportance === '重要' || taskImportance === '対外公開') {
+          // escalated: 全権管理者（isFullAdmin）のみ承認可能
+          if (!isActingFullAdmin(acting)) {
+            if (checkPermissionOverride(acting, action, body)) return
+            throw new Error('重要度が「重要」または「対外公開」のタスクは、全権管理者のみ承認できます。')
+          }
+        } else {
+          // non-escalated: reviewer_ids / reviewer_id が設定されていれば acting.id と照合
+          var rawReviewers = String(taskForApprove.reviewer_ids || taskForApprove.reviewer_id || '').trim()
+          var reviewerIdList = rawReviewers.split(',').map(function(s) { return s.trim() }).filter(Boolean)
+          if (reviewerIdList.length > 0 && reviewerIdList.indexOf(acting.id) < 0 && !isActingFullAdmin(acting)) {
+            if (checkPermissionOverride(acting, action, body)) return
+            throw new Error('このタスクの承認者として指定されていないため、承認できません。')
+          }
+        }
       }
     }
 
@@ -563,14 +598,19 @@ function authorizeAction(acting, action, body) {
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
-    // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
+    // updateTaskStatus: 全権管理者は制限なし。担当者は「完了」以外のステータスのみ変更可。
     if (action === 'updateTaskStatus') {
-      var taskId = String(body.taskId || '')
-      var task = findRow(SHEET_TASKS, taskId)
-      if (task) {
-        var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
-        if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
-          throw new Error('このタスクの担当者のみステータスを変更できます。')
+      if (!isActingFullAdmin(acting)) {
+        var taskId = String(body.taskId || '')
+        var task = findRow(SHEET_TASKS, taskId)
+        if (task) {
+          var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+          if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
+            throw new Error('このタスクの担当者のみステータスを変更できます。')
+          }
+        }
+        if (body.status === '完了') {
+          throw new Error('担当者は「完了」に変更できません。管理者に確認を依頼してください。')
         }
       }
     }
