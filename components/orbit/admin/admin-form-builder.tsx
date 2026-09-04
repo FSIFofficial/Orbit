@@ -109,14 +109,14 @@ function FieldEditor({
     <div className="space-y-2 rounded-md border border-border bg-card p-3">
       <div className="flex items-start gap-2">
         <GripVertical className="mt-1 size-4 text-muted-foreground" />
-        <div className="flex-1 space-y-2">
-          <div className="flex gap-2">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="text"
               value={field.label}
               onChange={(e) => onChange({ ...field, label: e.target.value })}
               placeholder="フィールド名"
-              className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
             />
             <select
               value={field.type}
@@ -212,7 +212,7 @@ function FormEditor({
 
   return (
     <Modal open={true} onClose={onClose}>
-      <div className="max-h-[80vh] overflow-y-auto space-y-4 p-4" style={{ minWidth: 500, maxWidth: 640 }}>
+      <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto space-y-4 p-4 sm:min-w-[500px]">
         <h3 className="font-semibold">{initial ? 'フォーム編集' : 'フォーム作成'}</h3>
 
         <div className="space-y-1">

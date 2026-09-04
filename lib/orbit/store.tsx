@@ -405,7 +405,6 @@ const RESTRICTED_ROLES_STORAGE_KEY = 'orbit-restricted-roles'
 // 切り替えて使う場合にも既読状態が混ざらないようにする
 const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
 const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
-const SLACK_WEBHOOK_STORAGE_KEY = 'orbit-slack-webhook-url'
 const ORG_NAME_STORAGE_KEY = 'orbit-org-name'
 const ORG_LOGO_URL_STORAGE_KEY = 'orbit-org-logo-url'
 
@@ -3205,7 +3204,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存
   const setSlackWebhookUrl = useCallback(
     (url: string) => {
-      try { window.localStorage.setItem(SLACK_WEBHOOK_STORAGE_KEY, url) } catch { /* ignore */ }
       setSlackWebhookUrlState(url)
       if (isRemoteConfigured) runRemote(remoteApi.updateSlackWebhookUrl(url))
     },
