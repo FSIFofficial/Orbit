@@ -220,6 +220,7 @@ interface OrbitContextValue extends OrbitState {
   dismissNotification: (notificationId: string) => void
   setSlackWebhookUrl: (url: string) => void
   toggleMemberInactive: (memberId: string) => void
+  updateMemberDepartmentPath: (memberId: string, departmentPath: string) => void
   updateAbsentDates: (memberId: string, dates: string[]) => void
   // item 20: 1on1ワークシート質問項目
   oneOnOneQuestions: string[]
@@ -3227,6 +3228,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  const updateMemberDepartmentPath = useCallback(
+    (memberId: string, departmentPath: string) => {
+      setMembers((prev) => prev.map((m) => m.id !== memberId ? m : { ...m, departmentPath: departmentPath || undefined }))
+      if (isRemoteConfigured) runRemote(remoteApi.updateMemberDepartmentPath(memberId, departmentPath))
+    },
+    [runRemote],
+  )
+
   // 不在日の更新 — localStorageで管理（GAS同期は将来対応）
   const updateAbsentDates = useCallback((memberId: string, dates: string[]) => {
     setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, absentDates: dates } : m))
@@ -3552,6 +3561,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     dismissNotification,
     setSlackWebhookUrl,
     toggleMemberInactive,
+    updateMemberDepartmentPath,
     updateAbsentDates,
     oneOnOneQuestions,
     setOneOnOneQuestions,

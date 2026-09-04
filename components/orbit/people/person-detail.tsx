@@ -112,6 +112,7 @@ export function PersonDetail({ id }: { id: string }) {
     notifyTrainingDecision,
     updateDevelopmentPlan,
     updateOneOnOnes,
+    updateMemberDepartmentPath,
     radarAxes,
     quizDefinitions,
     submitQuizResult,
@@ -125,6 +126,7 @@ export function PersonDetail({ id }: { id: string }) {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [editingJoinedAt, setEditingJoinedAt] = useState(false)
+  const [editingDeptPath, setEditingDeptPath] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [initialsDraft, setInitialsDraft] = useState('')
@@ -419,10 +421,39 @@ export function PersonDetail({ id }: { id: string }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {member.role !== BASE_ROLE ? member.role : member.affiliation}
           </p>
-          {member.departmentPath && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')}
-            </p>
+          {editingDeptPath && isAdmin ? (
+            <input
+              autoFocus
+              defaultValue={member.departmentPath ?? ''}
+              onBlur={(e) => {
+                updateMemberDepartmentPath(member.id, e.target.value.trim())
+                setEditingDeptPath(false)
+              }}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                if (e.key === 'Enter') { updateMemberDepartmentPath(member.id, e.currentTarget.value.trim()); setEditingDeptPath(false) }
+                if (e.key === 'Escape') setEditingDeptPath(false)
+              }}
+              placeholder="例: 開発部 > フロントエンド班"
+              className="mt-0.5 h-6 w-64 rounded-md border border-primary bg-card px-1.5 text-xs outline-none"
+            />
+          ) : (
+            <div className="mt-0.5 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground">
+                {member.departmentPath
+                  ? member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')
+                  : isAdmin ? <span className="italic">組織パス未設定</span> : null}
+              </p>
+              {isAdmin && (
+                <button
+                  onClick={() => setEditingDeptPath(true)}
+                  className="rounded-md p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  aria-label="組織パスを編集"
+                >
+                  <Pencil className="size-3" />
+                </button>
+              )}
+            </div>
           )}
           <div className="mt-1 flex items-center gap-1.5">
             {editingJoinedAt ? (

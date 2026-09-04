@@ -644,6 +644,8 @@ export const remoteApi = {
   updateSlackWebhookUrl: (url: string) => postToGas('updateSlackWebhookUrl', { url }),
   updateMemberInactive: (memberId: string, inactive: boolean) =>
     postToGas('updateMemberInactive', { memberId, inactive }),
+  updateMemberDepartmentPath: (memberId: string, departmentPath: string) =>
+    postToGas('updateMemberDepartmentPath', { memberId, departmentPath }),
   updateMemberProjects: (memberId: string, projectIds: string[]) =>
     postToGas('updateMemberProjects', { memberId, projectIds }),
   updateReviewer: (taskId: string, reviewerId: string | null) =>
