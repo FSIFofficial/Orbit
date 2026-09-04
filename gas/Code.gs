@@ -338,6 +338,7 @@ function authorizeAction(acting, action, body) {
     'removeMember',            // メンバー削除は代表のみ
     'removeProject',           // プロジェクト削除は代表のみ
     'updateDiscordWebhookUrl', // システム設定は代表のみ
+    'updateSlackWebhookUrl',   // システム設定は代表のみ
     'updateSetting',           // システム設定は代表のみ
     'uploadOrgLogo',           // 団体ロゴアップロードは代表のみ
     'addMember',               // メンバー追加は代表のみ
@@ -396,6 +397,45 @@ function authorizeAction(acting, action, body) {
       if (checkPermissionOverride(acting, action, body)) return
       throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
     }
+    // 承認ステップの担当者チェック（代表は上で return 済みなので班長のみ到達）
+    if (action === 'approveExpenseStep' || action === 'approveFormStep') {
+      var approverCheckPassed = false
+      try {
+        if (action === 'approveExpenseStep') {
+          var expSheet = ensureExpensesSheet()
+          var expFound = findExpenseRow(expSheet, String(body.applicationId || ''))
+          if (expFound) {
+            var expSteps = JSON.parse(String(expFound.data[expFound.headers.indexOf('approval_steps_json')] || '[]'))
+            var expIdx = Number(expFound.data[expFound.headers.indexOf('current_step_index')]) || 0
+            var expStep = expSteps[expIdx]
+            if (expStep) {
+              if (expStep.type === 'member' && expStep.memberId === acting.id) approverCheckPassed = true
+              if (expStep.type === 'role' && expStep.role === acting.role) approverCheckPassed = true
+            }
+          }
+        } else {
+          var fmSheet = ensureFormSubmissionsSheet()
+          var fmFound = findFormSubmissionRow(fmSheet, String(body.submissionId || ''))
+          if (fmFound) {
+            var fmIdx = Number(fmFound.data[fmFound.headers.indexOf('current_step_index')]) || 0
+            var fmId = String(fmFound.data[fmFound.headers.indexOf('form_id')] || '')
+            var fmDefs = []
+            try { var fmRaw = getSettingValue('custom_form_defs'); if (fmRaw) fmDefs = JSON.parse(fmRaw) } catch(e2) {}
+            var fmDef = fmDefs.filter(function(f) { return f.id === fmId })[0]
+            var fmStepObj = fmDef ? (fmDef.approvalSteps || [])[fmIdx] : null
+            if (fmStepObj) {
+              if (fmStepObj.type === 'member' && fmStepObj.memberId === acting.id) approverCheckPassed = true
+              if (fmStepObj.type === 'role' && fmStepObj.role === acting.role) approverCheckPassed = true
+            }
+          }
+        }
+      } catch(e) {}
+      if (!approverCheckPassed) {
+        if (checkPermissionOverride(acting, action, body)) return
+        throw new Error('この承認ステップの担当者ではありません。')
+      }
+    }
+
     // 班長（代表以外の管理者）はプロジェクトスコープに制限する。
     // acting.project_ids に対象プロジェクトが含まれなければ permission_overrides でのみ許可。
     var actingProjectIds = acting.project_ids ? String(acting.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean) : []
@@ -810,6 +850,9 @@ function doPost(e) {
       case 'updateDiscordWebhookUrl':
         result = updateDiscordWebhookUrl(body.url)
         break
+      case 'updateSlackWebhookUrl':
+        result = updateSlackWebhookUrl(body.url)
+        break
       case 'updateMemberProjects':
         result = updateMemberFields(body.memberId, {
           project_ids: (body.projectIds || []).join(','),
@@ -909,7 +952,7 @@ function doPost(e) {
         result = setExpenseStatus(body.applicationId, 'rejected', body.reason)
         break
       case 'withdrawExpense':
-        result = setExpenseStatus(body.applicationId, 'withdrawn')
+        result = setExpenseStatus(body.applicationId, 'withdrawn', null, actingMember.id)
         break
       case 'submitCustomForm':
         result = saveCustomFormSubmission(body.submission, actingMember)
@@ -2203,6 +2246,22 @@ function updateDiscordWebhookUrl(url) {
   return { updated: true }
 }
 
+var SLACK_WEBHOOK_PROPERTY_KEY = 'slack_webhook_url'
+
+function getSlackWebhookUrl() {
+  return PropertiesService.getScriptProperties().getProperty(SLACK_WEBHOOK_PROPERTY_KEY) || ''
+}
+
+function updateSlackWebhookUrl(url) {
+  PropertiesService.getScriptProperties().setProperty(SLACK_WEBHOOK_PROPERTY_KEY, url || '')
+  notifyAdmins(
+    '[Orbit] Slack Webhook URLが変更されました',
+    (url ? 'Slack Webhook URLが更新されました。' : 'Slack Webhook URLが削除されました。') +
+      '\n\n心当たりがない場合はAdmin → Tagsから確認してください。',
+  )
+  return { updated: true }
+}
+
 // Task titles are free text any member can set (INPUT screen, or the admin
 // edit form) — posted verbatim as Discord message content, `allowed_mentions`
 // must suppress mention parsing so a title like "@everyone" can't mass-ping
@@ -2525,6 +2584,12 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   var steps = JSON.parse(String(data[stepsCol] || '[]'))
   var currentIdx = Number(data[stepIndexCol]) || 0
 
+  // 3-1: stepId 順序チェック — 現在のステップと一致しない場合は拒否
+  var currentStep = steps[currentIdx]
+  if (!currentStep || currentStep.id !== stepId) {
+    throw new Error('指定されたステップは現在の承認ステップではありません。')
+  }
+
   approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
 
   var step = steps[currentIdx]
@@ -2537,6 +2602,34 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
   sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
 
+  // 次ステップ承認者への通知
+  if (nextIdx > currentIdx && nextIdx < steps.length) {
+    var nextStep = steps[nextIdx]
+    var notifyIds = []
+    if (nextStep && nextStep.type === 'member' && nextStep.memberId) {
+      notifyIds = [nextStep.memberId]
+    } else if (nextStep && nextStep.type === 'role' && nextStep.role) {
+      try {
+        var mSheet = getSheet(SHEET_MEMBERS)
+        var mHeaders = headerRow(mSheet)
+        var mRoleCol = mHeaders.indexOf('role')
+        var mIdCol = mHeaders.indexOf('id')
+        if (mRoleCol >= 0 && mIdCol >= 0 && mSheet.getLastRow() > 1) {
+          var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, mHeaders.length).getValues()
+          mRows.forEach(function(r) {
+            if (String(r[mRoleCol]).trim() === nextStep.role) notifyIds.push(String(r[mIdCol]))
+          })
+        }
+      } catch(e) {}
+    }
+    if (notifyIds.length > 0) {
+      var nextEmails = memberEmailsByIds(notifyIds)
+      if (nextEmails.length > 0) {
+        MailApp.sendEmail({ to: nextEmails.join(','), subject: 'Orbit: 経費承認の依頼', body: '経費申請の承認依頼が届きました。Orbitにログインして確認してください。' })
+      }
+    }
+  }
+
   // 申請者への完了通知
   if (newStatus === 'approved') {
     var applicantId = String(data[headers.indexOf('applicant_id')])
@@ -2548,7 +2641,7 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   return { ok: true }
 }
 
-function setExpenseStatus(applicationId, status, reason) {
+function setExpenseStatus(applicationId, status, reason, actorId) {
   var sheet = ensureExpensesSheet()
   var found = findExpenseRow(sheet, applicationId)
   if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
@@ -2557,6 +2650,11 @@ function setExpenseStatus(applicationId, status, reason) {
   var statusCol = headers.indexOf('status')
   var reasonCol = headers.indexOf('rejection_reason')
   var applicantId = String(found.data[headers.indexOf('applicant_id')])
+
+  // 取り下げは申請者本人のみ
+  if (status === 'withdrawn' && actorId && actorId !== applicantId) {
+    throw new Error('この経費申請を取り下げる権限がありません。')
+  }
 
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) {
@@ -2618,10 +2716,7 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
   var approvals = JSON.parse(String(data[approvalsCol] || '[]'))
   var currentIdx = Number(data[stepIndexCol]) || 0
 
-  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
-  var stepApprovals = approvals.filter(function(a) { return a.stepId === stepId && a.action === 'approved' })
-
-  // フォーム定義からステップ数を取得（Settingsから読む）
+  // フォーム定義からステップ一覧を取得（Settingsから読む）
   var formId = String(data[headers.indexOf('form_id')])
   var customFormDefs = []
   try {
@@ -2629,8 +2724,18 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
     if (raw) customFormDefs = JSON.parse(raw)
   } catch(e) {}
   var formDef = customFormDefs.filter(function(f) { return f.id === formId })[0]
-  var totalSteps = formDef ? (formDef.approvalSteps || []).length : 0
-  var step = formDef ? (formDef.approvalSteps || [])[currentIdx] : null
+  var allSteps = formDef ? (formDef.approvalSteps || []) : []
+  var totalSteps = allSteps.length
+  var step = allSteps[currentIdx]
+
+  // 3-1: stepId 順序チェック — 現在のステップと一致しない場合は拒否
+  if (!step || step.id !== stepId) {
+    throw new Error('指定されたステップは現在の承認ステップではありません。')
+  }
+
+  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
+  var stepApprovals = approvals.filter(function(a) { return a.stepId === stepId && a.action === 'approved' })
+
   var needed = (step && step.requiredCount === 'all') ? Infinity : (step && typeof step.requiredCount === 'number' ? step.requiredCount : 1)
   var nextIdx = stepApprovals.length >= needed ? currentIdx + 1 : currentIdx
   var newStatus = nextIdx >= totalSteps ? 'approved' : 'pending'
@@ -2638,6 +2743,35 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
   sheet.getRange(found.row, approvalsCol + 1).setValue(JSON.stringify(approvals))
   sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
   sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
+
+  // 次ステップ承認者への通知
+  if (nextIdx > currentIdx && nextIdx < totalSteps) {
+    var nextFmStep = allSteps[nextIdx]
+    var fmNotifyIds = []
+    if (nextFmStep && nextFmStep.type === 'member' && nextFmStep.memberId) {
+      fmNotifyIds = [nextFmStep.memberId]
+    } else if (nextFmStep && nextFmStep.type === 'role' && nextFmStep.role) {
+      try {
+        var fmMSheet = getSheet(SHEET_MEMBERS)
+        var fmMHeaders = headerRow(fmMSheet)
+        var fmMRoleCol = fmMHeaders.indexOf('role')
+        var fmMIdCol = fmMHeaders.indexOf('id')
+        if (fmMRoleCol >= 0 && fmMIdCol >= 0 && fmMSheet.getLastRow() > 1) {
+          var fmMRows = fmMSheet.getRange(2, 1, fmMSheet.getLastRow() - 1, fmMHeaders.length).getValues()
+          fmMRows.forEach(function(r) {
+            if (String(r[fmMRoleCol]).trim() === nextFmStep.role) fmNotifyIds.push(String(r[fmMIdCol]))
+          })
+        }
+      } catch(e2) {}
+    }
+    if (fmNotifyIds.length > 0) {
+      var fmNextEmails = memberEmailsByIds(fmNotifyIds)
+      if (fmNextEmails.length > 0) {
+        MailApp.sendEmail({ to: fmNextEmails.join(','), subject: 'Orbit: 申請フォーム承認の依頼', body: '申請フォームの承認依頼が届きました。Orbitにログインして確認してください。' })
+      }
+    }
+  }
+
   return { ok: true }
 }
 

@@ -227,7 +227,7 @@ export function Header() {
                           }
                           if (n.taskId) openTask(n.taskId)
                         }}
-                        className="flex flex-1 items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-secondary"
+                        className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-secondary"
                       >
                         {n.kind === 'deadline' ? (
                           <CalendarClock className="mt-0.5 size-4 shrink-0 text-warning" />
