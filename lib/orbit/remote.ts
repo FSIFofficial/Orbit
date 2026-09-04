@@ -594,8 +594,8 @@ export const remoteApi = {
     postToGas('updateJudgment', { memberId, judgment }),
   approveTask: (taskId: string) => postToGas('approveTask', { taskId }),
   removeTask: (taskId: string) => postToGas('removeTask', { taskId }),
-  notifyTaskRejected: (creatorId: string | undefined, taskName: string, reason: string | undefined) =>
-    postToGas('notifyTaskRejected', { creatorId, taskName, reason }),
+  notifyTaskRejected: (taskId: string, creatorId: string | undefined, taskName: string, reason: string | undefined) =>
+    postToGas('notifyTaskRejected', { taskId, creatorId, taskName, reason }),
   createProject: (name: string, description: string, type?: string, parentId?: string) =>
     postToGas<{ id: string }>('createProject', { name, description, type, parentId }),
   removeProject: (projectId: string) => postToGas('removeProject', { projectId }),

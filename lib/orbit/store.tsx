@@ -2210,7 +2210,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       )
       if (isRemoteConfigured) {
         runRemote(remoteApi.removeTask(id))
-        if (task) runRemote(remoteApi.notifyTaskRejected(task.createdById, task.name, reason))
+        if (task) runRemote(remoteApi.notifyTaskRejected(id, task.createdById, task.name, reason))
       }
     },
     [tasks, runRemote],

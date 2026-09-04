@@ -417,6 +417,51 @@ function authorizeAction(acting, action, body) {
         if (checkPermissionOverride(acting, action, body)) return
         throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
       }
+
+      // メンバーを対象とするアクション: 対象メンバーの project_ids と acting の共通項をチェック
+      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath']
+      if (memberScopeActions.indexOf(action) >= 0 && body.memberId) {
+        try {
+          var targetMember = findRow(SHEET_MEMBERS, String(body.memberId))
+          if (targetMember) {
+            var targetMemberProjectIds = targetMember.project_ids
+              ? String(targetMember.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean)
+              : []
+            var hasOverlap = targetMemberProjectIds.some(function(pid) { return actingProjectIds.indexOf(pid) >= 0 })
+            if (!hasOverlap) {
+              if (checkPermissionOverride(acting, action, body)) return
+              throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
+            }
+          }
+        } catch(e) {
+          if (String(e).indexOf('担当プロジェクト') >= 0) throw e
+          // findRow失敗など予期しないエラーは通過させる（安全側: サーバーエラーで弾く）
+        }
+      }
+
+      // bulkUpdateSkills: 配列内の全 memberId についてスコープチェック
+      if (action === 'bulkUpdateSkills' && body.updates) {
+        var updates = body.updates || []
+        for (var i = 0; i < updates.length; i++) {
+          var uid = updates[i] && updates[i].memberId ? String(updates[i].memberId) : null
+          if (!uid) continue
+          try {
+            var uMember = findRow(SHEET_MEMBERS, uid)
+            if (uMember) {
+              var uPids = uMember.project_ids
+                ? String(uMember.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean)
+                : []
+              var uOverlap = uPids.some(function(pid) { return actingProjectIds.indexOf(pid) >= 0 })
+              if (!uOverlap) {
+                if (checkPermissionOverride(acting, action, body)) return
+                throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
+              }
+            }
+          } catch(e) {
+            if (String(e).indexOf('担当プロジェクト') >= 0) throw e
+          }
+        }
+      }
     }
     return
   }
@@ -585,6 +630,7 @@ function doPost(e) {
         result = updateTaskFields(body.taskId, { approval_status: '承認済み' })
         break
       case 'notifyTaskRejected':
+        // body.taskId は authorizeAction() のスコープチェックで使用済み
         notifyTaskRejected(body.creatorId, body.taskName, body.reason)
         result = { ok: true }
         break
@@ -860,7 +906,8 @@ function doPost(e) {
         result = saveExpenseApplication(body.application, actingMember)
         break
       case 'approveExpenseStep':
-        result = processExpenseStep(body.applicationId, body.stepId, body.actorId, 'approved', body.comment)
+        // actingMember.id を使うことでクライアントの自己申告値(body.actorId)による偽装を防ぐ
+        result = processExpenseStep(body.applicationId, body.stepId, actingMember.id, 'approved', body.comment)
         break
       case 'rejectExpense':
         result = setExpenseStatus(body.applicationId, 'rejected', body.reason)
@@ -872,7 +919,8 @@ function doPost(e) {
         result = saveCustomFormSubmission(body.submission, actingMember)
         break
       case 'approveFormStep':
-        result = processFormStep(body.submissionId, body.stepId, body.actorId, 'approved', body.comment)
+        // actingMember.id を使うことでクライアントの自己申告値(body.actorId)による偽装を防ぐ
+        result = processFormStep(body.submissionId, body.stepId, actingMember.id, 'approved', body.comment)
         break
       case 'rejectFormSubmission':
         result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
