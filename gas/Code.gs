@@ -384,6 +384,7 @@ function authorizeAction(acting, action, body) {
     'rejectExpense',        // 経費却下（管理者操作）
     'approveFormStep',      // フォーム承認（管理者操作）
     'rejectFormSubmission', // フォーム却下（管理者操作）
+    'bulkUpdateSkills',     // スキル一括更新（管理者操作）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
@@ -837,6 +838,9 @@ function doPost(e) {
         break
       case 'rejectFormSubmission':
         result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
+        break
+      case 'bulkUpdateSkills':
+        result = bulkUpdateSkillLevels(body.updates || [])
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2460,4 +2464,59 @@ function getSettingValue(key) {
     if (String(data[i][0]) === key) return String(data[i][1] || '')
   }
   return null
+}
+
+// ---- Phase 6: スキル一括更新 ----
+
+function bulkUpdateSkillLevels(updates) {
+  // updates: [{ memberId, skill, level }]
+  if (!updates || updates.length === 0) return { ok: true, updated: 0 }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getSheetByName(SHEET_MEMBERS)
+  if (!sheet) throw new Error('Membersシートが見つかりません')
+
+  var data = sheet.getDataRange().getValues()
+  var headers = data[0].map(function(h) { return String(h).trim() })
+  var idCol = headers.indexOf('id')
+  var skillLevelsCol = headers.indexOf('skill_levels_json')
+  if (idCol < 0 || skillLevelsCol < 0) throw new Error('Membersシートの列が不足しています')
+
+  // group updates by memberId
+  var byMember = {}
+  for (var i = 0; i < updates.length; i++) {
+    var u = updates[i]
+    if (!byMember[u.memberId]) byMember[u.memberId] = []
+    byMember[u.memberId].push(u)
+  }
+
+  var count = 0
+  for (var row = 1; row < data.length; row++) {
+    var memberId = String(data[row][idCol] || '')
+    if (!memberId || !byMember[memberId]) continue
+
+    var existing = []
+    try {
+      existing = JSON.parse(String(data[row][skillLevelsCol] || '[]')) || []
+    } catch (e) { existing = [] }
+
+    var memberUpdates = byMember[memberId]
+    for (var j = 0; j < memberUpdates.length; j++) {
+      var upd = memberUpdates[j]
+      var found = false
+      for (var k = 0; k < existing.length; k++) {
+        if (existing[k].skill === upd.skill) {
+          existing[k].level = upd.level
+          found = true
+          break
+        }
+      }
+      if (!found) existing.push({ skill: upd.skill, level: upd.level })
+    }
+
+    sheet.getRange(row + 1, skillLevelsCol + 1).setValue(JSON.stringify(existing))
+    count++
+  }
+
+  return { ok: true, updated: count }
 }

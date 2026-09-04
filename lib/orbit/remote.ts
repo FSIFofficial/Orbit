@@ -728,6 +728,8 @@ export const remoteApi = {
     postToGas('approveFormStep', { submissionId, stepId, actorId, comment }),
   rejectFormSubmission: (submissionId: string, reason: string) =>
     postToGas('rejectFormSubmission', { submissionId, reason }),
+  bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) =>
+    postToGas('bulkUpdateSkills', { updates }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

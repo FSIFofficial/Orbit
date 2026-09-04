@@ -30,6 +30,7 @@ export type AdminSection =
   | 'radar'
   | 'expenses'
   | 'forms'
+  | 'memberdb'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -44,6 +45,7 @@ export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'radar', label: 'Radar' },
   { key: 'expenses', label: 'Expenses' },
   { key: 'forms', label: 'Forms' },
+  { key: 'memberdb', label: '人材DB' },
 ]
 
 // Members/Tags manage org-wide config (roles, notification routing, the

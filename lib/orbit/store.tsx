@@ -360,6 +360,8 @@ interface OrbitContextValue extends OrbitState {
   rejectFormSubmission: (submissionId: string, reason: string) => void
   // タスク確認ターゲット更新
   updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
+  // Phase 6: スキル一括更新
+  bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) => void
 }
 
 const OrbitContext = createContext<OrbitContextValue | null>(null)
@@ -2591,6 +2593,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [appendHistory, runRemote],
   )
 
+  const bulkUpdateSkills = useCallback(
+    (updates: { memberId: string; skill: string; level: number }[]) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          const memberUpdates = updates.filter((u) => u.memberId === m.id)
+          if (memberUpdates.length === 0) return m
+          const existing = [...(m.skillLevels ?? [])]
+          for (const u of memberUpdates) {
+            const idx = existing.findIndex((sl) => sl.skill === u.skill)
+            if (idx >= 0) existing[idx] = { ...existing[idx], level: u.level as import('./types').SkillLevelValue }
+            else existing.push({ skill: u.skill, level: u.level as import('./types').SkillLevelValue })
+          }
+          return { ...m, skillLevels: existing }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.bulkUpdateSkills(updates))
+    },
+    [runRemote],
+  )
+
   // "困っている/作業が止まっている" flag, independent of status (item 7:
   // ブロッカー管理) — pass null/empty to clear
   const setBlocker = useCallback(
@@ -3424,6 +3446,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     submitCustomForm,
     approveFormStep,
     rejectFormSubmission,
+    bulkUpdateSkills,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>
