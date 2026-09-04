@@ -1166,11 +1166,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (dataUrl: string, filename: string): Promise<void> => {
       if (!isDriveConfigured) return Promise.resolve()
       return remoteApi
-        .uploadAvatarImage('org-logo', dataUrl, filename)
+        .uploadOrgLogo(dataUrl, filename)
         .then(({ url }) => {
           setOrgLogoUrlState(url)
           try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, url) } catch {}
-          if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_logo_url', url))
           setRemoteError(null)
         })
         .catch((err) => {
