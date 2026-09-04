@@ -101,6 +101,14 @@ export function getGasAuthToken(): string | null {
   return _gasAuthToken
 }
 
+/** Silently requests a new Google access token (no popup) and updates the cache. */
+export function refreshGasAuthToken(): Promise<string> {
+  return requestToken(LOGIN_SCOPE, /* silent= */ true).then((token) => {
+    _gasAuthToken = token
+    return token
+  })
+}
+
 // ---- personal sheet sync (spreadsheets scope) ----------------------------
 
 export function requestSheetsToken(silent = false): Promise<string> {

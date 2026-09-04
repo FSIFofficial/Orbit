@@ -267,8 +267,17 @@ function doPost(e) {
     // login via GIS initTokenClient). We verify it against Google's tokeninfo
     // endpoint, extract the email, find the acting member in the Members sheet,
     // and check whether they have permission for this action.
-    var actingMember = getActingMember(verifyToken(body.authToken || '').email)
-    authorizeAction(actingMember, body.action, body)
+    //
+    // Auth errors are returned with authError:true so the frontend can
+    // distinguish them from business logic errors and attempt a silent
+    // token refresh + retry automatically.
+    var actingMember
+    try {
+      actingMember = getActingMember(verifyToken(body.authToken || '').email)
+      authorizeAction(actingMember, body.action, body)
+    } catch (authErr) {
+      return jsonOutput({ ok: false, error: String(authErr), authError: true })
+    }
     // ------------------------------------------------------------------------
 
     switch (body.action) {
