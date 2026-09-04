@@ -351,6 +351,7 @@ function authorizeAction(acting, action, body) {
     'updateCompetencies',           // コンピテンシー評価は管理者のみ
     'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
     'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
+    'updateMemberProjects',         // プロジェクト割り当ては代表のみ（自己昇権の抜け穴防止）
   ]
   if (daihyoOnly.indexOf(action) >= 0) {
     throw new Error('この操作は代表のみ実行できます。')
@@ -372,7 +373,7 @@ function authorizeAction(acting, action, body) {
     'updateProjectParent',  // 親プロジェクト変更
     'updateProjectArchived',// アーカイブ操作
     'updateProjectMembers', // プロジェクトメンバー管理
-    'updateMemberProjects', // メンバーのプロジェクト担当割り当て
+    // updateMemberProjects は daihyoOnly に移動（下記参照）
     'updatePriority',       // 優先度（管理者が設定するケースが主）
     'updateDifficulty',     // 難易度（管理者が設定するケースが主）
     'updateSchedule',       // 日程設定
