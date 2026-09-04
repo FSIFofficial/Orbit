@@ -10,6 +10,7 @@ import { PeopleView } from './people-view'
 import { ProjectView } from './project-view'
 import { DifficultyBoard } from './difficulty-board'
 import { DependencyView } from './dependency-view'
+import { GanttView } from './gantt-view'
 import { TaskDetailDrawer } from './task-detail-drawer'
 import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_LABEL, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
@@ -28,11 +29,16 @@ import {
   SlidersHorizontal,
   User,
   X,
+  Receipt,
+  FileText,
+  BarChart2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
+import { CustomFormModal } from '@/components/orbit/custom-form-modal'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
-type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency'
+type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt'
 
 const DEFAULT_TARGET_ORDER: Target[] = ['mine', 'all', 'people', 'projects', 'archive']
 const TARGET_LABEL: Record<Target, string> = {
@@ -98,13 +104,15 @@ function loadHiddenProjects(userId: string | null | undefined): Set<string> {
 }
 
 export function OutputScreen() {
-  const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks } = useOrbit()
+  const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks, expenseCategories, customFormDefs } = useOrbit()
   const { go } = useNav()
   const [targetOrder, setTargetOrder] = useState<Target[]>(() => loadTargetOrder(currentUser?.id))
   const [target, setTarget] = useState<Target>(() => loadTargetOrder(currentUser?.id)[0])
   const [view, setView] = useState<View>('workflow')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [projectFilter, setProjectFilter] = useState('')
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [formModalOpen, setFormModalOpen] = useState(false)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [cardFields, setCardFields] = useState<Set<KanbanCardField>>(() =>
@@ -239,6 +247,26 @@ export function OutputScreen() {
                 : '登録済みのタスクを組織の視点で確認します。'}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            {expenseCategories.length > 0 && (
+              <button
+                onClick={() => setExpenseModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Receipt className="size-3.5" />
+                経費申請
+              </button>
+            )}
+            {customFormDefs.length > 0 && (
+              <button
+                onClick={() => setFormModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <FileText className="size-3.5" />
+                フォーム申請
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -337,6 +365,13 @@ export function OutputScreen() {
             >
               <GitBranch className="size-3.5" />
               依存関係
+            </Seg>
+            <Seg
+              active={(target === 'all' || target === 'mine') && view === 'gantt'}
+              onClick={() => selectView('gantt')}
+            >
+              <BarChart2 className="size-3.5" />
+              ガント
             </Seg>
           </Segment>
 
@@ -523,10 +558,15 @@ export function OutputScreen() {
           {(target === 'all' || target === 'mine') && view === 'dependency' && (
             <DependencyView tasks={dependencyTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
           )}
+          {(target === 'all' || target === 'mine') && view === 'gantt' && (
+            <GanttView tasks={filteredTasks} onOpenTask={setOpenTaskId} />
+          )}
         </>
       )}
 
       <TaskDetailDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+      {expenseModalOpen && <ExpenseApplicationModal onClose={() => setExpenseModalOpen(false)} />}
+      {formModalOpen && <CustomFormModal onClose={() => setFormModalOpen(false)} />}
     </div>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getCalendarToken, requestCalendarToken, isGoogleOAuthConfigured } from '@/lib/orbit/google-sheet-sync'
+import { createCalendarEvent } from '@/lib/orbit/google-calendar'
 import { Drawer, Modal } from '../modal'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
@@ -26,13 +28,14 @@ import {
   type Priority,
   type Project,
   type ScheduleResponseValue,
+  type SkillPoints,
   type Task,
   type TaskHistoryEntry,
   type TaskImportance,
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { cn } from '@/lib/utils'
 import {
@@ -146,6 +149,7 @@ export function TaskDetailDrawer({
     addSkillOption,
     addCategoryOption,
     members,
+    awardSkillPoints,
   } = useOrbit()
   const toast = useToast()
   const [confirmTake, setConfirmTake] = useState(false)
@@ -159,6 +163,7 @@ export function TaskDetailDrawer({
   const [blockerOpen, setBlockerOpen] = useState(false)
   const [handoffOpen, setHandoffOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [awardOpen, setAwardOpen] = useState(false)
 
   const task = tasks.find((t) => t.id === taskId) ?? null
   const open = !!taskId
@@ -206,6 +211,7 @@ export function TaskDetailDrawer({
               toast('ブロックを解除しました')
             }}
             onOpenHandoff={() => setHandoffOpen(true)}
+            onOpenAward={() => setAwardOpen(true)}
             onAddDeliverable={(label, url) => addDeliverable(task.id, label, url)}
             onRemoveDeliverable={(id) => removeDeliverable(task.id, id)}
             onAddComment={(text) => addComment(task.id, text)}
@@ -319,44 +325,97 @@ export function TaskDetailDrawer({
           </button>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">複数人選べます。</p>
-        <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
-          <button
-            onClick={() => {
-              if (task) assignTask(task.id, [])
-              toast('担当者を未アサインにしました')
-            }}
-            className="flex items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
-          >
-            <Avatar member={null} size={28} />
-            全員はずす
-          </button>
-          {members.map((m) => {
-            const checked = !!task?.assigneeIds.includes(m.id)
-            return (
+        {(() => {
+          const deptTops = task?.department
+            ? getDepartmentTopsBySegment(task.department, members)
+            : []
+          const topIds = new Set(deptTops.map((m) => m.id))
+          return (
+            <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
               <button
-                key={m.id}
                 onClick={() => {
-                  if (!task) return
-                  const next = checked
-                    ? task.assigneeIds.filter((id) => id !== m.id)
-                    : [...task.assigneeIds, m.id]
-                  assignTask(task.id, next)
+                  if (task) assignTask(task.id, [])
+                  toast('担当者を未アサインにしました')
                 }}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
-                  checked && 'bg-primary-muted',
-                )}
+                className="flex items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
               >
-                <Avatar member={m} size={28} />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{m.displayName || m.name}</div>
-                  <div className="text-xs text-muted-foreground">{m.affiliation}</div>
-                </div>
-                {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                <Avatar member={null} size={28} />
+                全員はずす
               </button>
-            )
-          })}
-        </div>
+              {deptTops.length > 0 && (
+                <>
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">部署トップ（おすすめ）</div>
+                  {deptTops.map((m) => {
+                    const checked = !!task?.assigneeIds.includes(m.id)
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          if (!task) return
+                          const next = checked
+                            ? task.assigneeIds.filter((id) => id !== m.id)
+                            : [...task.assigneeIds, m.id]
+                          assignTask(task.id, next)
+                        }}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                          checked && 'bg-primary-muted',
+                        )}
+                      >
+                        <Avatar member={m} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">{m.displayName || m.name}</div>
+                          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                        </div>
+                        {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                      </button>
+                    )
+                  })}
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">全メンバー</div>
+                </>
+              )}
+              {members
+                .filter((m) => !topIds.has(m.id) && !m.inactive)
+                .map((m) => {
+                  const activeCount = tasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done').length
+                  return { m, activeCount }
+                })
+                .sort((a, b) => a.activeCount - b.activeCount)
+                .map(({ m, activeCount }) => {
+                  const checked = !!task?.assigneeIds.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        if (!task) return
+                        const next = checked
+                          ? task.assigneeIds.filter((id) => id !== m.id)
+                          : [...task.assigneeIds, m.id]
+                        assignTask(task.id, next)
+                      }}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                        checked && 'bg-primary-muted',
+                      )}
+                    >
+                      <Avatar member={m} size={28} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{m.displayName || m.name}</div>
+                        <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                      </div>
+                      <span className={cn(
+                        'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+                        activeCount === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : activeCount <= 2 ? 'bg-secondary text-muted-foreground' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+                      )}>
+                        {activeCount}件
+                      </span>
+                      {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                    </button>
+                  )
+                })}
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Task handoff (item 13: タスク引き継ぎ) */}
@@ -499,36 +558,99 @@ export function TaskDetailDrawer({
         <p className="mb-2 text-xs text-muted-foreground">
           複数選択できます。担当者とは別に、完了確認を行う人を指定してください。
         </p>
-        <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
-          {members.map((m) => {
-            const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
-            const checked = currentIds.includes(m.id)
-            return (
-              <button
-                key={m.id}
-                onClick={() => {
+        {(() => {
+          const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
+          const deptTops = task?.department
+            ? getDepartmentTopsBySegment(task.department, members)
+            : []
+          const topIds = new Set(deptTops.map((m) => m.id))
+          return (
+            <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
+              {deptTops.length > 0 && (
+                <>
+                  <div className="px-1 pb-0.5 pt-1 text-xs font-medium text-muted-foreground">部署トップ（おすすめ）</div>
+                  {deptTops.map((m) => {
+                    const checked = currentIds.includes(m.id)
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          if (!task) return
+                          const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
+                          updateReviewers(task.id, next, task.requiredApprovals)
+                        }}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                          checked && 'bg-primary-muted',
+                        )}
+                      >
+                        <Avatar member={m} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">{m.displayName || m.name}</div>
+                          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                        </div>
+                        {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                      </button>
+                    )
+                  })}
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">全メンバー</div>
+                </>
+              )}
+              {members.filter((m) => !topIds.has(m.id)).map((m) => {
+                const checked = currentIds.includes(m.id)
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      if (!task) return
+                      const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
+                      updateReviewers(task.id, next, task.requiredApprovals)
+                    }}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                      checked && 'bg-primary-muted',
+                    )}
+                  >
+                    <Avatar member={m} size={28} />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{m.displayName || m.name}</div>
+                      <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                    </div>
+                    {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
+        {/* 必要承認数の設定 */}
+        {(() => {
+          const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
+          if (currentIds.length < 2) return null
+          const req = task?.requiredApprovals
+          return (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+              <span className="text-xs text-muted-foreground shrink-0">必要な承認数:</span>
+              <select
+                value={req === 'all' ? 'all' : (req ?? 1)}
+                onChange={(e) => {
                   if (!task) return
-                  const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
-                  updateReviewers(task.id, next)
+                  const val = e.target.value === 'all' ? 'all' : Number(e.target.value) as number
+                  updateReviewers(task.id, currentIds, val)
                 }}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
-                  checked && 'bg-primary-muted',
-                )}
+                className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
               >
-                <Avatar member={m} size={28} />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{m.displayName || m.name}</div>
-                  <div className="text-xs text-muted-foreground">{m.affiliation}</div>
-                </div>
-                {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
-              </button>
-            )
-          })}
-        </div>
+                {currentIds.map((_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}人</option>
+                ))}
+                <option value="all">全員</option>
+              </select>
+            </div>
+          )
+        })()}
         <button
           onClick={() => {
-            if (task) updateReviewers(task.id, [])
+            if (task) updateReviewers(task.id, [], undefined)
             setReviewerOpen(false)
           }}
           className="mt-2 w-full rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
@@ -549,6 +671,22 @@ export function TaskDetailDrawer({
           setBlockerOpen(false)
         }}
       />
+
+      {/* Skill award modal (admin, done tasks) */}
+      {task && isAdmin && task.status === 'done' && (
+        <SkillAwardModal
+          open={awardOpen}
+          onClose={() => setAwardOpen(false)}
+          task={task}
+          assignees={assignees}
+          allTasks={tasks}
+          onAward={(memberId, points) => {
+            awardSkillPoints(task.id, memberId, points)
+            toast('スキルポイントを付与しました')
+            setAwardOpen(false)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -595,6 +733,104 @@ function BlockerModal({
         </Button>
         <Button className="h-9" disabled={!note.trim()} onClick={() => onSave(note)}>
           保存
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+// スキルポイント付与モーダル
+function SkillAwardModal({
+  open,
+  onClose,
+  task,
+  assignees,
+  allTasks,
+  onAward,
+}: {
+  open: boolean
+  onClose: () => void
+  task: Task
+  assignees: Member[]
+  allTasks: Task[]
+  onAward: (memberId: string, points: SkillPoints) => void
+}) {
+  const [memberId, setMemberId] = useState(assignees[0]?.id ?? '')
+  const [pointsMap, setPointsMap] = useState<Record<string, number>>(() =>
+    Object.fromEntries(task.skills.map((s) => [s, 10])),
+  )
+
+  // Compute average awarded points for each skill from similar-category done tasks
+  const avgPoints = Object.fromEntries(
+    task.skills.map((skill) => {
+      const similar = allTasks.filter(
+        (t) =>
+          t.id !== task.id &&
+          t.status === 'done' &&
+          t.category === task.category &&
+          t.awardedPoints?.[skill] != null,
+      )
+      if (similar.length === 0) return [skill, null]
+      const avg = similar.reduce((sum, t) => sum + (t.awardedPoints![skill] ?? 0), 0) / similar.length
+      return [skill, Math.round(avg)]
+    }),
+  )
+
+  const setPoint = (skill: string, value: number) =>
+    setPointsMap((prev) => ({ ...prev, [skill]: Math.max(0, value) }))
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <h2 className="mb-3 text-base font-semibold">スキルポイントを付与</h2>
+      {assignees.length > 1 && (
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">対象メンバー</label>
+          <select
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
+          >
+            {assignees.map((m) => (
+              <option key={m.id} value={m.id}>{m.displayName ?? m.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        {task.skills.map((skill) => (
+          <div key={skill} className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 text-sm">{skill}</span>
+            {avgPoints[skill] != null && (
+              <button
+                onClick={() => setPoint(skill, avgPoints[skill]!)}
+                className="shrink-0 text-xs text-muted-foreground hover:text-primary"
+              >
+                参考値: {avgPoints[skill]}pt
+              </button>
+            )}
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={pointsMap[skill] ?? 0}
+              onChange={(e) => setPoint(skill, Number(e.target.value))}
+              className="h-8 w-20 rounded-md border border-border bg-background px-2 text-right text-sm outline-none focus:border-primary"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>キャンセル</Button>
+        <Button
+          disabled={!memberId}
+          onClick={() => {
+            if (!memberId) return
+            const points: SkillPoints = {}
+            task.skills.forEach((s) => { if ((pointsMap[s] ?? 0) > 0) points[s] = pointsMap[s] })
+            onAward(memberId, points)
+          }}
+        >
+          付与する
         </Button>
       </div>
     </Modal>
@@ -1122,6 +1358,7 @@ function DrawerBody({
   onOpenHandoff,
   onOpenEdit,
   onOpenDelete,
+  onOpenAward,
   onAddDeliverable,
   onRemoveDeliverable,
   onAddComment,
@@ -1160,6 +1397,7 @@ function DrawerBody({
   onOpenHandoff: () => void
   onOpenEdit: () => void
   onOpenDelete: () => void
+  onOpenAward: () => void
   onAddDeliverable: (label: string, url: string) => void
   onRemoveDeliverable: (id: string) => void
   onAddComment: (text: string) => void
@@ -1192,9 +1430,12 @@ function DrawerBody({
   const [commentDraft, setCommentDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  // only an admin can move a task to the final 完了 — an assignee's own
-  // "done" signal is 確認待ち, which emails the admin for confirmation
-  const statusOptions = allowedStatusOptions(isAdmin)
+  // 確認者が設定されている場合、「完了」への変更は確認者本人のみ可（item 17）。
+  // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
+  const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
+  const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
+  const canSetDone = reviewerIds.length === 0 ? isAdmin : isReviewer
+  const statusOptions = allowedStatusOptions(isAdmin).filter((s) => s !== 'done' || canSetDone)
 
   return (
     <div className="flex h-full flex-col">
@@ -1518,6 +1759,12 @@ function DrawerBody({
                 前提タスクが未完了のため「完了」にできません：{incompleteDeps.map((d) => d.name).join('、')}
               </p>
             )}
+            {reviewerIds.length > 0 && !isReviewer && isAdmin && (
+              <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <UserCheck className="size-3" />
+                確認者が設定されています。「完了」への変更は確認者本人のみ行えます。
+              </p>
+            )}
             {!isAdmin && (
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 「確認待ち」にすると管理者に通知され、確認後「完了」になります。
@@ -1757,6 +2004,24 @@ function DrawerBody({
           />
         )}
 
+        {/* Skill award button (admin, done tasks with skills) */}
+        {isAdmin && task.status === 'done' && task.skills.length > 0 && task.assigneeIds.length > 0 && (
+          <div className="mt-4">
+            <button
+              onClick={onOpenAward}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+              スキルポイントを付与
+              {task.awardedPoints && Object.keys(task.awardedPoints).length > 0 && (
+                <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  付与済み
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Change history */}
         {isAdmin && (task.history?.length ?? 0) > 0 && (
           <div className="mt-6">
@@ -1947,6 +2212,57 @@ const SCHEDULE_RESPONSE_COLOR: Record<ScheduleResponseValue, string> = {
   '×': 'bg-rose-50 text-rose-700',
 }
 
+// Googleカレンダーへの追加ボタン — 日程調整完了後に表示する
+function AddToGCalButton({ task }: { task: Task }) {
+  const toast = useToast()
+  const [added, setAdded] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  if (!isGoogleOAuthConfigured() || added) return null
+
+  const add = async () => {
+    setLoading(true)
+    try {
+      let token = getCalendarToken()
+      if (!token) token = await requestCalendarToken()
+      const title = task.name
+      const desc = task.description ?? ''
+      if (task.deadline) {
+        const iso = task.dueTime
+          ? `${task.deadline}T${task.dueTime}:00+09:00`
+          : undefined
+        const endIso = task.dueTime
+          ? `${task.deadline}T${String(parseInt(task.dueTime.slice(0, 2)) + 1).padStart(2, '0')}${task.dueTime.slice(2)}:00+09:00`
+          : undefined
+        await createCalendarEvent(token, {
+          summary: `[Orbit] ${title}`,
+          description: desc,
+          ...(iso ? { startDateTime: iso, endDateTime: endIso ?? iso } : { startDate: task.deadline }),
+        })
+      } else {
+        await createCalendarEvent(token, { summary: `[Orbit] ${title}`, description: desc, startDate: new Date().toISOString().slice(0, 10) })
+      }
+      setAdded(true)
+      toast('Googleカレンダーに追加しました')
+    } catch (e) {
+      toast(`カレンダー追加に失敗しました: ${String(e)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={add}
+      disabled={loading}
+      className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50"
+    >
+      <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      {loading ? '追加中...' : 'Googleカレンダーに追加'}
+    </button>
+  )
+}
+
 // 日程調整ツール — 候補日時＋招待メンバーを作成者/管理者が設定し、招待者は
 // 候補ごとに〇×△で回答する。全員が回答し終えるとタスクは自動的に完了になる
 // （store.tsx の respondToSchedule）
@@ -2008,6 +2324,28 @@ function ScheduleSection({
   const canSubmitResponse =
     !!schedule && schedule.candidates.every((c) => !!responseDraft[c.id])
 
+  // GCal空き確認 — カレンダートークンがあれば候補に対してFreeBusyを取得する
+  const [freeBusy, setFreeBusy] = useState<Record<string, boolean>>({}) // candidateId -> busy
+  const checkFreeBusy = async () => {
+    if (!schedule || !isInvited) return
+    const token = getCalendarToken()
+    if (!token) return
+    const { fetchFreeBusy } = await import('@/lib/orbit/google-calendar')
+    for (const c of schedule.candidates) {
+      try {
+        // labelからISO日時を復元するのが難しいため、labelに日時が含まれる場合のみ
+        // 例: "9/5(金) 14:00" → 現在年の9月5日14:00を試みる
+        const m = c.label.match(/(\d+)\/(\d+)[^0-9]*(\d{2}):(\d{2})/)
+        if (!m) continue
+        const now = new Date()
+        const dt = new Date(now.getFullYear(), parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]))
+        const dtEnd = new Date(dt.getTime() + 60 * 60 * 1000)
+        const busy = await fetchFreeBusy(token, dt.toISOString(), dtEnd.toISOString())
+        setFreeBusy((prev) => ({ ...prev, [c.id]: busy.length > 0 }))
+      } catch { /* ignore */ }
+    }
+  }
+
   return (
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between">
@@ -2033,11 +2371,26 @@ function ScheduleSection({
         <div className="flex flex-col gap-3">
           {canRespond && (
             <div className="rounded-lg border border-border bg-secondary/40 p-3">
-              <p className="mb-2 text-xs text-muted-foreground">候補ごとに回答してください</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">候補ごとに回答してください</p>
+                {isGoogleOAuthConfigured() && getCalendarToken() && (
+                  <button onClick={checkFreeBusy} className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    GCalで空き確認
+                  </button>
+                )}
+              </div>
               <div className="flex flex-col gap-1.5">
                 {schedule.candidates.map((c) => (
                   <div key={c.id} className="flex items-center justify-between gap-2">
-                    <span className="text-sm">{c.label}</span>
+                    <span className="flex items-center gap-1.5 text-sm">
+                      {c.label}
+                      {freeBusy[c.id] !== undefined && (
+                        <span className={cn('rounded-full px-1.5 py-0.5 text-[9px] font-medium', freeBusy[c.id] ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400')}>
+                          {freeBusy[c.id] ? '予定あり' : '空き'}
+                        </span>
+                      )}
+                    </span>
                     <div className="flex items-center gap-1">
                       {SCHEDULE_RESPONSE_OPTIONS.map((v) => (
                         <button
@@ -2116,7 +2469,10 @@ function ScheduleSection({
             </table>
           </div>
           {task.status === 'done' && (
-            <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+              <AddToGCalButton task={task} />
+            </div>
           )}
         </div>
       )}

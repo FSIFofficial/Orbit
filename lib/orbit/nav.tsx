@@ -21,6 +21,13 @@ export type Screen =
       name: 'admin'
       section: AdminSection
     }
+  | { name: 'feedback' }
+  // item 6: 個人コメント・進捗報告横断一覧
+  | { name: 'activity' }
+  // item 23: 日報・週報
+  | { name: 'dailyreport' }
+  // item 22: メンバー体験定点測定アンケート
+  | { name: 'survey' }
 
 interface NavValue {
   screen: Screen

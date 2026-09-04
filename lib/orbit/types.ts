@@ -1,6 +1,6 @@
 export type TaskStatus = 'todo' | 'progress' | 'support' | 'review' | 'fix' | 'done'
 
-export type Difficulty = '新人歓迎' | '少し経験必要' | '経験者向け'
+export type Difficulty = '誰でも可' | '新人歓迎' | '少し経験必要' | '経験者向け' | '上級者向け'
 
 // 一般 is the fixed, implicit baseline every member starts at — it carries
 // no admin access. Everything above it is an admin-defined permission
@@ -25,15 +25,29 @@ export type AdminSection =
   | 'members'
   | 'tags'
   | 'analytics'
+  | 'org'
+  | 'quiz'
+  | 'radar'
+  | 'expenses'
+  | 'forms'
+  | 'memberdb'
+  | 'leadership'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'leadership', label: '幹部 View' },
   { key: 'approvals', label: 'Approvals' },
   { key: 'assignments', label: 'Assignments' },
   { key: 'projects', label: 'Projects' },
   { key: 'members', label: 'Members' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'tags', label: 'Tags' },
+  { key: 'org', label: 'Org Tree' },
+  { key: 'quiz', label: 'Quiz' },
+  { key: 'radar', label: 'Radar' },
+  { key: 'expenses', label: 'Expenses' },
+  { key: 'forms', label: 'Forms' },
+  { key: 'memberdb', label: '人材DB' },
 ]
 
 // Members/Tags manage org-wide config (roles, notification routing, the
@@ -136,6 +150,15 @@ export interface Member {
   // 含む自己申告の数値）とは別物で、この団体に所属してからの正確な期間を
   // 表示するために使う（person-detail.tsx の「所属歴」）
   joinedAt?: string
+  // 活動休止中フラグ — true のときタスクのおすすめ対象から除外される
+  // (store.tsx の recommendedAssignees/taskRecommendations で inactive 除外)
+  inactive?: boolean
+  // Orbitへの最終アクセス日時（ISO datetime）— GAS側でlogin actionを
+  // 受け取ったときに更新。25日間アクセスなしで管理者に通知（item 25）
+  lastLogin?: string
+  // 不在日リスト（YYYY-MM-DD）— カレンダービューで自分で登録し、
+  // Googleカレンダーとも同期する
+  absentDates?: string[]
 
   // ---- talent-management fields (タレントマネジメント) --------------------
   // 人材DB／スキル管理／人材検索／育成・キャリア — wired end-to-end (store.tsx
@@ -171,7 +194,32 @@ export interface Member {
   trainingHistory?: TrainingRecord[]
   developmentPlan?: DevelopmentPlanEntry[]
   oneOnOnes?: OneOnOneRecord[]
+
+  // ---- 組織階層・権限・スキルポイント ----------------------------------------
+
+  // 所属パス ("事業本部A>事業部1>グループX") — ">" 区切りで最上位から記述。
+  // affiliation（プロジェクトから動的導出）とは独立した静的な組織階層情報。
+  departmentPath?: string
+
+  // 個別の例外許可。たとえば「一般メンバーだが特定タスクだけ閲覧可」など
+  // ロールベースの権限チェックに重ねて適用する。
+  permissionOverrides?: PermissionOverride[]
+
+  // スキルごとの累計ポイント。skill_levels_json（確定レベル）とは別で、
+  // レベルアップのベースになる生の累計点を保持する。
+  // 例: { "デザイン": 120, "プログラミング": 340 }
+  skillPoints?: SkillPoints
 }
+
+/** 個別例外許可エントリ (Member.permissionOverrides の要素) */
+export interface PermissionOverride {
+  targetType: 'task' | 'project' | 'department'
+  targetId: string
+  access: 'view' | 'edit' | 'approve'
+}
+
+/** スキル名 → 累計ポイント のマップ */
+export type SkillPoints = Record<string, number>
 
 export interface CareerHistoryEntry {
   id: string
@@ -211,6 +259,7 @@ export type SkillLevelValue = 1 | 2 | 3 | 4 | 5
 export interface SkillLevel {
   skill: string
   level: SkillLevelValue
+  acquiredAt?: string // ISO date — set when skill is first added
 }
 
 export interface Competency {
@@ -314,6 +363,59 @@ export interface TaskSetTemplate {
 // client-side on load (store.tsx) against lastGeneratedDate.
 export type RecurrenceFrequency = 'weekly' | 'monthly'
 
+// ---- Settings シートのキー型 -----------------------------------------------
+
+/**
+ * スキルごとのレベルアップ閾値マップ (Settings キー: "skill_level_thresholds")
+ * 例: { "デフォルト": 100, "デザイン": 150, "プログラミング": 200 }
+ * キーが存在しないスキルは "デフォルト" の値を使う。
+ */
+export type SkillLevelThresholds = Record<string, number>
+
+/**
+ * 部署ツリー設定 (Settings キー: "department_tree_config", 省略可)
+ * 省略時は Members.departmentPath の実データから動的導出される。
+ * 例: [{ "path": "事業本部A>事業部1>グループX" }]
+ */
+export interface DepartmentTreeNode {
+  path: string        // ">" 区切りのフルパス
+  label?: string      // 表示名（省略時は path の末尾ノード名を使う）
+}
+
+// ---- 検定（クイズ） -------------------------------------------------------
+
+export interface QuizQuestion {
+  id: string
+  text: string
+  choices: string[]
+  correctIndex: number
+}
+
+/**
+ * 検定定義 (Settings キー: "quiz_definitions" の配列要素)
+ * targetSkill に対応する skillLevels エントリのレベルを
+ * 合格時に targetLevel に引き上げる（それ以上の場合は据え置き）。
+ */
+export interface QuizDefinition {
+  id: string
+  title: string
+  targetSkill: string
+  targetLevel: SkillLevelValue
+  passRate: number // 合格ライン: 0–100 (%)
+  questions: QuizQuestion[]
+}
+
+// ---- レーダーチャート軸 ---------------------------------------------------
+
+/**
+ * レーダーチャートの軸定義 (Settings キー: "radar_axes")
+ * 各軸は skill_levels_json のスキル名に対応する。
+ */
+export interface RadarAxis {
+  skill: string
+  label?: string // 表示名（省略時は skill をそのまま使う）
+}
+
 export interface RecurringTaskRule {
   id: string
   name: string
@@ -329,6 +431,11 @@ export interface RecurringTaskRule {
   dueInDays?: number // deadline offset in days from the generated task's creation date
   active: boolean
   lastGeneratedDate?: string // YYYY-MM-DD — the last date this rule generated a task for
+  // 「状態起点」— 前回生成されたタスクがこのステータスになったときに次を生成。
+  // 未設定の場合は従来どおり日付起点（毎日/毎週/毎月）で生成する。
+  triggerOnStatus?: TaskStatus
+  // 「例外スキップ日」— これらの日付（YYYY-MM-DD）はタスクを生成しない
+  skipDates?: string[]
 }
 
 export interface Task {
@@ -372,6 +479,8 @@ export interface Task {
   // 'review' status). Unset = no particular reviewer, any admin can review.
   reviewerId?: string // deprecated — kept for backward compat read
   reviewerIds?: string[] // replaces reviewerId; multiple reviewers can all confirm
+  // 確認待ちに必要な承認数: number = 指定人数, 'all' = 全員
+  requiredApprovals?: number | 'all'
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved
@@ -401,6 +510,8 @@ export interface Task {
   schedule?: TaskSchedule
   // 汎用フォームツール — see TaskForm
   form?: TaskForm
+  // 完了時に付与されたスキルポイント（skill → points）— 推奨値の計算に使用
+  awardedPoints?: SkillPoints
 }
 
 export interface TaskRetrospective {
@@ -542,9 +653,11 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
 }
 
 export const DIFFICULTY_LABEL: Difficulty[] = [
+  '誰でも可',
   '新人歓迎',
   '少し経験必要',
   '経験者向け',
+  '上級者向け',
 ]
 
 // Priority accent line color (used on card left edge). Uses CSS vars so it
@@ -574,10 +687,101 @@ export interface NotificationItem {
   // 進行中タスクの更新が7日以上ない場合に表示
   // 'mention' = コメントで@メンションされた（未読のみ表示。store.tsxの
   // seenMentionIds/markMentionSeen参照）
-  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention'
+  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info'
   title: string
   detail: string
   taskId: string
   // kind: 'mention' のときだけ設定 — 既読化(markMentionSeen)に使う
   commentId?: string
+}
+
+// ---- 多段階承認 (Phase 5) -----------------------------------------------
+
+/**
+ * 承認フローの1ステップ。
+ * type='member' のときは memberId を持ち、指定の個人が承認する。
+ * type='role' のときは role（と任意で department）を持ち、
+ * 該当する役職・部署の誰か1人が承認するとそのステップは完了する。
+ */
+export interface ApprovalStep {
+  id: string
+  type: 'member' | 'role'
+  memberId?: string
+  role?: string
+  department?: string
+  // 'all' = 対象者全員の承認が必要, number = 指定人数で足りる (省略時 'any' = 1人)
+  requiredCount?: number | 'all'
+}
+
+/** 承認/却下の記録 */
+export interface ApprovalRecord {
+  stepId: string
+  memberId: string
+  at: string // ISO datetime
+  action: 'approved' | 'rejected'
+  comment?: string
+}
+
+// ---- 経費申請カテゴリ ---------------------------------------------------
+
+export interface ExpenseCategory {
+  id: string
+  label: string
+  approvalSteps: ApprovalStep[]
+}
+
+// ---- 経費申請 -----------------------------------------------------------
+
+export type ExpenseApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn'
+
+export interface ExpenseApplication {
+  id: string
+  applicantId: string
+  amount: number
+  categoryId: string
+  receiptUrl?: string
+  justification?: string
+  purpose?: string
+  // 作成時点のステップ定義のスナップショット
+  approvalSteps: ApprovalStep[]
+  approvals: ApprovalRecord[]
+  currentStepIndex: number
+  status: ExpenseApplicationStatus
+  createdAt: string
+  updatedAt?: string
+  rejectionReason?: string
+}
+
+// ---- 団体カスタムフォーム -----------------------------------------------
+
+export type CustomFormFieldType = 'text' | 'number' | 'select' | 'date'
+
+export interface CustomFormField {
+  id: string
+  label: string
+  type: CustomFormFieldType
+  options?: string[] // type='select' 用
+  required: boolean
+}
+
+export interface CustomFormDef {
+  id: string
+  title: string
+  description?: string
+  fields: CustomFormField[]
+  approvalSteps: ApprovalStep[]
+}
+
+export type CustomFormSubmissionStatus = 'pending' | 'approved' | 'rejected'
+
+export interface CustomFormSubmission {
+  id: string
+  formId: string
+  submitterId: string
+  answers: Record<string, string | number>
+  approvals: ApprovalRecord[]
+  currentStepIndex: number
+  status: CustomFormSubmissionStatus
+  createdAt: string
+  rejectionReason?: string
 }

@@ -8,10 +8,11 @@ import { Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload } from 'lucide-react'
+import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload, Pause, Play } from 'lucide-react'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
-import { tenureYears } from '@/lib/orbit/utils'
+import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
+import { PermissionOverridesButton } from './admin-permission-overrides'
 
 function workload(count: number): { label: string; className: string } {
   if (count <= 2) return { label: '稼働少なめ', className: 'text-muted-foreground' }
@@ -36,6 +37,7 @@ export function AdminMembers() {
     restrictedRoles,
     addMember,
     isFullAdmin,
+    toggleMemberInactive,
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
@@ -297,7 +299,9 @@ export function AdminMembers() {
                         <Avatar member={m} size={30} />
                         <div>
                           <div className="font-medium">{m.displayName || m.name}</div>
-                          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {m.departmentPath ? formatDepartmentPath(m.departmentPath) : m.affiliation}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -381,14 +385,29 @@ export function AdminMembers() {
                         {m.notify ? 'ON' : 'OFF'}
                       </button>
                     </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setRemoving(m)}
-                        className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
-                      >
-                        <UserMinus className="size-3.5" />
-                        退会
-                      </button>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => toggleMemberInactive(m.id)}
+                          title={m.inactive ? '活動再開' : '活動休止'}
+                          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                            m.inactive
+                              ? 'border-amber-300/50 bg-amber-50 text-amber-600 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-400'
+                              : 'border-border text-muted-foreground hover:bg-secondary'
+                          }`}
+                        >
+                          {m.inactive ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                          {m.inactive ? '再開' : '休止'}
+                        </button>
+                        {isFullAdmin && <PermissionOverridesButton member={m} />}
+                        <button
+                          onClick={() => setRemoving(m)}
+                          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                        >
+                          <UserMinus className="size-3.5" />
+                          退会
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

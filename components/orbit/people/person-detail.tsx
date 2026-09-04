@@ -32,6 +32,7 @@ import {
   FolderKanban,
   Link2,
   RefreshCw,
+  Download,
 } from 'lucide-react'
 import {
   isGoogleOAuthConfigured,
@@ -110,6 +111,10 @@ export function PersonDetail({ id }: { id: string }) {
     notifyTrainingDecision,
     updateDevelopmentPlan,
     updateOneOnOnes,
+    radarAxes,
+    quizDefinitions,
+    submitQuizResult,
+    oneOnOneQuestions,
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
@@ -411,6 +416,11 @@ export function PersonDetail({ id }: { id: string }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {member.role !== BASE_ROLE ? member.role : member.affiliation}
           </p>
+          {member.departmentPath && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')}
+            </p>
+          )}
           <div className="mt-1 flex items-center gap-1.5">
             {editingJoinedAt ? (
               <input
@@ -843,6 +853,10 @@ export function PersonDetail({ id }: { id: string }) {
           updateDevelopmentPlan={updateDevelopmentPlan}
           updateOneOnOnes={updateOneOnOnes}
           currentUserId={currentUser?.id ?? null}
+          oneOnOneQuestions={oneOnOneQuestions}
+          radarAxes={radarAxes}
+          quizDefinitions={quizDefinitions}
+          submitQuizResult={submitQuizResult}
         />
       )}
 
@@ -1014,7 +1028,38 @@ export function PersonDetail({ id }: { id: string }) {
 
       {/* Task history */}
       <div className="mt-4">
-        <SectionLabel>タスク履歴</SectionLabel>
+        <div className="flex items-center justify-between mb-2">
+          <SectionLabel>タスク履歴</SectionLabel>
+          {(isSelf || isAdmin) && history.length > 0 && (
+            <button
+              onClick={() => {
+                const headers = ['タスク名', 'プロジェクト', '難易度', 'ステータス', '完了日', 'カテゴリ']
+                const rows = history.map((t) => [
+                  t.name,
+                  getProject(t.projectId)?.name ?? '',
+                  t.difficulty ?? '',
+                  t.status,
+                  t.completedDate ?? '',
+                  t.category ?? '',
+                ])
+                const csv = [headers, ...rows]
+                  .map((r) => r.map((v) => (String(v).includes(',') || String(v).includes('"') ? '"' + String(v).replace(/"/g, '""') + '"' : String(v))).join(','))
+                  .join('\n')
+                const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `tasks-${member.name}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <Download className="size-3" />
+              CSVダウンロード
+            </button>
+          )}
+        </div>
         <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
             <thead>

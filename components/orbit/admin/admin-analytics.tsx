@@ -1,7 +1,9 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
-import { SectionLabel } from '@/components/orbit/primitives'
+import { SectionLabel, Avatar } from '@/components/orbit/primitives'
+import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
 
 function BarRow({
   label,
@@ -41,7 +43,7 @@ function sortedCounts(map: Map<string, number>): [string, number][] {
 // 同様に DEFAULT_NON_TOP_SECTIONS には含めていない（Admin → Tagsから
 // 個別に許可することは可能）。
 export function AdminAnalytics() {
-  const { members } = useOrbit()
+  const { members, visibleTasks, archivedTasks } = useOrbit()
 
   const roleCounts = new Map<string, number>()
   const affiliationCounts = new Map<string, number>()
@@ -82,6 +84,31 @@ export function AdminAnalytics() {
   const maxAffiliation = Math.max(1, ...affiliationRows.map(([, c]) => c))
   const maxSkill = Math.max(1, ...skillRows.map((r) => r.count))
   const maxRating = Math.max(1, ...ratingRows.map(([, c]) => c))
+
+  // item 14: メンバー別 スキル数×担当タスク数 散布図（稼働余力可視化）
+  // x軸: スキル数（能力の幅）, y軸: 担当中タスク数（稼働量）
+  const allTasks = useMemo(() => [...visibleTasks, ...archivedTasks], [visibleTasks, archivedTasks])
+  const scatterPoints = useMemo(() =>
+    members
+      .filter((m) => !m.inactive)
+      .map((m) => {
+        const activeTasks = visibleTasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done')
+        const doneTasks = allTasks.filter((t) => t.assigneeIds.includes(m.id) && t.status === 'done')
+        const avgDifficulty = doneTasks.length > 0
+          ? doneTasks.reduce((sum, t) => sum + DIFFICULTY_LABEL.indexOf(t.difficulty), 0) / doneTasks.length
+          : 0
+        return {
+          member: m,
+          skillCount: m.skills.length + (m.skillLevels ?? []).length,
+          activeTaskCount: activeTasks.length,
+          completedCount: doneTasks.length,
+          avgDifficulty,
+        }
+      }),
+    [members, visibleTasks, allTasks],
+  )
+  const maxSkillCount = Math.max(1, ...scatterPoints.map((p) => p.skillCount))
+  const maxTaskCount = Math.max(1, ...scatterPoints.map((p) => p.activeTaskCount))
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -149,6 +176,66 @@ export function AdminAnalytics() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* item 14: スキル×稼働量 散布図 */}
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>スキル数 × 担当中タスク数（稼働マップ）</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          横軸：スキル数（能力の幅）、縦軸：担当中タスク数（現在の稼働量）。
+          右下ほど能力があって余力があるメンバーです。
+        </p>
+        <div className="relative mt-4 h-60 overflow-hidden rounded-md border border-border/40 bg-secondary/20">
+          {[25, 50, 75].map((pct) => (
+            <div key={pct} className="absolute left-0 right-0 border-t border-dashed border-border/30" style={{ top: `${pct}%` }} />
+          ))}
+          {[25, 50, 75].map((pct) => (
+            <div key={pct} className="absolute top-0 bottom-0 border-l border-dashed border-border/30" style={{ left: `${pct}%` }} />
+          ))}
+          {scatterPoints.map(({ member: m, skillCount, activeTaskCount }) => {
+            const x = maxSkillCount > 0 ? (skillCount / maxSkillCount) * 88 + 6 : 6
+            const y = maxTaskCount > 0 ? 94 - (activeTaskCount / maxTaskCount) * 88 : 94
+            return (
+              <div
+                key={m.id}
+                className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                style={{ left: `${x}%`, top: `${y}%` }}
+                title={`${m.displayName || m.name}: スキル${skillCount} / 担当${activeTaskCount}件`}
+              >
+                <Avatar member={m} size={22} />
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background group-hover:block">
+                  {m.displayName || m.name} ({activeTaskCount}件)
+                </div>
+              </div>
+            )
+          })}
+          <span className="absolute bottom-1 right-2 text-[9px] text-muted-foreground">スキル数 →</span>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1 pr-3 font-medium">メンバー</th>
+                <th className="py-1 pr-3 text-right font-medium">スキル数</th>
+                <th className="py-1 pr-3 text-right font-medium">担当中</th>
+                <th className="py-1 text-right font-medium">完了累計</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scatterPoints
+                .sort((a, b) => a.activeTaskCount - b.activeTaskCount || b.skillCount - a.skillCount)
+                .slice(0, 10)
+                .map(({ member: m, skillCount, activeTaskCount, completedCount }) => (
+                  <tr key={m.id} className="border-t border-border/30">
+                    <td className="py-1 pr-3 font-medium">{m.displayName || m.name}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{skillCount}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{activeTaskCount}</td>
+                    <td className="py-1 text-right tabular-nums">{completedCount}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

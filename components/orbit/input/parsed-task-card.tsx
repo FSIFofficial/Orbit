@@ -174,17 +174,21 @@ export function ParsedTaskCard({
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3.5 sm:grid-cols-4">
         <Field label="プロジェクト">
-          <select
-            value={task.projectId}
-            onChange={(e) => set('projectId', e.target.value)}
-            className="w-full cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
-          >
+          <input
+            list="project-suggestions"
+            value={projects.find((p) => p.id === task.projectId)?.name ?? ''}
+            onChange={(e) => {
+              const matched = projects.find((p) => p.name === e.target.value)
+              if (matched) set('projectId', matched.id)
+            }}
+            placeholder="プロジェクト名を入力…"
+            className="w-full rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
+          />
+          <datalist id="project-suggestions">
             {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
+              <option key={p.id} value={p.name} />
             ))}
-          </select>
+          </datalist>
         </Field>
 
         <Field label="開始日">

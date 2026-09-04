@@ -1149,6 +1149,10 @@ const EMPTY_RECURRING_DRAFT = {
   dayOfWeek: 1,
   dayOfMonth: 1,
   dueInDays: 3,
+  // item 13: 状態起点（前タスクがこのステータスになったら次を生成）
+  triggerOnStatus: '' as '' | import('@/lib/orbit/types').TaskStatus,
+  // item 13: 例外スキップ日（カンマ区切り入力 → 保存時配列に変換）
+  skipDatesInput: '',
 }
 
 function RecurringRuleForm({
@@ -1179,12 +1183,18 @@ function RecurringRuleForm({
         dayOfWeek: editingRule.dayOfWeek ?? 1,
         dayOfMonth: editingRule.dayOfMonth ?? 1,
         dueInDays: editingRule.dueInDays ?? 3,
+        triggerOnStatus: (editingRule.triggerOnStatus ?? '') as '' | import('@/lib/orbit/types').TaskStatus,
+        skipDatesInput: (editingRule.skipDates ?? []).join(', '),
       })
     }
   }, [editingRule])
 
   const submit = () => {
     if (!draft.name.trim() || !draft.projectId) return
+    const skipDates = draft.skipDatesInput
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s))
     const rule = {
       name: draft.name.trim(),
       projectId: draft.projectId,
@@ -1197,6 +1207,8 @@ function RecurringRuleForm({
       dayOfWeek: draft.frequency === 'weekly' ? draft.dayOfWeek : undefined,
       dayOfMonth: draft.frequency === 'monthly' ? draft.dayOfMonth : undefined,
       dueInDays: draft.dueInDays,
+      triggerOnStatus: draft.triggerOnStatus || undefined,
+      skipDates: skipDates.length ? skipDates : undefined,
     }
     if (editingRule) {
       onUpdate(rule)
@@ -1285,6 +1297,30 @@ function RecurringRuleForm({
             className="h-8 w-16 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
           />
           <span className="text-xs text-muted-foreground">日後が期限</span>
+        </div>
+      </div>
+      {/* item 13: 状態起点・例外スキップ日 */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-muted-foreground">状態起点（前タスクがこのステータスになったら次を生成）</span>
+          <select
+            value={draft.triggerOnStatus}
+            onChange={(e) => setDraft({ ...draft, triggerOnStatus: e.target.value as '' | import('@/lib/orbit/types').TaskStatus })}
+            className="h-8 cursor-pointer rounded-md border border-border bg-background px-1 text-xs outline-none"
+          >
+            <option value="">日付起点（従来どおり）</option>
+            <option value="review">確認待ちになったら</option>
+            <option value="done">完了になったら</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-muted-foreground">例外スキップ日（YYYY-MM-DD、カンマ区切り）</span>
+          <input
+            value={draft.skipDatesInput}
+            onChange={(e) => setDraft({ ...draft, skipDatesInput: e.target.value })}
+            placeholder="例: 2025-08-11, 2025-12-31"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+          />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-1.5">

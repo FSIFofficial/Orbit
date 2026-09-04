@@ -10,24 +10,34 @@ import {
 } from 'react'
 import type {
   AdminSection,
+  ApprovalRecord,
+  ApprovalStep,
   CareerHistoryEntry,
   Competency,
+  CustomFormDef,
+  CustomFormSubmission,
   Department,
   DevelopmentPlanEntry,
   EvaluationRecord,
+  ExpenseApplication,
+  ExpenseCategory,
   Member,
   OneOnOneRecord,
   Project,
   ProjectTemplateTask,
   RecurringTaskRule,
   Qualification,
+  QuizDefinition,
+  RadarAxis,
   Role,
   FormAnswerValue,
   FormFieldDef,
   ScheduleCandidate,
   ScheduleResponseValue,
   SkillLevel,
+  SkillLevelThresholds,
   SkillLevelValue,
+  SkillPoints,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -48,6 +58,7 @@ import type {
   ProgressEntry,
   NotifyKind,
   NotifyFrequency,
+  PermissionOverride,
 } from './types'
 import { canSeeExecTasks, BASE_ROLE, STATUS_LABEL } from './types'
 import { isFullAdminRole, resolveVisibleAdminSections } from './permissions'
@@ -202,6 +213,13 @@ interface OrbitContextValue extends OrbitState {
   skillCertifiedEvent: { memberName: string; skill: string } | null
   clearSkillCertifiedEvent: () => void
   markMentionSeen: (commentId: string) => void
+  dismissNotification: (notificationId: string) => void
+  setSlackWebhookUrl: (url: string) => void
+  toggleMemberInactive: (memberId: string) => void
+  updateAbsentDates: (memberId: string, dates: string[]) => void
+  // item 20: 1on1ワークシート質問項目
+  oneOnOneQuestions: string[]
+  setOneOnOneQuestions: (questions: string[]) => void
   login: (userId: string) => void
   logout: () => void
   setMode: (m: Mode) => void
@@ -257,6 +275,15 @@ interface OrbitContextValue extends OrbitState {
   adminPendingTasks: Task[]
   updateRole: (memberId: string, role: Role) => void
   updateReportsTo: (memberId: string, reportsToId: string | null) => void
+  updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) => void
+  // スキルポイント・検定・レーダーチャート
+  skillLevelThresholds: SkillLevelThresholds
+  quizDefinitions: QuizDefinition[]
+  radarAxes: RadarAxis[]
+  awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
+  updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
+  updateRadarAxes: (axes: RadarAxis[]) => void
+  submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
   updateMentor: (memberId: string, mentorId: string | null) => void
   // ---- タレントマネジメント ----
   updateSearchProfile: (
@@ -284,7 +311,6 @@ interface OrbitContextValue extends OrbitState {
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
-  updateReviewers: (id: string, reviewerIds: string[]) => void
   setBlocker: (id: string, note: string | null) => void
   updateEstimatedHours: (id: string, hours: number | null) => void
   updateActualHours: (id: string, hours: number | null) => void
@@ -320,6 +346,29 @@ interface OrbitContextValue extends OrbitState {
   // this project" definition admin-projects.tsx uses, so the workspace
   // (project-view/project-detail) shows the same assignments as Admin does
   getProjectMembers: (projectId: string) => Member[]
+  // ---- Phase 5: 経費申請・カスタムフォーム --------------------------------
+  expenseCategories: import('./types').ExpenseCategory[]
+  expenseApplications: import('./types').ExpenseApplication[]
+  customFormDefs: import('./types').CustomFormDef[]
+  customFormSubmissions: import('./types').CustomFormSubmission[]
+  updateExpenseCategories: (categories: import('./types').ExpenseCategory[]) => void
+  submitExpenseApplication: (
+    application: Omit<import('./types').ExpenseApplication, 'id' | 'approvals' | 'currentStepIndex' | 'status' | 'createdAt'>,
+  ) => void
+  approveExpenseStep: (applicationId: string, stepId: string, comment?: string) => void
+  rejectExpense: (applicationId: string, reason: string) => void
+  withdrawExpense: (applicationId: string) => void
+  updateCustomFormDefs: (forms: import('./types').CustomFormDef[]) => void
+  submitCustomForm: (
+    formId: string,
+    answers: Record<string, string | number>,
+  ) => void
+  approveFormStep: (submissionId: string, stepId: string, comment?: string) => void
+  rejectFormSubmission: (submissionId: string, reason: string) => void
+  // タスク確認ターゲット更新
+  updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
+  // Phase 6: スキル一括更新
+  bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) => void
 }
 
 const OrbitContext = createContext<OrbitContextValue | null>(null)
@@ -349,6 +398,8 @@ const RESTRICTED_ROLES_STORAGE_KEY = 'orbit-restricted-roles'
 // currentUserId -> 既読にしたコメントID配列、で複数メンバーを同一端末で
 // 切り替えて使う場合にも既読状態が混ざらないようにする
 const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
+const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
+const SLACK_WEBHOOK_STORAGE_KEY = 'orbit-slack-webhook-url'
 
 function loadState(): Partial<OrbitState> | null {
   if (typeof window === 'undefined') return null
@@ -563,10 +614,32 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
   const [onboardedIds, setOnboardedIds] = useState<Set<string>>(new Set())
   const [seenMentionIds, setSeenMentionIds] = useState<Record<string, string[]>>({})
+  // 通知の個別dismiss — userId -> 無視した通知IDの配列。通知はMemoで動的生成
+  // されるので、dismissedは端末ローカルのlocalStorageで管理する（item 7）
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Record<string, string[]>>({})
   const [skillCertifiedEvent, setSkillCertifiedEvent] = useState<{
     memberName: string
     skill: string
   } | null>(null)
+  const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
+  const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
+  // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
+  const [slackWebhookUrl, setSlackWebhookUrlState] = useState<string>('')
+  // item 20: 1on1ワークシート質問項目 — org管理者が設定できる質問のリスト
+  // localStorageに保存（GAS同期は将来対応）
+  const [oneOnOneQuestions, setOneOnOneQuestionsState] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('orbit-1on1-questions') : null
+      return raw ? JSON.parse(raw) : ['今月の良かったことは？', '困っていることや課題は？', '次回までのアクションは？']
+    } catch {
+      return ['今月の良かったことは？', '困っていることや課題は？', '次回までのアクションは？']
+    }
+  })
+  const [skillLevelThresholds, setSkillLevelThresholds] = useState<SkillLevelThresholds>({})
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
+  const [expenseApplications, setExpenseApplications] = useState<ExpenseApplication[]>([])
+  const [customFormDefs, setCustomFormDefs] = useState<CustomFormDef[]>([])
+  const [customFormSubmissions, setCustomFormSubmissions] = useState<CustomFormSubmission[]>([])
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
@@ -669,6 +742,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSkillFieldThresholdState(s.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
         setOrgNotificationEmails(s.orgNotificationEmails)
         setProjectOrderState(s.projectOrder)
+        if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
+        if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
+        if (s.radarAxes) setRadarAxes(s.radarAxes)
+        if (s.expenseCategories) setExpenseCategories(s.expenseCategories)
+        if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -722,6 +800,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSkillFieldThresholdState(settings.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
           setOrgNotificationEmails(settings.orgNotificationEmails)
           setProjectOrderState(settings.projectOrder)
+          if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
+          if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
+          if (settings.radarAxes) setRadarAxes(settings.radarAxes)
+          if (settings.expenseCategories) setExpenseCategories(settings.expenseCategories)
+          if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
         }
         setRemoteError(null)
       })
@@ -1057,10 +1140,304 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
-  const login = useCallback((userId: string) => {
-    setCurrentUserId(userId)
-    setModeState('output')
-  }, [])
+  // スキルポイント付与 — タスク完了後に管理者が各スキルに対してポイントを付与。
+  // 累計ポイントが閾値を超えるとスキルレベルが自動で繰り上がる。
+  const awardSkillPoints = useCallback(
+    (taskId: string, memberId: string, points: SkillPoints) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const current = { ...m.skillPoints }
+          Object.entries(points).forEach(([skill, pts]) => {
+            current[skill] = (current[skill] ?? 0) + pts
+          })
+          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+          const existingLevels = [...(m.skillLevels ?? [])]
+          Object.entries(current).forEach(([skill, pts]) => {
+            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
+            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
+            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
+            if (idx < 0) {
+              existingLevels.push({ skill, level: earnedLevel })
+            } else if (earnedLevel > existingLevels[idx].level) {
+              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
+            }
+          })
+          return { ...m, skillPoints: current, skillLevels: existingLevels }
+        }),
+      )
+      setTasks((prev) => prev.map((t) => (t.id !== taskId ? t : { ...t, awardedPoints: points })))
+      if (isRemoteConfigured) runRemote(remoteApi.awardSkillPoints(taskId, memberId, points))
+    },
+    [skillLevelThresholds, runRemote],
+  )
+
+  // 検定定義の更新（Admin）
+  const updateQuizDefinitions = useCallback(
+    (quizzes: QuizDefinition[]) => {
+      setQuizDefinitions(quizzes)
+      if (isSettingsConfigured) runRemote(remoteApi.updateQuizDefinitions(quizzes))
+    },
+    [runRemote],
+  )
+
+  // レーダーチャート軸の更新（Admin）
+  const updateRadarAxes = useCallback(
+    (axes: RadarAxis[]) => {
+      setRadarAxes(axes)
+      if (isSettingsConfigured) runRemote(remoteApi.updateRadarAxes(axes))
+    },
+    [runRemote],
+  )
+
+  // 検定を受験する（メンバー）— remote がある場合はサーバーで採点、なければ
+  // クライアント側でスコアを計算してスキルレベルを楽観的更新する。
+  const submitQuizResult = useCallback(
+    async (quizId: string, memberId: string, answers: number[]): Promise<{ passed: boolean; score: number }> => {
+      const quiz = quizDefinitions.find((q) => q.id === quizId)
+      if (!quiz) return { passed: false, score: 0 }
+
+      const localScore = () => {
+        const correct = answers.filter((ans, i) => ans === quiz.questions[i]?.correctIndex).length
+        return Math.round((correct / Math.max(1, quiz.questions.length)) * 100)
+      }
+
+      if (isRemoteConfigured) {
+        try {
+          const result = await remoteApi.submitQuizResult(quizId, memberId, answers)
+          if (result.passed && result.newLevel != null) {
+            setMembers((prev) =>
+              prev.map((m) => {
+                if (m.id !== memberId) return m
+                const existing = [...(m.skillLevels ?? [])]
+                const idx = existing.findIndex((sl) => sl.skill === quiz.targetSkill)
+                const nl = result.newLevel as SkillLevelValue
+                if (idx < 0) {
+                  existing.push({ skill: quiz.targetSkill, level: nl })
+                } else if (nl > existing[idx].level) {
+                  existing[idx] = { ...existing[idx], level: nl }
+                }
+                return { ...m, skillLevels: existing }
+              }),
+            )
+          }
+          return result
+        } catch (err) {
+          reportRemoteError(err)
+          return { passed: false, score: localScore() }
+        }
+      } else {
+        const score = localScore()
+        const passed = score >= quiz.passRate
+        if (passed) {
+          setMembers((prev) =>
+            prev.map((m) => {
+              if (m.id !== memberId) return m
+              const existing = [...(m.skillLevels ?? [])]
+              const idx = existing.findIndex((sl) => sl.skill === quiz.targetSkill)
+              if (idx < 0) {
+                existing.push({ skill: quiz.targetSkill, level: quiz.targetLevel })
+              } else if (quiz.targetLevel > existing[idx].level) {
+                existing[idx] = { ...existing[idx], level: quiz.targetLevel }
+              }
+              return { ...m, skillLevels: existing }
+            }),
+          )
+        }
+        return { passed, score }
+      }
+    },
+    [quizDefinitions, reportRemoteError],
+  )
+
+  // ---- Phase 5: 経費申請・カスタムフォーム コールバック --------------------
+
+  const updateExpenseCategories = useCallback(
+    (categories: ExpenseCategory[]) => {
+      setExpenseCategories(categories)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('expense_categories', JSON.stringify(categories)))
+    },
+    [runRemote],
+  )
+
+  const submitExpenseApplication = useCallback(
+    (application: Omit<ExpenseApplication, 'id' | 'approvals' | 'currentStepIndex' | 'status' | 'createdAt'>) => {
+      const newApp: ExpenseApplication = {
+        ...application,
+        id: crypto.randomUUID(),
+        approvals: [],
+        currentStepIndex: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }
+      setExpenseApplications((prev) => [newApp, ...prev])
+      if (isRemoteConfigured) runRemote(remoteApi.submitExpenseApplication(newApp))
+    },
+    [runRemote],
+  )
+
+  const approveExpenseStep = useCallback(
+    (applicationId: string, stepId: string, comment?: string) => {
+      const actorId = currentUserId ?? ''
+      setExpenseApplications((prev) =>
+        prev.map((app) => {
+          if (app.id !== applicationId) return app
+          const record: ApprovalRecord = {
+            stepId,
+            memberId: actorId,
+            at: new Date().toISOString(),
+            action: 'approved',
+            comment,
+          }
+          const approvals = [...app.approvals, record]
+          const step = app.approvalSteps[app.currentStepIndex]
+          const stepApprovals = approvals.filter((a) => a.stepId === step?.id && a.action === 'approved')
+          const needed =
+            step?.requiredCount === 'all'
+              ? (app.approvalSteps[app.currentStepIndex] ? Infinity : 1)
+              : (typeof step?.requiredCount === 'number' ? step.requiredCount : 1)
+          const nextStepIndex = stepApprovals.length >= needed ? app.currentStepIndex + 1 : app.currentStepIndex
+          const status = nextStepIndex >= app.approvalSteps.length ? 'approved' : 'pending'
+          return { ...app, approvals, currentStepIndex: nextStepIndex, status }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.approveExpenseStep(applicationId, stepId, actorId, comment))
+    },
+    [currentUserId, runRemote],
+  )
+
+  const rejectExpense = useCallback(
+    (applicationId: string, reason: string) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId ? { ...app, status: 'rejected', rejectionReason: reason } : app,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.rejectExpense(applicationId, reason))
+    },
+    [runRemote],
+  )
+
+  const withdrawExpense = useCallback(
+    (applicationId: string) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId ? { ...app, status: 'withdrawn' } : app,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.withdrawExpense(applicationId))
+    },
+    [runRemote],
+  )
+
+  const updateCustomFormDefs = useCallback(
+    (forms: CustomFormDef[]) => {
+      setCustomFormDefs(forms)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('custom_form_defs', JSON.stringify(forms)))
+    },
+    [runRemote],
+  )
+
+  const submitCustomForm = useCallback(
+    (formId: string, answers: Record<string, string | number>) => {
+      const form = customFormDefs.find((f) => f.id === formId)
+      if (!form || !currentUserId) return
+      const submission: CustomFormSubmission = {
+        id: crypto.randomUUID(),
+        formId,
+        submitterId: currentUserId,
+        answers,
+        approvals: [],
+        currentStepIndex: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }
+      setCustomFormSubmissions((prev) => [submission, ...prev])
+      if (isRemoteConfigured) runRemote(remoteApi.submitCustomForm(submission))
+    },
+    [customFormDefs, currentUserId, runRemote],
+  )
+
+  const approveFormStep = useCallback(
+    (submissionId: string, stepId: string, comment?: string) => {
+      const actorId = currentUserId ?? ''
+      setCustomFormSubmissions((prev) =>
+        prev.map((sub) => {
+          if (sub.id !== submissionId) return sub
+          const form = customFormDefs.find((f) => f.id === sub.formId)
+          const record: ApprovalRecord = {
+            stepId,
+            memberId: actorId,
+            at: new Date().toISOString(),
+            action: 'approved',
+            comment,
+          }
+          const approvals = [...sub.approvals, record]
+          const step = form?.approvalSteps[sub.currentStepIndex]
+          const stepApprovals = approvals.filter((a) => a.stepId === step?.id && a.action === 'approved')
+          const needed =
+            step?.requiredCount === 'all'
+              ? Infinity
+              : (typeof step?.requiredCount === 'number' ? step.requiredCount : 1)
+          const nextStepIndex = stepApprovals.length >= needed ? sub.currentStepIndex + 1 : sub.currentStepIndex
+          const totalSteps = form?.approvalSteps.length ?? 0
+          const status = nextStepIndex >= totalSteps ? 'approved' : 'pending'
+          return { ...sub, approvals, currentStepIndex: nextStepIndex, status }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.approveFormStep(submissionId, stepId, actorId, comment))
+    },
+    [currentUserId, customFormDefs, runRemote],
+  )
+
+  const rejectFormSubmission = useCallback(
+    (submissionId: string, reason: string) => {
+      setCustomFormSubmissions((prev) =>
+        prev.map((sub) =>
+          sub.id === submissionId ? { ...sub, status: 'rejected', rejectionReason: reason } : sub,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.rejectFormSubmission(submissionId, reason))
+    },
+    [runRemote],
+  )
+
+  // item 1: 初ログイン時（既存タスクが0件）に初期タスクセットを自動付与。
+  // 団体名や役割は仮値 — 実際はSettingsシートの initial_tasks_json キーで
+  // 上書き可能にすることを想定。ここではハードコードで3件を生成する。
+  const INITIAL_TASKS_KEY = 'orbit-initial-tasks-given'
+  const login = useCallback(
+    (userId: string) => {
+      setCurrentUserId(userId)
+      setModeState('output')
+
+      // 既に初期タスクを付与済みか、タスクが存在する場合はスキップ
+      try {
+        const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
+        const givenIds: string[] = given ? JSON.parse(given) : []
+        if (givenIds.includes(userId)) return
+      } catch { /* ignore */ }
+
+      setTasks((prevTasks) => {
+        if (prevTasks.length > 0) return prevTasks
+        const now = new Date().toISOString()
+        const base = { assigneeIds: [userId], status: 'todo' as const, progressHistory: [] as import('./types').ProgressEntry[], department: '未分類' as const, category: '未分類', skills: [], priority: '中' as const, difficulty: '新人歓迎' as const, deadline: null, createdAt: now, lastActivity: now.slice(0, 10) }
+        const newTasks: import('./types').Task[] = [
+          { ...base, id: `init-${userId}-1`, name: 'Orbitの使い方を確認する', description: 'INPUT→タスク登録→OUTPUT確認の流れを体験してみましょう。', projectId: projects[0]?.id ?? 'default', description: 'まずINPUT画面で「今日やること」を入力し、承認を受けてみましょう。' },
+          { ...base, id: `init-${userId}-2`, name: 'プロフィールを設定する', description: 'ヘッダーのアカウントメニュー →「プロフィール」でWillとスキルを登録しましょう。', projectId: projects[0]?.id ?? 'default' },
+          { ...base, id: `init-${userId}-3`, name: 'チームメンバーのタスクを確認する', description: 'OUTPUT →「一覧」タブで組織のタスク全体を把握しましょう。', projectId: projects[0]?.id ?? 'default' },
+        ]
+        try {
+          const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
+          const givenIds: string[] = given ? JSON.parse(given) : []
+          window.localStorage.setItem(INITIAL_TASKS_KEY, JSON.stringify([...givenIds, userId]))
+        } catch { /* ignore */ }
+        return [...prevTasks, ...newTasks]
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projects],
+  )
 
   const logout = useCallback(() => {
     setCurrentUserId(null)
@@ -2017,6 +2394,16 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  const updatePermissionOverrides = useCallback(
+    (memberId: string, overrides: PermissionOverride[]) => {
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, permissionOverrides: overrides } : m)),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updatePermissionOverrides(memberId, overrides))
+    },
+    [runRemote],
+  )
+
   // item 14: メンター/サポート担当の設定
   const updateMentor = useCallback(
     (memberId: string, mentorId: string | null) => {
@@ -2244,12 +2631,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   const updateReviewers = useCallback(
-    (id: string, reviewerIds: string[]) => {
+    (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => {
       setTasks((prev) =>
         prev.map((t) =>
           t.id === id
             ? appendHistory(
-                { ...t, reviewerIds, reviewerId: reviewerIds[0] },
+                { ...t, reviewerIds, reviewerId: reviewerIds[0], requiredApprovals },
                 'reviewer',
                 (t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])).join('、'),
                 reviewerIds.join('、'),
@@ -2260,6 +2647,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.updateReviewers(id, reviewerIds))
     },
     [appendHistory, runRemote],
+  )
+
+  const bulkUpdateSkills = useCallback(
+    (updates: { memberId: string; skill: string; level: number }[]) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          const memberUpdates = updates.filter((u) => u.memberId === m.id)
+          if (memberUpdates.length === 0) return m
+          const existing = [...(m.skillLevels ?? [])]
+          for (const u of memberUpdates) {
+            const idx = existing.findIndex((sl) => sl.skill === u.skill)
+            if (idx >= 0) existing[idx] = { ...existing[idx], level: u.level as import('./types').SkillLevelValue }
+            else existing.push({ skill: u.skill, level: u.level as import('./types').SkillLevelValue })
+          }
+          return { ...m, skillLevels: existing }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.bulkUpdateSkills(updates))
+    },
+    [runRemote],
   )
 
   // "困っている/作業が止まっている" flag, independent of status (item 7:
@@ -2712,6 +3119,59 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const clearSkillCertifiedEvent = useCallback(() => setSkillCertifiedEvent(null), [])
 
+  // 通知の個別dismiss（item 7）— userId単位で管理し、端末ローカルにのみ保持
+  const dismissNotification = useCallback(
+    (notificationId: string) => {
+      if (!currentUserId) return
+      setDismissedNotificationIds((prev) => {
+        const mine = prev[currentUserId] ?? []
+        if (mine.includes(notificationId)) return prev
+        const next = { ...prev, [currentUserId]: [...mine, notificationId] }
+        try {
+          window.localStorage.setItem(DISMISSED_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next))
+        } catch { /* ignore */ }
+        return next
+      })
+    },
+    [currentUserId],
+  )
+
+  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存
+  const setSlackWebhookUrl = useCallback(
+    (url: string) => {
+      try { window.localStorage.setItem(SLACK_WEBHOOK_STORAGE_KEY, url) } catch { /* ignore */ }
+      setSlackWebhookUrlState(url)
+      if (isRemoteConfigured) runRemote(remoteApi.updateSlackWebhookUrl(url))
+    },
+    [runRemote],
+  )
+
+  // item 20: 1on1質問項目を更新
+  const setOneOnOneQuestions = useCallback((questions: string[]) => {
+    setOneOnOneQuestionsState(questions)
+    try { window.localStorage.setItem('orbit-1on1-questions', JSON.stringify(questions)) } catch {}
+  }, [])
+
+  // 活動休止トグル（item 9）— GAS側にも反映する
+  const toggleMemberInactive = useCallback(
+    (memberId: string) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const next = { ...m, inactive: !m.inactive }
+          if (isRemoteConfigured) runRemote(remoteApi.updateMemberInactive(memberId, !!next.inactive))
+          return next
+        }),
+      )
+    },
+    [runRemote],
+  )
+
+  // 不在日の更新 — localStorageで管理（GAS同期は将来対応）
+  const updateAbsentDates = useCallback((memberId: string, dates: string[]) => {
+    setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, absentDates: dates } : m))
+  }, [])
+
   const getMember = useCallback(
     (id: string | null) => members.find((m) => m.id === id),
     [members],
@@ -2882,8 +3342,37 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         })
       })
     })
-    return items
-  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds])
+    // item 25: 25日間未アクセスのメンバーを管理者に通知
+    if (isAdmin) {
+      const now = Date.now()
+      const INACTIVE_DAYS = 25
+      members
+        .filter((m) => !m.inactive && m.lastLogin)
+        .forEach((m) => {
+          const last = new Date(m.lastLogin!).getTime()
+          const days = Math.floor((now - last) / 86400000)
+          if (days >= INACTIVE_DAYS) {
+            items.push({
+              id: `inactive-${m.id}`,
+              kind: 'stale',
+              title: `${m.displayName || m.name}が${days}日間未ログイン`,
+              detail: 'Orbitにアクセスがない可能性があります',
+              taskId: '',
+            })
+          }
+        })
+    }
+    // カレンダースコープ追加告知 — 一度「消す」まで表示する
+    items.push({
+      id: 'calendar-scope-notice',
+      kind: 'info' as const,
+      title: 'Googleカレンダー連携が追加されました',
+      detail: 'カレンダー画面から「Googleカレンダーと連携」ボタンで接続できます',
+      taskId: '',
+    })
+    const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []
+    return items.filter((n) => !dismissedHere.includes(n.id))
+  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds, dismissedNotificationIds, members])
 
   const projectTypes = useMemo(
     () =>
@@ -2996,6 +3485,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     skillCertifiedEvent,
     clearSkillCertifiedEvent,
     markMentionSeen,
+    dismissNotification,
+    setSlackWebhookUrl,
+    toggleMemberInactive,
+    updateAbsentDates,
+    oneOnOneQuestions,
+    setOneOnOneQuestions,
     login,
     logout,
     setMode,
@@ -3032,6 +3527,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     adminPendingTasks,
     updateRole,
     updateReportsTo,
+    updatePermissionOverrides,
+    skillLevelThresholds,
+    quizDefinitions,
+    radarAxes,
+    awardSkillPoints,
+    updateQuizDefinitions,
+    updateRadarAxes,
+    submitQuizResult,
     updateMentor,
     updateSearchProfile,
     updateCareerHistory,
@@ -3074,6 +3577,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     getProject,
     getInput,
     getProjectMembers,
+    expenseCategories,
+    expenseApplications,
+    customFormDefs,
+    customFormSubmissions,
+    updateExpenseCategories,
+    submitExpenseApplication,
+    approveExpenseStep,
+    rejectExpense,
+    withdrawExpense,
+    updateCustomFormDefs,
+    submitCustomForm,
+    approveFormStep,
+    rejectFormSubmission,
+    bulkUpdateSkills,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>

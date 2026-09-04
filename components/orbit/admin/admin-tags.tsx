@@ -44,10 +44,12 @@ export function AdminTags() {
     addOrgNotificationEmail,
     removeOrgNotificationEmail,
     setDiscordWebhookUrl,
+    setSlackWebhookUrl,
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
   const [webhookDraft, setWebhookDraft] = useState('')
+  const [slackWebhookDraft, setSlackWebhookDraft] = useState('')
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
   // item 17: ポジション要件 — every role, including 一般, has a position
   const jobTypes = [BASE_ROLE, ...roleLevels]
@@ -259,6 +261,42 @@ export function AdminTags() {
       )}
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>Slack Incoming Webhook 連携</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          設定すると、タスクが確認待ちになったとき・期限超過タスクの日次サマリーが
+          指定したSlackチャンネルに通知されます（item 8）。SlackのAppからIncoming
+          Webhookを発行してURLを貼り付けてください。
+        </p>
+        {!isRemoteConfigured && (
+          <p className="mt-1 text-xs text-warning">
+            スプレッドシート連携が未設定のため、保存しても反映されません。
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            value={slackWebhookDraft}
+            onChange={(e) => setSlackWebhookDraft(e.target.value)}
+            placeholder="https://hooks.slack.com/services/..."
+            className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+          />
+          <Button
+            className="h-9 shrink-0"
+            disabled={!slackWebhookDraft.trim() || !isRemoteConfigured}
+            onClick={() => {
+              setSlackWebhookUrl(slackWebhookDraft.trim())
+              setSlackWebhookDraft('')
+              toast('Slack Webhook URLを保存しました')
+            }}
+          >
+            保存
+          </Button>
+        </div>
+      </div>
+
+      {/* item 20: 1on1ワークシート質問項目 */}
+      <OneOnOneQuestionsEditor />
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
         <SectionLabel>Discord Webhook 連携</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
           設定すると、タスクが確認待ちになったとき・期限超過タスクの日次サマリーが
@@ -297,6 +335,9 @@ export function AdminTags() {
           </Button>
         </div>
       </div>
+
+      {/* item 26: 通知種別・頻度設定 */}
+      <NotifySettingsEditor />
     </div>
   )
 }
@@ -468,6 +509,150 @@ function TagGroup({
         >
           <Plus className="size-4" />
         </button>
+      </div>
+    </div>
+  )
+}
+
+// item 20: 1on1ワークシート質問項目エディタ
+function OneOnOneQuestionsEditor() {
+  const { oneOnOneQuestions, setOneOnOneQuestions } = useOrbit()
+  const toast = useToast()
+  const [draft, setDraft] = useState('')
+
+  const add = () => {
+    const v = draft.trim()
+    if (!v || oneOnOneQuestions.includes(v)) { setDraft(''); return }
+    setOneOnOneQuestions([...oneOnOneQuestions, v])
+    setDraft('')
+    toast('質問項目を追加しました')
+  }
+  const remove = (q: string) => setOneOnOneQuestions(oneOnOneQuestions.filter((x) => x !== q))
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>1on1ワークシート 質問項目</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">
+        1on1記録フォームで表示される質問項目です。設定した質問ごとに入力欄が表示され、
+        回答が整形されて記録に保存されます。未設定の場合は自由入力になります。
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {oneOnOneQuestions.map((q) => (
+          <span
+            key={q}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2 py-1 text-xs font-medium"
+          >
+            {q}
+            <button
+              onClick={() => remove(q)}
+              className="ml-0.5 opacity-60 hover:opacity-100"
+              aria-label="削除"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+            if (e.key === 'Enter') { e.preventDefault(); add() }
+          }}
+          placeholder="例: 今月のハイライトは？"
+          className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        />
+        <Button variant="outline" className="h-8 text-xs" disabled={!draft.trim()} onClick={add}>
+          <Plus className="size-3.5" />
+          追加
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// item 26: 通知種別・頻度選択UIをlocalStorageに保存する
+// GAS側との連携は将来対応。現時点ではUIの設定値をフロント側の表示制御に利用する想定。
+const NOTIFY_SETTINGS_KEY = 'orbit-notify-settings'
+
+type NotifyFrequency = 'immediate' | 'daily' | 'weekly' | 'off'
+
+interface NotifySettings {
+  overdue: NotifyFrequency
+  approval: NotifyFrequency
+  inactive: NotifyFrequency
+  assign: NotifyFrequency
+}
+
+const DEFAULT_NOTIFY_SETTINGS: NotifySettings = {
+  overdue: 'daily',
+  approval: 'immediate',
+  inactive: 'weekly',
+  assign: 'immediate',
+}
+
+const NOTIFY_KIND_LABEL: Record<keyof NotifySettings, string> = {
+  overdue: '期限超過タスク',
+  approval: '承認・確認待ち',
+  inactive: '長期未ログインメンバー',
+  assign: '新規タスクアサイン',
+}
+
+const FREQ_LABEL: Record<NotifyFrequency, string> = {
+  immediate: '即時',
+  daily: '日次',
+  weekly: '週次',
+  off: 'OFF',
+}
+const FREQ_OPTIONS: NotifyFrequency[] = ['immediate', 'daily', 'weekly', 'off']
+
+function loadNotifySettings(): NotifySettings {
+  try {
+    const raw = window.localStorage.getItem(NOTIFY_SETTINGS_KEY)
+    if (raw) return { ...DEFAULT_NOTIFY_SETTINGS, ...JSON.parse(raw) }
+  } catch { /* ignore */ }
+  return DEFAULT_NOTIFY_SETTINGS
+}
+
+function NotifySettingsEditor() {
+  const [settings, setSettings] = useState<NotifySettings>(() => {
+    if (typeof window === 'undefined') return DEFAULT_NOTIFY_SETTINGS
+    return loadNotifySettings()
+  })
+  const toast = useToast()
+
+  const update = (kind: keyof NotifySettings, freq: NotifyFrequency) => {
+    const next = { ...settings, [kind]: freq }
+    setSettings(next)
+    try { window.localStorage.setItem(NOTIFY_SETTINGS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    toast(`「${NOTIFY_KIND_LABEL[kind]}」通知を${FREQ_LABEL[freq]}に設定しました`)
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>通知種別・頻度設定</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">
+        各通知の頻度を設定します。OFFにすると該当通知は表示されません（ブラウザのローカル設定です）。
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        {(Object.keys(NOTIFY_KIND_LABEL) as (keyof NotifySettings)[]).map((kind) => (
+          <div key={kind} className="flex items-center gap-3">
+            <span className="w-40 shrink-0 text-sm">{NOTIFY_KIND_LABEL[kind]}</span>
+            <div className="flex gap-1">
+              {FREQ_OPTIONS.map((freq) => (
+                <button
+                  key={freq}
+                  onClick={() => update(kind, freq)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${settings[kind] === freq ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}
+                >
+                  {FREQ_LABEL[freq]}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

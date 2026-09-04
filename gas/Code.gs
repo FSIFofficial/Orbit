@@ -20,6 +20,11 @@ var SHEET_TASKS = 'Tasks'
 // fine, updateSetting() creates it on first write.
 var SHEET_SETTINGS = 'Settings'
 var SETTINGS_KEY_RECURRING_RULES = 'recurring_rules'
+// スキルごとのレベルアップ閾値 JSON: { "デフォルト": 100, "デザイン": 150, ... }
+var SETTINGS_KEY_SKILL_LEVEL_THRESHOLDS = 'skill_level_thresholds'
+// 部署ツリー設定 JSON: 部署一覧を静的に管理したい場合に使う（省略時は
+// Members.department_path の実データから動的導出）
+var SETTINGS_KEY_DEPARTMENT_TREE_CONFIG = 'department_tree_config'
 // NOT a Settings-sheet key (that sheet is published as a public CSV) — this
 // is the PropertiesService key the Discord webhook URL is stored under
 // instead. See getDiscordWebhookUrl()/updateDiscordWebhookUrl() below.
@@ -89,20 +94,220 @@ function getActingMember(email) {
   var idCol = headers.indexOf('id')
   var roleCol = headers.indexOf('role')
   var projectIdsCol = headers.indexOf('project_ids')
+  var overridesCol = headers.indexOf('permission_overrides_json')
   if (emailCol < 0 || idCol < 0) throw new Error('Membersシートの構造が不正です。')
   var data = sheet.getDataRange().getValues()
   var lc = email.toLowerCase()
   for (var i = 1; i < data.length; i++) {
     var rowEmails = String(data[i][emailCol] || '').split(',').map(function (e) { return e.trim().toLowerCase() })
     if (rowEmails.indexOf(lc) >= 0) {
+      var overrides = []
+      if (overridesCol >= 0) {
+        try { overrides = JSON.parse(data[i][overridesCol] || '[]') } catch (_) {}
+      }
       return {
         id: String(data[i][idCol]),
         role: String(data[i][roleCol] || ''),
         project_ids: String(data[i][projectIdsCol] || '').split(',').map(function (s) { return s.trim() }).filter(Boolean),
+        permission_overrides: Array.isArray(overrides) ? overrides : [],
       }
     }
   }
   throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+}
+
+/**
+ * Returns true if acting member has a permission_overrides entry matching
+ * the action's target. Used as OR fallback when role-based check denies.
+ *
+ * Access level hierarchy: approve > edit > view
+ * Override { targetType, targetId, access } — targetId matches:
+ *   task       → body.taskId
+ *   project    → body.projectId or task.project_id
+ *   department → body.department or task.department
+ */
+function checkPermissionOverride(acting, action, body) {
+  var overrides = acting.permission_overrides
+  if (!overrides || overrides.length === 0) return false
+
+  // Map action → required access level and target extraction
+  var ACCESS_LEVELS = { view: 0, edit: 1, approve: 2 }
+
+  var taskId = String(body.taskId || '')
+  var projectId = String(body.projectId || '')
+  var department = String(body.department || '')
+
+  // For task-based actions resolve project/department from the sheet when not in body
+  if (taskId && (!projectId || !department)) {
+    var taskRow = findRow(SHEET_TASKS, taskId)
+    if (taskRow) {
+      if (!projectId) projectId = String(taskRow.project_id || '')
+      if (!department) department = String(taskRow.department || '')
+    }
+  }
+
+  // Minimum access required per action
+  var requiredAccess = 'edit' // default for daihyoOrLeader actions
+  if (action === 'approveTask') requiredAccess = 'approve'
+
+  var required = ACCESS_LEVELS[requiredAccess] || 0
+
+  for (var i = 0; i < overrides.length; i++) {
+    var ov = overrides[i]
+    var granted = ACCESS_LEVELS[ov.access]
+    if (typeof granted !== 'number' || granted < required) continue
+    if (ov.targetType === 'task' && ov.targetId === taskId && taskId) return true
+    if (ov.targetType === 'project' && ov.targetId === projectId && projectId) return true
+    if (ov.targetType === 'department' && ov.targetId === department && department) return true
+  }
+  return false
+}
+
+/**
+ * Reads skill_level_thresholds from the Settings sheet.
+ * Returns {} when the key is absent or unparseable.
+ */
+function getSkillLevelThresholds() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SETTINGS)
+    if (!sheet) return {}
+    var data = sheet.getDataRange().getValues()
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === 'skill_level_thresholds') {
+        return JSON.parse(data[i][1] || '{}')
+      }
+    }
+  } catch (_) {}
+  return {}
+}
+
+/**
+ * Reads quiz_definitions from the Settings sheet.
+ * Returns [] when the key is absent or unparseable.
+ */
+function getQuizDefinitions() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SETTINGS)
+    if (!sheet) return []
+    var data = sheet.getDataRange().getValues()
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === 'quiz_definitions') {
+        var defs = JSON.parse(data[i][1] || '[]')
+        return Array.isArray(defs) ? defs : []
+      }
+    }
+  } catch (_) {}
+  return []
+}
+
+/**
+ * Computes leveled-up skill_levels_json given current levels, cumulative
+ * points, and threshold config. Returns the updated levels array.
+ *
+ * Logic: for each skill with points, check if total >= threshold * level.
+ * The threshold is "points needed per level"; e.g. threshold=100 means
+ * Lv1→Lv2 at 100pts, Lv2→Lv3 at 200pts, ..., max Lv5.
+ */
+function computeAutoLevels(currentLevels, cumulativePoints, thresholds) {
+  var DEFAULT_THRESHOLD = thresholds['デフォルト'] || 100
+  var levels = {}
+  for (var i = 0; i < currentLevels.length; i++) {
+    levels[currentLevels[i].skill] = currentLevels[i].level
+  }
+  var skills = Object.keys(cumulativePoints)
+  for (var j = 0; j < skills.length; j++) {
+    var skill = skills[j]
+    var pts = cumulativePoints[skill] || 0
+    var thr = thresholds[skill] || DEFAULT_THRESHOLD
+    var earnedLevel = Math.min(5, Math.floor(pts / thr) + 1)
+    var current = levels[skill] || 1
+    if (earnedLevel > current) levels[skill] = earnedLevel
+  }
+  var result = []
+  var allSkills = Object.keys(levels)
+  for (var k = 0; k < allSkills.length; k++) {
+    result.push({ skill: allSkills[k], level: levels[allSkills[k]] })
+  }
+  return result
+}
+
+/**
+ * Awards skill points to a member on task completion.
+ * Updates skill_points_json and auto-levels skill_levels_json.
+ * Also saves awarded_points_json on the task for future avg calculations.
+ */
+function awardSkillPoints(taskId, memberId, points) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+
+  var currentPoints = {}
+  try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
+  var currentLevels = []
+  try { currentLevels = JSON.parse(memberRow.skill_levels_json || '[]') } catch (_) {}
+
+  // Accumulate points
+  var skillKeys = Object.keys(points)
+  for (var i = 0; i < skillKeys.length; i++) {
+    var s = skillKeys[i]
+    currentPoints[s] = (currentPoints[s] || 0) + (points[s] || 0)
+  }
+
+  // Compute auto-level-up
+  var thresholds = getSkillLevelThresholds()
+  var newLevels = computeAutoLevels(currentLevels, currentPoints, thresholds)
+
+  // Persist
+  updateMemberFields(memberId, {
+    skill_points_json: JSON.stringify(currentPoints),
+    skill_levels_json: JSON.stringify(newLevels),
+  })
+  if (taskId) {
+    updateTaskFields(taskId, { awarded_points_json: JSON.stringify(points) })
+  }
+  return { ok: true, newPoints: currentPoints, newLevels: newLevels }
+}
+
+/**
+ * Processes a quiz submission. Reads the quiz definition from Settings,
+ * scores the answers, and if pass rate is met, auto-levels the skill.
+ */
+function submitQuizResult(quizId, memberId, answers, acting) {
+  if (memberId !== acting.id && acting.role === '一般') {
+    throw new Error('他のメンバーの代わりに検定を受けることはできません。')
+  }
+  var defs = getQuizDefinitions()
+  var quiz = null
+  for (var i = 0; i < defs.length; i++) {
+    if (defs[i].id === quizId) { quiz = defs[i]; break }
+  }
+  if (!quiz) throw new Error('検定が見つかりません: ' + quizId)
+
+  var questions = quiz.questions || []
+  if (questions.length === 0) throw new Error('検定に設問がありません。')
+
+  var correct = 0
+  for (var j = 0; j < questions.length; j++) {
+    if (answers[j] === questions[j].correctIndex) correct++
+  }
+  var score = Math.round((correct / questions.length) * 100)
+  var passed = score >= quiz.passRate
+
+  var newLevel = null
+  if (passed) {
+    var memberRow = findRow(SHEET_MEMBERS, memberId)
+    var currentLevels = []
+    try { currentLevels = JSON.parse((memberRow && memberRow.skill_levels_json) || '[]') } catch (_) {}
+    var targetSkill = quiz.targetSkill
+    var targetLevel = quiz.targetLevel || 1
+    var existing = currentLevels.find(function(sl) { return sl.skill === targetSkill })
+    if (!existing || existing.level < targetLevel) {
+      var nextLevels = currentLevels.filter(function(sl) { return sl.skill !== targetSkill })
+      nextLevels.push({ skill: targetSkill, level: targetLevel })
+      updateMemberFields(memberId, { skill_levels_json: JSON.stringify(nextLevels) })
+      newLevel = targetLevel
+    }
+  }
+  return { ok: true, passed: passed, score: score, newLevel: newLevel }
 }
 
 /**
@@ -141,9 +346,10 @@ function authorizeAction(acting, action, body) {
     'updateMentor',            // メンター設定は代表のみ（HR操作）
     'updateEvaluationHistory', // 評価履歴は代表のみ（人事機密）
     'updateTransferHistory',   // 異動履歴は代表のみ（人事機密）
-    'updateOneOnOnes',         // 1on1記録は管理者のみ（管理者専用タブ）
-    'updateCompetencies',      // コンピテンシー評価は管理者のみ
-    'notifyTrainingDecision',  // 研修承認通知は代表のみ（承認権限）
+    'updateOneOnOnes',              // 1on1記録は管理者のみ（管理者専用タブ）
+    'updateCompetencies',           // コンピテンシー評価は管理者のみ
+    'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
+    'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
   ]
   if (daihyoOnly.indexOf(action) >= 0) {
     throw new Error('この操作は代表のみ実行できます。')
@@ -173,9 +379,17 @@ function authorizeAction(acting, action, body) {
     'setBlocker',           // ブロッカー設定（班長が管理）
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
+    'awardSkillPoints',     // スキルポイント付与（管理者操作）
+    'approveExpenseStep',   // 経費承認（管理者操作）
+    'rejectExpense',        // 経費却下（管理者操作）
+    'approveFormStep',      // フォーム承認（管理者操作）
+    'rejectFormSubmission', // フォーム却下（管理者操作）
+    'bulkUpdateSkills',     // スキル一括更新（管理者操作）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
+      // ロールで弾かれた場合でも permission_overrides_json に該当する例外があれば許可（OR条件）
+      if (checkPermissionOverride(acting, action, body)) return
       throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
     }
     return
@@ -234,6 +448,10 @@ function authorizeAction(acting, action, body) {
     'notifyFormResult',
     'updateHistory',
     'updateDeliverables',
+    'submitQuizResult',        // 検定の受験はログイン済み誰でも
+    'submitExpenseApplication',// 経費申請はログイン済み誰でも
+    'withdrawExpense',         // 取り下げは本人（下層でチェック）
+    'submitCustomForm',        // フォーム申請はログイン済み誰でも
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
@@ -366,6 +584,11 @@ function doPost(e) {
         break
       case 'updateRole':
         result = updateMemberFields(body.memberId, { role: body.role })
+        break
+      case 'updatePermissionOverrides':
+        result = updateMemberFields(body.memberId, {
+          permission_overrides_json: JSON.stringify(body.overrides || []),
+        })
         break
       case 'updateReportsTo':
         result = updateMemberFields(body.memberId, { reports_to_id: body.reportsToId || '' })
@@ -588,6 +811,36 @@ function doPost(e) {
         result = updateMemberFields(body.memberId, {
           one_on_ones_json: JSON.stringify(body.entries || []),
         })
+        break
+      case 'awardSkillPoints':
+        result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
+        break
+      case 'submitQuizResult':
+        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], acting)
+        break
+      case 'submitExpenseApplication':
+        result = saveExpenseApplication(body.application, acting)
+        break
+      case 'approveExpenseStep':
+        result = processExpenseStep(body.applicationId, body.stepId, body.actorId, 'approved', body.comment)
+        break
+      case 'rejectExpense':
+        result = setExpenseStatus(body.applicationId, 'rejected', body.reason)
+        break
+      case 'withdrawExpense':
+        result = setExpenseStatus(body.applicationId, 'withdrawn')
+        break
+      case 'submitCustomForm':
+        result = saveCustomFormSubmission(body.submission, acting)
+        break
+      case 'approveFormStep':
+        result = processFormStep(body.submissionId, body.stepId, body.actorId, 'approved', body.comment)
+        break
+      case 'rejectFormSubmission':
+        result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
+        break
+      case 'bulkUpdateSkills':
+        result = bulkUpdateSkillLevels(body.updates || [])
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -1880,6 +2133,10 @@ function setupOrbit() {
     'career_aspiration', 'desired_future_role', 'career_plan',
     'training_history_json', 'development_plan_json', 'one_on_ones_json',
     'notify_settings',
+    // 組織階層・権限・スキルポイント（新規列）
+    'department_path',          // 例: "事業本部A>事業部1>グループX"
+    'permission_overrides_json',// 例: [{"targetType":"task","targetId":"12","access":"view"}]
+    'skill_points_json',        // 例: {"デザイン":120,"プログラミング":340}
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -1894,6 +2151,7 @@ function setupOrbit() {
     'deliverables_json', 'history_json', 'comments_json',
     'retrospective_json', 'schedule_json', 'form_json',
     'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
+    'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 
@@ -1976,4 +2234,289 @@ function debugAvatarWrite() {
     console.log('✅ テスト書き込み完了: avatar_url = ' + testUrl)
     console.log('スプレッドシートで avatar_url 列を確認してください。')
   }
+}
+
+// ---- Phase 5: 経費申請 -------------------------------------------------------
+
+var SHEET_EXPENSES = 'Expenses'
+var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
+
+function ensureExpensesSheet() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var sheet = ss.getSheetByName(SHEET_EXPENSES)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_EXPENSES)
+    sheet.appendRow(['id', 'applicant_id', 'amount', 'category_id', 'receipt_url', 'justification', 'purpose', 'approval_steps_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
+  }
+  return sheet
+}
+
+function ensureFormSubmissionsSheet() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var sheet = ss.getSheetByName(SHEET_FORM_SUBMISSIONS)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_FORM_SUBMISSIONS)
+    sheet.appendRow(['id', 'form_id', 'submitter_id', 'answers_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
+  }
+  return sheet
+}
+
+function saveExpenseApplication(application, acting) {
+  var sheet = ensureExpensesSheet()
+  sheet.appendRow([
+    application.id,
+    application.applicantId,
+    application.amount,
+    application.categoryId,
+    application.receiptUrl || '',
+    application.justification || '',
+    application.purpose || '',
+    JSON.stringify(application.approvalSteps || []),
+    '[]',
+    0,
+    'pending',
+    application.createdAt || new Date().toISOString(),
+    '',
+  ])
+  // 1次承認者への通知
+  var steps = application.approvalSteps || []
+  if (steps.length > 0) {
+    var firstStep = steps[0]
+    var emails = []
+    if (firstStep.type === 'member' && firstStep.memberId) {
+      emails = memberEmailsByIds([firstStep.memberId])
+    }
+    if (emails.length > 0) {
+      MailApp.sendEmail({
+        to: emails.join(','),
+        subject: 'Orbit: 経費申請が届きました',
+        body: '経費申請が届きました。Orbitから確認・承認してください。\n\n金額: ¥' + application.amount,
+      })
+    }
+  }
+  return { id: application.id }
+}
+
+function findExpenseRow(sheet, applicationId) {
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  if (idCol < 0) return null
+  var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === applicationId) {
+      return { row: i + 2, data: rows[i], headers: headers }
+    }
+  }
+  return null
+}
+
+function processExpenseStep(applicationId, stepId, actorId, action, comment) {
+  var sheet = ensureExpensesSheet()
+  var found = findExpenseRow(sheet, applicationId)
+  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+
+  var headers = found.headers
+  var data = found.data
+  var approvalsCol = headers.indexOf('approvals_json')
+  var stepIndexCol = headers.indexOf('current_step_index')
+  var statusCol = headers.indexOf('status')
+  var stepsCol = headers.indexOf('approval_steps_json')
+
+  var approvals = JSON.parse(String(data[approvalsCol] || '[]'))
+  var steps = JSON.parse(String(data[stepsCol] || '[]'))
+  var currentIdx = Number(data[stepIndexCol]) || 0
+
+  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
+
+  var step = steps[currentIdx]
+  var stepApprovals = approvals.filter(function(a) { return a.stepId === (step ? step.id : '') && a.action === 'approved' })
+  var needed = (step && step.requiredCount === 'all') ? Infinity : (step && typeof step.requiredCount === 'number' ? step.requiredCount : 1)
+  var nextIdx = stepApprovals.length >= needed ? currentIdx + 1 : currentIdx
+  var newStatus = nextIdx >= steps.length ? 'approved' : 'pending'
+
+  sheet.getRange(found.row, approvalsCol + 1).setValue(JSON.stringify(approvals))
+  sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
+  sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
+
+  // 申請者への完了通知
+  if (newStatus === 'approved') {
+    var applicantId = String(data[headers.indexOf('applicant_id')])
+    var emails = memberEmailsByIds([applicantId])
+    if (emails.length > 0) {
+      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が承認されました', body: '経費申請が承認されました。' })
+    }
+  }
+  return { ok: true }
+}
+
+function setExpenseStatus(applicationId, status, reason) {
+  var sheet = ensureExpensesSheet()
+  var found = findExpenseRow(sheet, applicationId)
+  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+
+  var headers = found.headers
+  var statusCol = headers.indexOf('status')
+  var reasonCol = headers.indexOf('rejection_reason')
+  var applicantId = String(found.data[headers.indexOf('applicant_id')])
+
+  sheet.getRange(found.row, statusCol + 1).setValue(status)
+  if (reason && reasonCol >= 0) {
+    sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+  }
+
+  // 却下通知
+  if (status === 'rejected') {
+    var emails = memberEmailsByIds([applicantId])
+    if (emails.length > 0) {
+      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が却下されました', body: '経費申請が却下されました。\n理由: ' + (reason || '—') })
+    }
+  }
+  return { ok: true }
+}
+
+// ---- Phase 5: カスタムフォーム申請 -------------------------------------------
+
+function saveCustomFormSubmission(submission, acting) {
+  var sheet = ensureFormSubmissionsSheet()
+  sheet.appendRow([
+    submission.id,
+    submission.formId,
+    submission.submitterId,
+    JSON.stringify(submission.answers || {}),
+    '[]',
+    0,
+    'pending',
+    submission.createdAt || new Date().toISOString(),
+    '',
+  ])
+  return { id: submission.id }
+}
+
+function findFormSubmissionRow(sheet, submissionId) {
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  if (idCol < 0) return null
+  var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === submissionId) {
+      return { row: i + 2, data: rows[i], headers: headers }
+    }
+  }
+  return null
+}
+
+function processFormStep(submissionId, stepId, actorId, action, comment) {
+  var sheet = ensureFormSubmissionsSheet()
+  var found = findFormSubmissionRow(sheet, submissionId)
+  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+
+  var headers = found.headers
+  var data = found.data
+  var approvalsCol = headers.indexOf('approvals_json')
+  var stepIndexCol = headers.indexOf('current_step_index')
+  var statusCol = headers.indexOf('status')
+
+  var approvals = JSON.parse(String(data[approvalsCol] || '[]'))
+  var currentIdx = Number(data[stepIndexCol]) || 0
+
+  approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
+  var stepApprovals = approvals.filter(function(a) { return a.stepId === stepId && a.action === 'approved' })
+
+  // フォーム定義からステップ数を取得（Settingsから読む）
+  var formId = String(data[headers.indexOf('form_id')])
+  var customFormDefs = []
+  try {
+    var raw = getSettingValue('custom_form_defs')
+    if (raw) customFormDefs = JSON.parse(raw)
+  } catch(e) {}
+  var formDef = customFormDefs.filter(function(f) { return f.id === formId })[0]
+  var totalSteps = formDef ? (formDef.approvalSteps || []).length : 0
+  var step = formDef ? (formDef.approvalSteps || [])[currentIdx] : null
+  var needed = (step && step.requiredCount === 'all') ? Infinity : (step && typeof step.requiredCount === 'number' ? step.requiredCount : 1)
+  var nextIdx = stepApprovals.length >= needed ? currentIdx + 1 : currentIdx
+  var newStatus = nextIdx >= totalSteps ? 'approved' : 'pending'
+
+  sheet.getRange(found.row, approvalsCol + 1).setValue(JSON.stringify(approvals))
+  sheet.getRange(found.row, stepIndexCol + 1).setValue(nextIdx)
+  sheet.getRange(found.row, statusCol + 1).setValue(newStatus)
+  return { ok: true }
+}
+
+function setFormSubmissionStatus(submissionId, status, reason) {
+  var sheet = ensureFormSubmissionsSheet()
+  var found = findFormSubmissionRow(sheet, submissionId)
+  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+
+  var headers = found.headers
+  var statusCol = headers.indexOf('status')
+  var reasonCol = headers.indexOf('rejection_reason')
+
+  sheet.getRange(found.row, statusCol + 1).setValue(status)
+  if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+  return { ok: true }
+}
+
+function getSettingValue(key) {
+  var sheet = getSheet('Settings')
+  if (!sheet) return null
+  var data = sheet.getDataRange().getValues()
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]) === key) return String(data[i][1] || '')
+  }
+  return null
+}
+
+// ---- Phase 6: スキル一括更新 ----
+
+function bulkUpdateSkillLevels(updates) {
+  // updates: [{ memberId, skill, level }]
+  if (!updates || updates.length === 0) return { ok: true, updated: 0 }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getSheetByName(SHEET_MEMBERS)
+  if (!sheet) throw new Error('Membersシートが見つかりません')
+
+  var data = sheet.getDataRange().getValues()
+  var headers = data[0].map(function(h) { return String(h).trim() })
+  var idCol = headers.indexOf('id')
+  var skillLevelsCol = headers.indexOf('skill_levels_json')
+  if (idCol < 0 || skillLevelsCol < 0) throw new Error('Membersシートの列が不足しています')
+
+  // group updates by memberId
+  var byMember = {}
+  for (var i = 0; i < updates.length; i++) {
+    var u = updates[i]
+    if (!byMember[u.memberId]) byMember[u.memberId] = []
+    byMember[u.memberId].push(u)
+  }
+
+  var count = 0
+  for (var row = 1; row < data.length; row++) {
+    var memberId = String(data[row][idCol] || '')
+    if (!memberId || !byMember[memberId]) continue
+
+    var existing = []
+    try {
+      existing = JSON.parse(String(data[row][skillLevelsCol] || '[]')) || []
+    } catch (e) { existing = [] }
+
+    var memberUpdates = byMember[memberId]
+    for (var j = 0; j < memberUpdates.length; j++) {
+      var upd = memberUpdates[j]
+      var found = false
+      for (var k = 0; k < existing.length; k++) {
+        if (existing[k].skill === upd.skill) {
+          existing[k].level = upd.level
+          found = true
+          break
+        }
+      }
+      if (!found) existing.push({ skill: upd.skill, level: upd.level })
+    }
+
+    sheet.getRange(row + 1, skillLevelsCol + 1).setValue(JSON.stringify(existing))
+    count++
+  }
+
+  return { ok: true, updated: count }
 }
