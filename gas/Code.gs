@@ -386,6 +386,8 @@ function authorizeAction(acting, action, body) {
     'approveFormStep',      // フォーム承認（管理者操作）
     'rejectFormSubmission', // フォーム却下（管理者操作）
     'bulkUpdateSkills',     // スキル一括更新（管理者操作）
+    'updateMemberInactive', // 活動休止/再開（管理者操作）
+    'updateMemberDepartmentPath', // 組織パス設定（管理者操作）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
@@ -744,6 +746,12 @@ function doPost(e) {
         result = updateMemberFields(body.memberId, {
           project_ids: (body.projectIds || []).join(','),
         })
+        break
+      case 'updateMemberInactive':
+        result = updateMemberFields(body.memberId, { inactive: body.inactive ? 'TRUE' : '' })
+        break
+      case 'updateMemberDepartmentPath':
+        result = updateMemberFields(body.memberId, { department_path: body.departmentPath || '' })
         break
       // ---- タレントマネジメント ----
       case 'updateSearchProfile':
