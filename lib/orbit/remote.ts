@@ -670,6 +670,8 @@ export const remoteApi = {
     postToGas('updateDevelopmentPlan', { memberId, entries }),
   updateOneOnOnes: (memberId: string, entries: OneOnOneRecord[]) =>
     postToGas('updateOneOnOnes', { memberId, entries }),
+  updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) =>
+    postToGas('updatePermissionOverrides', { memberId, overrides }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

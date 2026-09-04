@@ -12,6 +12,7 @@ import { Search, Bell, UserMinus, UserPlus, FolderKanban, Check, Upload } from '
 import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
 import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
+import { PermissionOverridesButton } from './admin-permission-overrides'
 
 function workload(count: number): { label: string; className: string } {
   if (count <= 2) return { label: '稼働少なめ', className: 'text-muted-foreground' }
@@ -383,14 +384,17 @@ export function AdminMembers() {
                         {m.notify ? 'ON' : 'OFF'}
                       </button>
                     </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setRemoving(m)}
-                        className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
-                      >
-                        <UserMinus className="size-3.5" />
-                        退会
-                      </button>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        {isFullAdmin && <PermissionOverridesButton member={m} />}
+                        <button
+                          onClick={() => setRemoving(m)}
+                          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                        >
+                          <UserMinus className="size-3.5" />
+                          退会
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

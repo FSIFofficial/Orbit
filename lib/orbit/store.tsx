@@ -48,6 +48,7 @@ import type {
   ProgressEntry,
   NotifyKind,
   NotifyFrequency,
+  PermissionOverride,
 } from './types'
 import { canSeeExecTasks, BASE_ROLE, STATUS_LABEL } from './types'
 import { isFullAdminRole, resolveVisibleAdminSections } from './permissions'
@@ -257,6 +258,7 @@ interface OrbitContextValue extends OrbitState {
   adminPendingTasks: Task[]
   updateRole: (memberId: string, role: Role) => void
   updateReportsTo: (memberId: string, reportsToId: string | null) => void
+  updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) => void
   updateMentor: (memberId: string, mentorId: string | null) => void
   // ---- タレントマネジメント ----
   updateSearchProfile: (
@@ -2017,6 +2019,16 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  const updatePermissionOverrides = useCallback(
+    (memberId: string, overrides: PermissionOverride[]) => {
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, permissionOverrides: overrides } : m)),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updatePermissionOverrides(memberId, overrides))
+    },
+    [runRemote],
+  )
+
   // item 14: メンター/サポート担当の設定
   const updateMentor = useCallback(
     (memberId: string, mentorId: string | null) => {
@@ -3032,6 +3044,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     adminPendingTasks,
     updateRole,
     updateReportsTo,
+    updatePermissionOverrides,
     updateMentor,
     updateSearchProfile,
     updateCareerHistory,

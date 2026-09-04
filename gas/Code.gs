@@ -94,20 +94,73 @@ function getActingMember(email) {
   var idCol = headers.indexOf('id')
   var roleCol = headers.indexOf('role')
   var projectIdsCol = headers.indexOf('project_ids')
+  var overridesCol = headers.indexOf('permission_overrides_json')
   if (emailCol < 0 || idCol < 0) throw new Error('Membersシートの構造が不正です。')
   var data = sheet.getDataRange().getValues()
   var lc = email.toLowerCase()
   for (var i = 1; i < data.length; i++) {
     var rowEmails = String(data[i][emailCol] || '').split(',').map(function (e) { return e.trim().toLowerCase() })
     if (rowEmails.indexOf(lc) >= 0) {
+      var overrides = []
+      if (overridesCol >= 0) {
+        try { overrides = JSON.parse(data[i][overridesCol] || '[]') } catch (_) {}
+      }
       return {
         id: String(data[i][idCol]),
         role: String(data[i][roleCol] || ''),
         project_ids: String(data[i][projectIdsCol] || '').split(',').map(function (s) { return s.trim() }).filter(Boolean),
+        permission_overrides: Array.isArray(overrides) ? overrides : [],
       }
     }
   }
   throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+}
+
+/**
+ * Returns true if acting member has a permission_overrides entry matching
+ * the action's target. Used as OR fallback when role-based check denies.
+ *
+ * Access level hierarchy: approve > edit > view
+ * Override { targetType, targetId, access } — targetId matches:
+ *   task       → body.taskId
+ *   project    → body.projectId or task.project_id
+ *   department → body.department or task.department
+ */
+function checkPermissionOverride(acting, action, body) {
+  var overrides = acting.permission_overrides
+  if (!overrides || overrides.length === 0) return false
+
+  // Map action → required access level and target extraction
+  var ACCESS_LEVELS = { view: 0, edit: 1, approve: 2 }
+
+  var taskId = String(body.taskId || '')
+  var projectId = String(body.projectId || '')
+  var department = String(body.department || '')
+
+  // For task-based actions resolve project/department from the sheet when not in body
+  if (taskId && (!projectId || !department)) {
+    var taskRow = findRow(SHEET_TASKS, taskId)
+    if (taskRow) {
+      if (!projectId) projectId = String(taskRow.project_id || '')
+      if (!department) department = String(taskRow.department || '')
+    }
+  }
+
+  // Minimum access required per action
+  var requiredAccess = 'edit' // default for daihyoOrLeader actions
+  if (action === 'approveTask') requiredAccess = 'approve'
+
+  var required = ACCESS_LEVELS[requiredAccess] || 0
+
+  for (var i = 0; i < overrides.length; i++) {
+    var ov = overrides[i]
+    var granted = ACCESS_LEVELS[ov.access]
+    if (typeof granted !== 'number' || granted < required) continue
+    if (ov.targetType === 'task' && ov.targetId === taskId && taskId) return true
+    if (ov.targetType === 'project' && ov.targetId === projectId && projectId) return true
+    if (ov.targetType === 'department' && ov.targetId === department && department) return true
+  }
+  return false
 }
 
 /**
@@ -146,9 +199,10 @@ function authorizeAction(acting, action, body) {
     'updateMentor',            // メンター設定は代表のみ（HR操作）
     'updateEvaluationHistory', // 評価履歴は代表のみ（人事機密）
     'updateTransferHistory',   // 異動履歴は代表のみ（人事機密）
-    'updateOneOnOnes',         // 1on1記録は管理者のみ（管理者専用タブ）
-    'updateCompetencies',      // コンピテンシー評価は管理者のみ
-    'notifyTrainingDecision',  // 研修承認通知は代表のみ（承認権限）
+    'updateOneOnOnes',              // 1on1記録は管理者のみ（管理者専用タブ）
+    'updateCompetencies',           // コンピテンシー評価は管理者のみ
+    'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
+    'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
   ]
   if (daihyoOnly.indexOf(action) >= 0) {
     throw new Error('この操作は代表のみ実行できます。')
@@ -181,6 +235,8 @@ function authorizeAction(acting, action, body) {
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
+      // ロールで弾かれた場合でも permission_overrides_json に該当する例外があれば許可（OR条件）
+      if (checkPermissionOverride(acting, action, body)) return
       throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
     }
     return
@@ -371,6 +427,11 @@ function doPost(e) {
         break
       case 'updateRole':
         result = updateMemberFields(body.memberId, { role: body.role })
+        break
+      case 'updatePermissionOverrides':
+        result = updateMemberFields(body.memberId, {
+          permission_overrides_json: JSON.stringify(body.overrides || []),
+        })
         break
       case 'updateReportsTo':
         result = updateMemberFields(body.memberId, { reports_to_id: body.reportsToId || '' })
