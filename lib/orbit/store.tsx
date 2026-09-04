@@ -21,13 +21,17 @@ import type {
   ProjectTemplateTask,
   RecurringTaskRule,
   Qualification,
+  QuizDefinition,
+  RadarAxis,
   Role,
   FormAnswerValue,
   FormFieldDef,
   ScheduleCandidate,
   ScheduleResponseValue,
   SkillLevel,
+  SkillLevelThresholds,
   SkillLevelValue,
+  SkillPoints,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -259,6 +263,14 @@ interface OrbitContextValue extends OrbitState {
   updateRole: (memberId: string, role: Role) => void
   updateReportsTo: (memberId: string, reportsToId: string | null) => void
   updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) => void
+  // スキルポイント・検定・レーダーチャート
+  skillLevelThresholds: SkillLevelThresholds
+  quizDefinitions: QuizDefinition[]
+  radarAxes: RadarAxis[]
+  awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
+  updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
+  updateRadarAxes: (axes: RadarAxis[]) => void
+  submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
   updateMentor: (memberId: string, mentorId: string | null) => void
   // ---- タレントマネジメント ----
   updateSearchProfile: (
@@ -569,6 +581,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     memberName: string
     skill: string
   } | null>(null)
+  const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
+  const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
+  const [skillLevelThresholds, setSkillLevelThresholds] = useState<SkillLevelThresholds>({})
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
@@ -671,6 +686,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSkillFieldThresholdState(s.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
         setOrgNotificationEmails(s.orgNotificationEmails)
         setProjectOrderState(s.projectOrder)
+        if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
+        if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
+        if (s.radarAxes) setRadarAxes(s.radarAxes)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -724,6 +742,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSkillFieldThresholdState(settings.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
           setOrgNotificationEmails(settings.orgNotificationEmails)
           setProjectOrderState(settings.projectOrder)
+          if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
+          if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
+          if (settings.radarAxes) setRadarAxes(settings.radarAxes)
         }
         setRemoteError(null)
       })
@@ -1057,6 +1078,116 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.updateDiscordWebhookUrl(url))
     },
     [runRemote],
+  )
+
+  // スキルポイント付与 — タスク完了後に管理者が各スキルに対してポイントを付与。
+  // 累計ポイントが閾値を超えるとスキルレベルが自動で繰り上がる。
+  const awardSkillPoints = useCallback(
+    (taskId: string, memberId: string, points: SkillPoints) => {
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const current = { ...m.skillPoints }
+          Object.entries(points).forEach(([skill, pts]) => {
+            current[skill] = (current[skill] ?? 0) + pts
+          })
+          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+          const existingLevels = [...(m.skillLevels ?? [])]
+          Object.entries(current).forEach(([skill, pts]) => {
+            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
+            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
+            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
+            if (idx < 0) {
+              existingLevels.push({ skill, level: earnedLevel })
+            } else if (earnedLevel > existingLevels[idx].level) {
+              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
+            }
+          })
+          return { ...m, skillPoints: current, skillLevels: existingLevels }
+        }),
+      )
+      setTasks((prev) => prev.map((t) => (t.id !== taskId ? t : { ...t, awardedPoints: points })))
+      if (isRemoteConfigured) runRemote(remoteApi.awardSkillPoints(taskId, memberId, points))
+    },
+    [skillLevelThresholds, runRemote],
+  )
+
+  // 検定定義の更新（Admin）
+  const updateQuizDefinitions = useCallback(
+    (quizzes: QuizDefinition[]) => {
+      setQuizDefinitions(quizzes)
+      if (isSettingsConfigured) runRemote(remoteApi.updateQuizDefinitions(quizzes))
+    },
+    [runRemote],
+  )
+
+  // レーダーチャート軸の更新（Admin）
+  const updateRadarAxes = useCallback(
+    (axes: RadarAxis[]) => {
+      setRadarAxes(axes)
+      if (isSettingsConfigured) runRemote(remoteApi.updateRadarAxes(axes))
+    },
+    [runRemote],
+  )
+
+  // 検定を受験する（メンバー）— remote がある場合はサーバーで採点、なければ
+  // クライアント側でスコアを計算してスキルレベルを楽観的更新する。
+  const submitQuizResult = useCallback(
+    async (quizId: string, memberId: string, answers: number[]): Promise<{ passed: boolean; score: number }> => {
+      const quiz = quizDefinitions.find((q) => q.id === quizId)
+      if (!quiz) return { passed: false, score: 0 }
+
+      const localScore = () => {
+        const correct = answers.filter((ans, i) => ans === quiz.questions[i]?.correctIndex).length
+        return Math.round((correct / Math.max(1, quiz.questions.length)) * 100)
+      }
+
+      if (isRemoteConfigured) {
+        try {
+          const result = await remoteApi.submitQuizResult(quizId, memberId, answers)
+          if (result.passed && result.newLevel != null) {
+            setMembers((prev) =>
+              prev.map((m) => {
+                if (m.id !== memberId) return m
+                const existing = [...(m.skillLevels ?? [])]
+                const idx = existing.findIndex((sl) => sl.skill === quiz.targetSkill)
+                const nl = result.newLevel as SkillLevelValue
+                if (idx < 0) {
+                  existing.push({ skill: quiz.targetSkill, level: nl })
+                } else if (nl > existing[idx].level) {
+                  existing[idx] = { ...existing[idx], level: nl }
+                }
+                return { ...m, skillLevels: existing }
+              }),
+            )
+          }
+          return result
+        } catch (err) {
+          reportRemoteError(err)
+          return { passed: false, score: localScore() }
+        }
+      } else {
+        const score = localScore()
+        const passed = score >= quiz.passRate
+        if (passed) {
+          setMembers((prev) =>
+            prev.map((m) => {
+              if (m.id !== memberId) return m
+              const existing = [...(m.skillLevels ?? [])]
+              const idx = existing.findIndex((sl) => sl.skill === quiz.targetSkill)
+              if (idx < 0) {
+                existing.push({ skill: quiz.targetSkill, level: quiz.targetLevel })
+              } else if (quiz.targetLevel > existing[idx].level) {
+                existing[idx] = { ...existing[idx], level: quiz.targetLevel }
+              }
+              return { ...m, skillLevels: existing }
+            }),
+          )
+        }
+        return { passed, score }
+      }
+    },
+    [quizDefinitions, reportRemoteError],
   )
 
   const login = useCallback((userId: string) => {
@@ -3045,6 +3176,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateRole,
     updateReportsTo,
     updatePermissionOverrides,
+    skillLevelThresholds,
+    quizDefinitions,
+    radarAxes,
+    awardSkillPoints,
+    updateQuizDefinitions,
+    updateRadarAxes,
+    submitQuizResult,
     updateMentor,
     updateSearchProfile,
     updateCareerHistory,

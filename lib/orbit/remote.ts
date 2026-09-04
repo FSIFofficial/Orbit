@@ -20,9 +20,12 @@ import type {
   ProjectTemplateTask,
   ProgressEntry,
   Qualification,
+  QuizDefinition,
+  RadarAxis,
   RecurringTaskRule,
   Role,
   SkillLevel,
+  SkillLevelThresholds,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -295,6 +298,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     importance: (r.importance || undefined) as Task['importance'],
     schedule: parseJsonObject<TaskSchedule>(r.schedule_json),
     form: parseJsonObject<TaskForm>(r.form_json),
+    awardedPoints: parseJsonObject<SkillPoints>(r.awarded_points_json),
   }
 }
 
@@ -381,6 +385,12 @@ export interface RemoteSettings {
   // 制限付きロール — Tags画面で「制限あり」に設定されたロール名のリスト。
   // リストにないロールは全管理者権限を持つ
   restrictedRoles: string[]
+  // スキルポイントのレベルアップ閾値 — { "デフォルト": 100, "デザイン": 150 }
+  skillLevelThresholds: SkillLevelThresholds
+  // 検定定義リスト — Settings キー "quiz_definitions"
+  quizDefinitions: QuizDefinition[]
+  // レーダーチャート軸定義 — Settings キー "radar_axes"
+  radarAxes: RadarAxis[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -449,6 +459,15 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     orgNotificationEmails: splitTags(byKey.get('org_notification_emails')),
     projectOrder: splitTags(byKey.get('project_order')),
     restrictedRoles: splitTags(byKey.get('restricted_roles')),
+    skillLevelThresholds: (() => {
+      try { const r = byKey.get('skill_level_thresholds'); return r ? JSON.parse(r) : {} } catch { return {} }
+    })(),
+    quizDefinitions: (() => {
+      try { const r = byKey.get('quiz_definitions'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    radarAxes: (() => {
+      try { const r = byKey.get('radar_axes'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
   }
 }
 
@@ -672,6 +691,17 @@ export const remoteApi = {
     postToGas('updateOneOnOnes', { memberId, entries }),
   updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) =>
     postToGas('updatePermissionOverrides', { memberId, overrides }),
+  // ---- スキルポイント付与 ----
+  awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) =>
+    postToGas<{ newLevels: SkillLevel[]; newPoints: SkillPoints }>('awardSkillPoints', { taskId, memberId, points }),
+  // ---- 検定 ----
+  updateQuizDefinitions: (quizzes: QuizDefinition[]) =>
+    postToGas('updateSetting', { key: 'quiz_definitions', value: JSON.stringify(quizzes) }),
+  submitQuizResult: (quizId: string, memberId: string, answers: number[]) =>
+    postToGas<{ passed: boolean; score: number; newLevel?: number }>('submitQuizResult', { quizId, memberId, answers }),
+  // ---- レーダーチャート軸 ----
+  updateRadarAxes: (axes: RadarAxis[]) =>
+    postToGas('updateSetting', { key: 'radar_axes', value: JSON.stringify(axes) }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

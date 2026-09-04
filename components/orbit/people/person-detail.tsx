@@ -110,6 +110,9 @@ export function PersonDetail({ id }: { id: string }) {
     notifyTrainingDecision,
     updateDevelopmentPlan,
     updateOneOnOnes,
+    radarAxes,
+    quizDefinitions,
+    submitQuizResult,
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
@@ -848,6 +851,9 @@ export function PersonDetail({ id }: { id: string }) {
           updateDevelopmentPlan={updateDevelopmentPlan}
           updateOneOnOnes={updateOneOnOnes}
           currentUserId={currentUser?.id ?? null}
+          radarAxes={radarAxes}
+          quizDefinitions={quizDefinitions}
+          submitQuizResult={submitQuizResult}
         />
       )}
 

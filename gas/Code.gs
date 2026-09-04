@@ -164,6 +164,153 @@ function checkPermissionOverride(acting, action, body) {
 }
 
 /**
+ * Reads skill_level_thresholds from the Settings sheet.
+ * Returns {} when the key is absent or unparseable.
+ */
+function getSkillLevelThresholds() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SETTINGS)
+    if (!sheet) return {}
+    var data = sheet.getDataRange().getValues()
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === 'skill_level_thresholds') {
+        return JSON.parse(data[i][1] || '{}')
+      }
+    }
+  } catch (_) {}
+  return {}
+}
+
+/**
+ * Reads quiz_definitions from the Settings sheet.
+ * Returns [] when the key is absent or unparseable.
+ */
+function getQuizDefinitions() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SETTINGS)
+    if (!sheet) return []
+    var data = sheet.getDataRange().getValues()
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === 'quiz_definitions') {
+        var defs = JSON.parse(data[i][1] || '[]')
+        return Array.isArray(defs) ? defs : []
+      }
+    }
+  } catch (_) {}
+  return []
+}
+
+/**
+ * Computes leveled-up skill_levels_json given current levels, cumulative
+ * points, and threshold config. Returns the updated levels array.
+ *
+ * Logic: for each skill with points, check if total >= threshold * level.
+ * The threshold is "points needed per level"; e.g. threshold=100 means
+ * Lv1→Lv2 at 100pts, Lv2→Lv3 at 200pts, ..., max Lv5.
+ */
+function computeAutoLevels(currentLevels, cumulativePoints, thresholds) {
+  var DEFAULT_THRESHOLD = thresholds['デフォルト'] || 100
+  var levels = {}
+  for (var i = 0; i < currentLevels.length; i++) {
+    levels[currentLevels[i].skill] = currentLevels[i].level
+  }
+  var skills = Object.keys(cumulativePoints)
+  for (var j = 0; j < skills.length; j++) {
+    var skill = skills[j]
+    var pts = cumulativePoints[skill] || 0
+    var thr = thresholds[skill] || DEFAULT_THRESHOLD
+    var earnedLevel = Math.min(5, Math.floor(pts / thr) + 1)
+    var current = levels[skill] || 1
+    if (earnedLevel > current) levels[skill] = earnedLevel
+  }
+  var result = []
+  var allSkills = Object.keys(levels)
+  for (var k = 0; k < allSkills.length; k++) {
+    result.push({ skill: allSkills[k], level: levels[allSkills[k]] })
+  }
+  return result
+}
+
+/**
+ * Awards skill points to a member on task completion.
+ * Updates skill_points_json and auto-levels skill_levels_json.
+ * Also saves awarded_points_json on the task for future avg calculations.
+ */
+function awardSkillPoints(taskId, memberId, points) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+
+  var currentPoints = {}
+  try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
+  var currentLevels = []
+  try { currentLevels = JSON.parse(memberRow.skill_levels_json || '[]') } catch (_) {}
+
+  // Accumulate points
+  var skillKeys = Object.keys(points)
+  for (var i = 0; i < skillKeys.length; i++) {
+    var s = skillKeys[i]
+    currentPoints[s] = (currentPoints[s] || 0) + (points[s] || 0)
+  }
+
+  // Compute auto-level-up
+  var thresholds = getSkillLevelThresholds()
+  var newLevels = computeAutoLevels(currentLevels, currentPoints, thresholds)
+
+  // Persist
+  updateMemberFields(memberId, {
+    skill_points_json: JSON.stringify(currentPoints),
+    skill_levels_json: JSON.stringify(newLevels),
+  })
+  if (taskId) {
+    updateTaskFields(taskId, { awarded_points_json: JSON.stringify(points) })
+  }
+  return { ok: true, newPoints: currentPoints, newLevels: newLevels }
+}
+
+/**
+ * Processes a quiz submission. Reads the quiz definition from Settings,
+ * scores the answers, and if pass rate is met, auto-levels the skill.
+ */
+function submitQuizResult(quizId, memberId, answers, acting) {
+  if (memberId !== acting.id && acting.role === '一般') {
+    throw new Error('他のメンバーの代わりに検定を受けることはできません。')
+  }
+  var defs = getQuizDefinitions()
+  var quiz = null
+  for (var i = 0; i < defs.length; i++) {
+    if (defs[i].id === quizId) { quiz = defs[i]; break }
+  }
+  if (!quiz) throw new Error('検定が見つかりません: ' + quizId)
+
+  var questions = quiz.questions || []
+  if (questions.length === 0) throw new Error('検定に設問がありません。')
+
+  var correct = 0
+  for (var j = 0; j < questions.length; j++) {
+    if (answers[j] === questions[j].correctIndex) correct++
+  }
+  var score = Math.round((correct / questions.length) * 100)
+  var passed = score >= quiz.passRate
+
+  var newLevel = null
+  if (passed) {
+    var memberRow = findRow(SHEET_MEMBERS, memberId)
+    var currentLevels = []
+    try { currentLevels = JSON.parse((memberRow && memberRow.skill_levels_json) || '[]') } catch (_) {}
+    var targetSkill = quiz.targetSkill
+    var targetLevel = quiz.targetLevel || 1
+    var existing = currentLevels.find(function(sl) { return sl.skill === targetSkill })
+    if (!existing || existing.level < targetLevel) {
+      var nextLevels = currentLevels.filter(function(sl) { return sl.skill !== targetSkill })
+      nextLevels.push({ skill: targetSkill, level: targetLevel })
+      updateMemberFields(memberId, { skill_levels_json: JSON.stringify(nextLevels) })
+      newLevel = targetLevel
+    }
+  }
+  return { ok: true, passed: passed, score: score, newLevel: newLevel }
+}
+
+/**
  * Enforces per-action role-based access control.
  * Throws with a human-readable Japanese error on denial.
  *
@@ -232,6 +379,7 @@ function authorizeAction(acting, action, body) {
     'setBlocker',           // ブロッカー設定（班長が管理）
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
+    'awardSkillPoints',     // スキルポイント付与（管理者操作）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
@@ -295,6 +443,7 @@ function authorizeAction(acting, action, body) {
     'notifyFormResult',
     'updateHistory',
     'updateDeliverables',
+    'submitQuizResult',     // 検定の受験はログイン済み誰でも
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
@@ -654,6 +803,12 @@ function doPost(e) {
         result = updateMemberFields(body.memberId, {
           one_on_ones_json: JSON.stringify(body.entries || []),
         })
+        break
+      case 'awardSkillPoints':
+        result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
+        break
+      case 'submitQuizResult':
+        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], acting)
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -1964,6 +2119,7 @@ function setupOrbit() {
     'deliverables_json', 'history_json', 'comments_json',
     'retrospective_json', 'schedule_json', 'form_json',
     'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
+    'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 

@@ -26,6 +26,8 @@ export type AdminSection =
   | 'tags'
   | 'analytics'
   | 'org'
+  | 'quiz'
+  | 'radar'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -36,6 +38,8 @@ export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'analytics', label: 'Analytics' },
   { key: 'tags', label: 'Tags' },
   { key: 'org', label: 'Org Tree' },
+  { key: 'quiz', label: 'Quiz' },
+  { key: 'radar', label: 'Radar' },
 ]
 
 // Members/Tags manage org-wide config (roles, notification routing, the
@@ -360,6 +364,40 @@ export interface DepartmentTreeNode {
   label?: string      // 表示名（省略時は path の末尾ノード名を使う）
 }
 
+// ---- 検定（クイズ） -------------------------------------------------------
+
+export interface QuizQuestion {
+  id: string
+  text: string
+  choices: string[]
+  correctIndex: number
+}
+
+/**
+ * 検定定義 (Settings キー: "quiz_definitions" の配列要素)
+ * targetSkill に対応する skillLevels エントリのレベルを
+ * 合格時に targetLevel に引き上げる（それ以上の場合は据え置き）。
+ */
+export interface QuizDefinition {
+  id: string
+  title: string
+  targetSkill: string
+  targetLevel: SkillLevelValue
+  passRate: number // 合格ライン: 0–100 (%)
+  questions: QuizQuestion[]
+}
+
+// ---- レーダーチャート軸 ---------------------------------------------------
+
+/**
+ * レーダーチャートの軸定義 (Settings キー: "radar_axes")
+ * 各軸は skill_levels_json のスキル名に対応する。
+ */
+export interface RadarAxis {
+  skill: string
+  label?: string // 表示名（省略時は skill をそのまま使う）
+}
+
 export interface RecurringTaskRule {
   id: string
   name: string
@@ -447,6 +485,8 @@ export interface Task {
   schedule?: TaskSchedule
   // 汎用フォームツール — see TaskForm
   form?: TaskForm
+  // 完了時に付与されたスキルポイント（skill → points）— 推奨値の計算に使用
+  awardedPoints?: SkillPoints
 }
 
 export interface TaskRetrospective {

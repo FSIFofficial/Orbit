@@ -10,10 +10,12 @@ import { AdminMembers } from './admin-members'
 import { AdminAnalytics } from './admin-analytics'
 import { AdminTags } from './admin-tags'
 import { AdminOrgTree } from './admin-org-tree'
+import { AdminQuiz } from './admin-quiz'
+import { AdminRadarAxes } from './admin-radar-axes'
 import { useOrbit } from '@/lib/orbit/store'
 import { OrbitMark } from '../primitives'
 import type { AdminSection } from '@/lib/orbit/types'
-import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network } from 'lucide-react'
+import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, Radar } from 'lucide-react'
 
 type Section = AdminSection
 
@@ -26,6 +28,8 @@ const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: 'analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
   { key: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
   { key: 'org', label: 'Org Tree', icon: <Network className="size-4" /> },
+  { key: 'quiz', label: '検定', icon: <GraduationCap className="size-4" /> },
+  { key: 'radar', label: 'レーダー', icon: <Radar className="size-4" /> },
 ]
 
 export function AdminScreen({ section }: { section: Section }) {
@@ -126,6 +130,8 @@ export function AdminScreen({ section }: { section: Section }) {
           {section === 'analytics' && <AdminAnalytics />}
           {section === 'tags' && <AdminTags />}
           {section === 'org' && <AdminOrgTree />}
+          {section === 'quiz' && <div className="p-6"><AdminQuiz /></div>}
+          {section === 'radar' && <div className="p-6"><AdminRadarAxes /></div>}
         </div>
       </div>
     </div>

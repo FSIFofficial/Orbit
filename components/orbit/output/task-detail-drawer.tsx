@@ -26,6 +26,7 @@ import {
   type Priority,
   type Project,
   type ScheduleResponseValue,
+  type SkillPoints,
   type Task,
   type TaskHistoryEntry,
   type TaskImportance,
@@ -146,6 +147,7 @@ export function TaskDetailDrawer({
     addSkillOption,
     addCategoryOption,
     members,
+    awardSkillPoints,
   } = useOrbit()
   const toast = useToast()
   const [confirmTake, setConfirmTake] = useState(false)
@@ -159,6 +161,7 @@ export function TaskDetailDrawer({
   const [blockerOpen, setBlockerOpen] = useState(false)
   const [handoffOpen, setHandoffOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [awardOpen, setAwardOpen] = useState(false)
 
   const task = tasks.find((t) => t.id === taskId) ?? null
   const open = !!taskId
@@ -206,6 +209,7 @@ export function TaskDetailDrawer({
               toast('ブロックを解除しました')
             }}
             onOpenHandoff={() => setHandoffOpen(true)}
+            onOpenAward={() => setAwardOpen(true)}
             onAddDeliverable={(label, url) => addDeliverable(task.id, label, url)}
             onRemoveDeliverable={(id) => removeDeliverable(task.id, id)}
             onAddComment={(text) => addComment(task.id, text)}
@@ -627,6 +631,22 @@ export function TaskDetailDrawer({
           setBlockerOpen(false)
         }}
       />
+
+      {/* Skill award modal (admin, done tasks) */}
+      {task && isAdmin && task.status === 'done' && (
+        <SkillAwardModal
+          open={awardOpen}
+          onClose={() => setAwardOpen(false)}
+          task={task}
+          assignees={assignees}
+          allTasks={tasks}
+          onAward={(memberId, points) => {
+            awardSkillPoints(task.id, memberId, points)
+            toast('スキルポイントを付与しました')
+            setAwardOpen(false)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -673,6 +693,104 @@ function BlockerModal({
         </Button>
         <Button className="h-9" disabled={!note.trim()} onClick={() => onSave(note)}>
           保存
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+// スキルポイント付与モーダル
+function SkillAwardModal({
+  open,
+  onClose,
+  task,
+  assignees,
+  allTasks,
+  onAward,
+}: {
+  open: boolean
+  onClose: () => void
+  task: Task
+  assignees: Member[]
+  allTasks: Task[]
+  onAward: (memberId: string, points: SkillPoints) => void
+}) {
+  const [memberId, setMemberId] = useState(assignees[0]?.id ?? '')
+  const [pointsMap, setPointsMap] = useState<Record<string, number>>(() =>
+    Object.fromEntries(task.skills.map((s) => [s, 10])),
+  )
+
+  // Compute average awarded points for each skill from similar-category done tasks
+  const avgPoints = Object.fromEntries(
+    task.skills.map((skill) => {
+      const similar = allTasks.filter(
+        (t) =>
+          t.id !== task.id &&
+          t.status === 'done' &&
+          t.category === task.category &&
+          t.awardedPoints?.[skill] != null,
+      )
+      if (similar.length === 0) return [skill, null]
+      const avg = similar.reduce((sum, t) => sum + (t.awardedPoints![skill] ?? 0), 0) / similar.length
+      return [skill, Math.round(avg)]
+    }),
+  )
+
+  const setPoint = (skill: string, value: number) =>
+    setPointsMap((prev) => ({ ...prev, [skill]: Math.max(0, value) }))
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <h2 className="mb-3 text-base font-semibold">スキルポイントを付与</h2>
+      {assignees.length > 1 && (
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">対象メンバー</label>
+          <select
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
+          >
+            {assignees.map((m) => (
+              <option key={m.id} value={m.id}>{m.displayName ?? m.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        {task.skills.map((skill) => (
+          <div key={skill} className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 text-sm">{skill}</span>
+            {avgPoints[skill] != null && (
+              <button
+                onClick={() => setPoint(skill, avgPoints[skill]!)}
+                className="shrink-0 text-xs text-muted-foreground hover:text-primary"
+              >
+                参考値: {avgPoints[skill]}pt
+              </button>
+            )}
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={pointsMap[skill] ?? 0}
+              onChange={(e) => setPoint(skill, Number(e.target.value))}
+              className="h-8 w-20 rounded-md border border-border bg-background px-2 text-right text-sm outline-none focus:border-primary"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>キャンセル</Button>
+        <Button
+          disabled={!memberId}
+          onClick={() => {
+            if (!memberId) return
+            const points: SkillPoints = {}
+            task.skills.forEach((s) => { if ((pointsMap[s] ?? 0) > 0) points[s] = pointsMap[s] })
+            onAward(memberId, points)
+          }}
+        >
+          付与する
         </Button>
       </div>
     </Modal>
@@ -1200,6 +1318,7 @@ function DrawerBody({
   onOpenHandoff,
   onOpenEdit,
   onOpenDelete,
+  onOpenAward,
   onAddDeliverable,
   onRemoveDeliverable,
   onAddComment,
@@ -1238,6 +1357,7 @@ function DrawerBody({
   onOpenHandoff: () => void
   onOpenEdit: () => void
   onOpenDelete: () => void
+  onOpenAward: () => void
   onAddDeliverable: (label: string, url: string) => void
   onRemoveDeliverable: (id: string) => void
   onAddComment: (text: string) => void
@@ -1833,6 +1953,24 @@ function DrawerBody({
             editable={isAdmin || isAssignee}
             onSave={onSaveRetrospective}
           />
+        )}
+
+        {/* Skill award button (admin, done tasks with skills) */}
+        {isAdmin && task.status === 'done' && task.skills.length > 0 && task.assigneeIds.length > 0 && (
+          <div className="mt-4">
+            <button
+              onClick={onOpenAward}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+              スキルポイントを付与
+              {task.awardedPoints && Object.keys(task.awardedPoints).length > 0 && (
+                <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  付与済み
+                </span>
+              )}
+            </button>
+          </div>
         )}
 
         {/* Change history */}

@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Button } from '@/components/ui/button'
+import { Modal } from '@/components/orbit/modal'
+import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
 import { cn } from '@/lib/utils'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, GraduationCap, CheckCircle2 } from 'lucide-react'
 import type {
   CareerHistoryEntry,
   Competency,
@@ -14,6 +16,8 @@ import type {
   Member,
   OneOnOneRecord,
   Qualification,
+  QuizDefinition,
+  RadarAxis,
   SkillLevel,
   SkillLevelValue,
   TrainingRecord,
@@ -101,6 +105,9 @@ export function CareerTab({
   updateDevelopmentPlan,
   updateOneOnOnes,
   currentUserId,
+  radarAxes,
+  quizDefinitions,
+  submitQuizResult,
 }: {
   member: Member
   members: Member[]
@@ -129,6 +136,9 @@ export function CareerTab({
   updateDevelopmentPlan: (id: string, entries: DevelopmentPlanEntry[]) => void
   updateOneOnOnes: (id: string, entries: OneOnOneRecord[]) => void
   currentUserId: string | null
+  radarAxes?: RadarAxis[]
+  quizDefinitions?: QuizDefinition[]
+  submitQuizResult?: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
 }) {
   const rid = () => Math.random().toString(36).slice(2, 9)
 
@@ -142,6 +152,21 @@ export function CareerTab({
         skillOptions={skillOptions}
         onSave={updateSkillLevels}
       />
+      {radarAxes && radarAxes.length >= 3 && (
+        <Section title="スキルレーダーチャート" description="設定された軸ごとのスキルレベルを可視化します。">
+          <div className="flex justify-center pt-2">
+            <SkillRadarChart axes={radarAxes} skillLevels={member.skillLevels ?? []} size={220} />
+          </div>
+        </Section>
+      )}
+      {quizDefinitions && quizDefinitions.length > 0 && submitQuizResult && (
+        <QuizSection
+          member={member}
+          quizDefinitions={quizDefinitions}
+          submitQuizResult={submitQuizResult}
+          editable={editable}
+        />
+      )}
       <CompetenciesSection member={member} editable={editableAdminOnly} onSave={updateCompetencies} />
       <CareerHistorySection member={member} editable={editable} onSave={updateCareerHistory} rid={rid} />
       <QualificationsSection member={member} editable={editable} onSave={updateQualifications} rid={rid} />
@@ -383,6 +408,144 @@ function SkillLevelsSection({
         </div>
       )}
     </Section>
+  )
+}
+
+function QuizSection({
+  member,
+  quizDefinitions,
+  submitQuizResult,
+  editable,
+}: {
+  member: Member
+  quizDefinitions: QuizDefinition[]
+  submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
+  editable: boolean
+}) {
+  const [activeQuiz, setActiveQuiz] = useState<QuizDefinition | null>(null)
+  const [answers, setAnswers] = useState<number[]>([])
+  const [result, setResult] = useState<{ passed: boolean; score: number } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const currentLevel = (quiz: QuizDefinition) =>
+    member.skillLevels?.find((sl) => sl.skill === quiz.targetSkill)?.level ?? 0
+
+  const openQuiz = (quiz: QuizDefinition) => {
+    setActiveQuiz(quiz)
+    setAnswers(new Array(quiz.questions.length).fill(-1))
+    setResult(null)
+  }
+
+  const handleSubmit = async () => {
+    if (!activeQuiz) return
+    setSubmitting(true)
+    try {
+      const r = await submitQuizResult(activeQuiz.id, member.id, answers)
+      setResult(r)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const allAnswered = answers.length > 0 && answers.every((a) => a >= 0)
+
+  return (
+    <>
+      <Section title="検定" description="合格するとスキルレベルが自動的に引き上がります。">
+        {!editable ? (
+          <p className="text-xs text-muted-foreground">本人のみ受験できます。</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {quizDefinitions.map((quiz) => {
+              const lv = currentLevel(quiz)
+              const alreadyPassed = lv >= quiz.targetLevel
+              return (
+                <li key={quiz.id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+                  <GraduationCap className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm">{quiz.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {quiz.targetSkill} → Lv.{quiz.targetLevel} / {quiz.questions.length}問 / 合格 {quiz.passRate}%
+                      {lv > 0 && <span className="ml-2">現在 Lv.{lv}</span>}
+                    </div>
+                  </div>
+                  {alreadyPassed ? (
+                    <span className="flex items-center gap-1 text-xs text-emerald-600">
+                      <CheckCircle2 className="size-3.5" /> 達成済み
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => openQuiz(quiz)}
+                      className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      受験する
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Section>
+
+      <Modal open={!!activeQuiz && !result} onClose={() => setActiveQuiz(null)}>
+        {activeQuiz && (
+          <>
+            <h3 className="mb-3 font-semibold">{activeQuiz.title}</h3>
+            <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto orbit-scroll pr-1">
+              {activeQuiz.questions.map((q, qi) => (
+                <div key={q.id}>
+                  <p className="mb-2 text-sm font-medium">Q{qi + 1}. {q.text}</p>
+                  <div className="flex flex-col gap-1">
+                    {q.choices.map((c, ci) => (
+                      <label key={ci} className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1 hover:bg-secondary text-sm">
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          checked={answers[qi] === ci}
+                          onChange={() => setAnswers((prev) => prev.map((a, i) => i === qi ? ci : a))}
+                        />
+                        {c}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setActiveQuiz(null)}>キャンセル</Button>
+              <Button disabled={!allAnswered || submitting} onClick={handleSubmit}>
+                {submitting ? '採点中…' : '提出する'}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal open={!!result} onClose={() => { setResult(null); setActiveQuiz(null) }}>
+        {result && activeQuiz && (
+          <div className="flex flex-col items-center gap-3 py-4">
+            {result.passed ? (
+              <CheckCircle2 className="size-12 text-emerald-500" />
+            ) : (
+              <GraduationCap className="size-12 text-muted-foreground" />
+            )}
+            <h3 className="text-lg font-semibold">
+              {result.passed ? '合格！' : '不合格'}
+            </h3>
+            <p className="text-sm text-muted-foreground">スコア: {result.score}% (合格ライン: {activeQuiz.passRate}%)</p>
+            {result.passed && (
+              <p className="text-sm font-medium text-emerald-600">
+                {activeQuiz.targetSkill} が Lv.{activeQuiz.targetLevel} に引き上げられました。
+              </p>
+            )}
+            <Button onClick={() => { setResult(null); setActiveQuiz(null) }} className="mt-2">
+              閉じる
+            </Button>
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }
 
