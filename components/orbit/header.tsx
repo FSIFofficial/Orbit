@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   Clock,
   LogOut,
+  MessageSquare,
   Moon,
   RefreshCw,
   Search,
@@ -328,6 +329,15 @@ export function Header() {
                 >
                   <User className="size-4" />
                   プロフィール
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'feedback' })
+                  }}
+                >
+                  <MessageSquare className="size-4" />
+                  改善を要望する
                 </MenuItem>
                 <div className="my-1 h-px bg-border" />
                 <MenuItem onClick={logout}>

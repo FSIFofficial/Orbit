@@ -21,6 +21,7 @@ export type Screen =
       name: 'admin'
       section: AdminSection
     }
+  | { name: 'feedback' }
 
 interface NavValue {
   screen: Screen

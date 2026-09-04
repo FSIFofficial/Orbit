@@ -14,6 +14,7 @@ import { OutputScreen } from './output/output-screen'
 import { PersonDetail } from './people/person-detail'
 import { ProjectDetail } from './projects/project-detail'
 import { AdminScreen } from './admin/admin-screen'
+import { FeedbackScreen } from './feedback-screen'
 import { TaskDetailDrawer } from './output/task-detail-drawer'
 import { OrbitMark } from './primitives'
 import { TriangleAlert } from 'lucide-react'
@@ -110,6 +111,7 @@ function Router() {
         {screen.name === 'person' && <PersonDetail id={screen.id} />}
         {screen.name === 'project' && <ProjectDetail id={screen.id} />}
         {screen.name === 'admin' && <AdminScreen section={screen.section} />}
+        {screen.name === 'feedback' && <FeedbackScreen />}
       </div>
       <TaskDetailDrawer taskId={openTaskId} onClose={closeTask} />
     </div>
