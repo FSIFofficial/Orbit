@@ -31,7 +31,7 @@ export function OrgSettingsScreen() {
     setOrgName,
     orgLogoUrl,
     setOrgLogoUrl,
-    uploadAvatarImage,
+    uploadOrgLogo,
     driveEnabled,
     orgNotificationEmails,
     addOrgNotificationEmail,
@@ -101,8 +101,8 @@ export function OrgSettingsScreen() {
                 if (!driveEnabled) { toast('Google Driveが未設定のためアップロードできません'); return }
                 setUploadingLogo(true)
                 try {
-                  await uploadAvatarImage('org-logo', await fileToDataUrl(file), 'org-logo.jpg')
-                  toast('ロゴをアップロードしました（Drive公開URLを下の欄に貼り付けてください）')
+                  await uploadOrgLogo(await fileToDataUrl(file), 'org-logo.jpg')
+                  toast('ロゴをアップロードしました')
                 } catch {
                   toast('アップロードに失敗しました')
                 } finally {
