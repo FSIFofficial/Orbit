@@ -1101,7 +1101,7 @@ function notifyReview(taskId) {
       '「' + task.title + '」が確認待ちになりました。\n\nOrbitで確認し、問題なければ「完了」にしてください。',
       reportsToEmails(assigneeIds),
     )
-    sendDiscordMessage('🔔 「' + task.title + '」が確認待ちになりました。')
+    notifyChat('🔔 「' + task.title + '」が確認待ちになりました。')
   } catch (err) {
     console.error('notifyReview failed: ' + err)
   }
@@ -1411,7 +1411,7 @@ function notifyTrainingRequest(memberId, trainingName) {
       name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。\n\nOrbitの人材育成タブから承認/却下してください。',
       reportsToEmails([memberId]),
     )
-    sendDiscordMessage('📚 ' + name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。')
+    notifyChat('📚 ' + name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。')
   } catch (err) {
     console.error('notifyTrainingRequest failed: ' + err)
   }
@@ -1506,7 +1506,7 @@ function notifyScheduleResult(taskId) {
 
     MailApp.sendEmail({ to: emails.join(','), subject: '[Orbit] 日程調整の回答が揃いました', body: body })
     console.log('notifyScheduleResult: sent to ' + emails.join(','))
-    sendDiscordMessage('🗓️ 「' + task.title + '」の日程調整で全員の回答が揃いました。')
+    notifyChat('🗓️ 「' + task.title + '」の日程調整で全員の回答が揃いました。')
   } catch (err) {
     console.error('notifyScheduleResult failed: ' + err)
   }
@@ -1559,7 +1559,7 @@ function notifyFormResult(taskId) {
 
     MailApp.sendEmail({ to: emails.join(','), subject: '[Orbit] フォームの回答が揃いました', body: body })
     console.log('notifyFormResult: sent to ' + emails.join(','))
-    sendDiscordMessage('📝 「' + task.title + '」のフォームで全員の回答が揃いました。')
+    notifyChat('📝 「' + task.title + '」のフォームで全員の回答が揃いました。')
   } catch (err) {
     console.error('notifyFormResult failed: ' + err)
   }
@@ -2281,6 +2281,28 @@ function sendDiscordMessage(content) {
   }
 }
 
+function sendSlackMessage(content) {
+  try {
+    var url = getSlackWebhookUrl()
+    if (!url) return
+    // @here / @channel / @everyone をゼロ幅スペースで無効化（意図しないメンション防止）
+    var safe = String(content).replace(/@(here|channel|everyone)/g, '​$1')
+    UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ text: safe }),
+      muteHttpExceptions: true,
+    })
+  } catch (err) {
+    // swallow — Slack delivery is best-effort
+  }
+}
+
+function notifyChat(content) {
+  sendDiscordMessage(content)
+  sendSlackMessage(content)
+}
+
 // A cell written as a plain 'yyyy-MM-dd' string can come back from
 // getValues() as a Date object instead (Sheets auto-converts date-like
 // strings in an unformatted column) — normalize either shape to
@@ -2294,8 +2316,6 @@ function cellDateStr(v) {
 // message listing every task whose due_date has passed and isn't 完了.
 function notifyOverdueTasksToDiscord() {
   try {
-    var url = getDiscordWebhookUrl()
-    if (!url) return
     var sheet = getSheet(SHEET_TASKS)
     var headers = headerRow(sheet)
     var titleCol = headers.indexOf('title')
@@ -2317,7 +2337,7 @@ function notifyOverdueTasksToDiscord() {
     var lines = overdue.map(function (t) {
       return '・' + t.title + '（期限: ' + t.due + '）'
     })
-    sendDiscordMessage('⚠️ 期限超過タスクが' + overdue.length + '件あります。\n' + lines.join('\n'))
+    notifyChat('⚠️ 期限超過タスクが' + overdue.length + '件あります。\n' + lines.join('\n'))
   } catch (err) {
     // best-effort
   }
@@ -2627,6 +2647,7 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
       if (nextEmails.length > 0) {
         MailApp.sendEmail({ to: nextEmails.join(','), subject: 'Orbit: 経費承認の依頼', body: '経費申請の承認依頼が届きました。Orbitにログインして確認してください。' })
       }
+      notifyChat('💴 経費申請の承認依頼が届きました（ステップ ' + (nextIdx + 1) + '）。Orbitにログインして確認してください。')
     }
   }
 
@@ -2769,6 +2790,7 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
       if (fmNextEmails.length > 0) {
         MailApp.sendEmail({ to: fmNextEmails.join(','), subject: 'Orbit: 申請フォーム承認の依頼', body: '申請フォームの承認依頼が届きました。Orbitにログインして確認してください。' })
       }
+      notifyChat('📋 申請フォームの承認依頼が届きました（ステップ ' + (nextIdx + 1) + '）。Orbitにログインして確認してください。')
     }
   }
 
