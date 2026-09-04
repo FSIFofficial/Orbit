@@ -351,6 +351,7 @@ function authorizeAction(acting, action, body) {
     'updateCompetencies',           // コンピテンシー評価は管理者のみ
     'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
     'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
+    'updateMemberProjects',         // プロジェクト割り当ては代表のみ（自己昇権の抜け穴防止）
   ]
   if (daihyoOnly.indexOf(action) >= 0) {
     throw new Error('この操作は代表のみ実行できます。')
@@ -372,7 +373,7 @@ function authorizeAction(acting, action, body) {
     'updateProjectParent',  // 親プロジェクト変更
     'updateProjectArchived',// アーカイブ操作
     'updateProjectMembers', // プロジェクトメンバー管理
-    'updateMemberProjects', // メンバーのプロジェクト担当割り当て
+    // updateMemberProjects は daihyoOnly に移動（下記参照）
     'updatePriority',       // 優先度（管理者が設定するケースが主）
     'updateDifficulty',     // 難易度（管理者が設定するケースが主）
     'updateSchedule',       // 日程設定
@@ -394,6 +395,69 @@ function authorizeAction(acting, action, body) {
       // ロールで弾かれた場合でも permission_overrides_json に該当する例外があれば許可（OR条件）
       if (checkPermissionOverride(acting, action, body)) return
       throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
+    }
+    // 班長（代表以外の管理者）はプロジェクトスコープに制限する。
+    // acting.project_ids に対象プロジェクトが含まれなければ permission_overrides でのみ許可。
+    var actingProjectIds = acting.project_ids ? String(acting.project_ids).split(',').map(function(s) { return s.trim() }).filter(Boolean) : []
+    if (actingProjectIds.length > 0) {
+      // 対象プロジェクトIDを特定する
+      var targetProjectId = null
+      if (body.projectId) {
+        // プロジェクト操作（createProject/updateProjectDetails/updateProjectMembers 等）
+        targetProjectId = String(body.projectId)
+      } else if (body.taskId) {
+        // タスク操作: タスクの project_id を引く
+        try {
+          var taskObj = findRow(SHEET_TASKS, String(body.taskId))
+          if (taskObj) targetProjectId = String(taskObj.project_id || '')
+        } catch(e) {}
+      }
+      // project_id が特定できた場合のみスコープチェック（特定できない操作は通過させる）
+      if (targetProjectId && actingProjectIds.indexOf(targetProjectId) < 0) {
+        if (checkPermissionOverride(acting, action, body)) return
+        throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
+      }
+
+      // メンバーを対象とするアクションのスコープチェック:
+      // acting.project_ids に含まれるプロジェクトの member_ids を Projects シートから取得し、
+      // 対象メンバーがそのいずれかに含まれるかで判定する（一般メンバーの project_ids は空欄設計のため）。
+      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath', 'bulkUpdateSkills']
+      if (memberScopeActions.indexOf(action) >= 0) {
+        // acting.project_ids 配下の Projects を1回読んで所属メンバーIDのセットを作る
+        var scopedMemberIdSet = {}
+        try {
+          var projectsSheet = getSheet(SHEET_PROJECTS)
+          var pHeaders = headerRow(projectsSheet)
+          var pIdCol = pHeaders.indexOf('id')
+          var pMemberIdsCol = pHeaders.indexOf('member_ids')
+          if (pIdCol >= 0 && pMemberIdsCol >= 0 && projectsSheet.getLastRow() > 1) {
+            var pRows = projectsSheet.getRange(2, 1, projectsSheet.getLastRow() - 1, pHeaders.length).getValues()
+            pRows.forEach(function(row) {
+              var pid = String(row[pIdCol] || '').trim()
+              if (actingProjectIds.indexOf(pid) >= 0) {
+                var mids = String(row[pMemberIdsCol] || '').split(',').map(function(s) { return s.trim() }).filter(Boolean)
+                mids.forEach(function(mid) { scopedMemberIdSet[mid] = true })
+              }
+            })
+          }
+        } catch(e) { /* Projects シート読み込み失敗時は scopedMemberIdSet が空のまま → 全件拒否（安全側） */ }
+
+        // チェック対象の memberId 一覧を取得
+        var memberIdsToCheck = []
+        if (action === 'bulkUpdateSkills') {
+          var bUpdates = body.updates || []
+          bUpdates.forEach(function(u) { if (u && u.memberId) memberIdsToCheck.push(String(u.memberId)) })
+        } else if (body.memberId) {
+          memberIdsToCheck.push(String(body.memberId))
+        }
+
+        for (var mi = 0; mi < memberIdsToCheck.length; mi++) {
+          if (!scopedMemberIdSet[memberIdsToCheck[mi]]) {
+            if (checkPermissionOverride(acting, action, body)) return
+            throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
+          }
+        }
+      }
     }
     return
   }
@@ -562,6 +626,7 @@ function doPost(e) {
         result = updateTaskFields(body.taskId, { approval_status: '承認済み' })
         break
       case 'notifyTaskRejected':
+        // body.taskId は authorizeAction() のスコープチェックで使用済み
         notifyTaskRejected(body.creatorId, body.taskName, body.reason)
         result = { ok: true }
         break
@@ -831,13 +896,14 @@ function doPost(e) {
         result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
         break
       case 'submitQuizResult':
-        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], acting)
+        result = submitQuizResult(body.quizId, body.memberId, body.answers || [], actingMember)
         break
       case 'submitExpenseApplication':
-        result = saveExpenseApplication(body.application, acting)
+        result = saveExpenseApplication(body.application, actingMember)
         break
       case 'approveExpenseStep':
-        result = processExpenseStep(body.applicationId, body.stepId, body.actorId, 'approved', body.comment)
+        // actingMember.id を使うことでクライアントの自己申告値(body.actorId)による偽装を防ぐ
+        result = processExpenseStep(body.applicationId, body.stepId, actingMember.id, 'approved', body.comment)
         break
       case 'rejectExpense':
         result = setExpenseStatus(body.applicationId, 'rejected', body.reason)
@@ -846,10 +912,11 @@ function doPost(e) {
         result = setExpenseStatus(body.applicationId, 'withdrawn')
         break
       case 'submitCustomForm':
-        result = saveCustomFormSubmission(body.submission, acting)
+        result = saveCustomFormSubmission(body.submission, actingMember)
         break
       case 'approveFormStep':
-        result = processFormStep(body.submissionId, body.stepId, body.actorId, 'approved', body.comment)
+        // actingMember.id を使うことでクライアントの自己申告値(body.actorId)による偽装を防ぐ
+        result = processFormStep(body.submissionId, body.stepId, actingMember.id, 'approved', body.comment)
         break
       case 'rejectFormSubmission':
         result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
@@ -2374,7 +2441,7 @@ var SHEET_EXPENSES = 'Expenses'
 var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
 
 function ensureExpensesSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
   var sheet = ss.getSheetByName(SHEET_EXPENSES)
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_EXPENSES)
@@ -2384,7 +2451,7 @@ function ensureExpensesSheet() {
 }
 
 function ensureFormSubmissionsSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
   var sheet = ss.getSheetByName(SHEET_FORM_SUBMISSIONS)
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_FORM_SUBMISSIONS)
@@ -2586,16 +2653,6 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
   return { ok: true }
-}
-
-function getSettingValue(key) {
-  var sheet = getSheet('Settings')
-  if (!sheet) return null
-  var data = sheet.getDataRange().getValues()
-  for (var i = 0; i < data.length; i++) {
-    if (String(data[i][0]) === key) return String(data[i][1] || '')
-  }
-  return null
 }
 
 // ---- Phase 6: スキル一括更新 ----
