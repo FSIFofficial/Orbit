@@ -36,10 +36,250 @@ function doGet(e) {
   )
 }
 
+// ---- Authentication & Authorization ----------------------------------------
+
+/**
+ * Verifies a Google access token via the tokeninfo endpoint.
+ * Returns { email } on success; throws with a Japanese message on failure.
+ *
+ * Note: we use access tokens (not JWT ID tokens) because the frontend GIS
+ * client (initTokenClient) issues access tokens. The tokeninfo endpoint
+ * returns the same email + audience fields for both token types, so the
+ * security properties are equivalent for our purposes.
+ */
+function verifyToken(accessToken) {
+  if (!accessToken) throw new Error('認証トークンがありません。再ログインしてください。')
+  var url = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken)
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true })
+  var code = resp.getResponseCode()
+  if (code !== 200) {
+    var errBody = {}
+    try { errBody = JSON.parse(resp.getContentText()) } catch (_) {}
+    if (errBody.error_description === 'Token has been expired or revoked.') {
+      throw new Error('認証トークンの有効期限が切れています。再ログインしてください。')
+    }
+    throw new Error('トークンの検証に失敗しました (HTTP ' + code + ')。再ログインしてください。')
+  }
+  var info = JSON.parse(resp.getContentText())
+  if (info.error || info.error_description) {
+    throw new Error('トークンが無効です: ' + (info.error_description || info.error) + '。再ログインしてください。')
+  }
+  // Verify the token was issued for this app (audience check).
+  // GOOGLE_OAUTH_CLIENT_ID is set in Apps Script: Project Settings > Script Properties.
+  var expectedClientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_OAUTH_CLIENT_ID')
+  if (expectedClientId) {
+    // access_token tokeninfo returns 'audience'; id_token tokeninfo uses 'aud'
+    var audience = info.audience || info.azp
+    if (audience !== expectedClientId) {
+      throw new Error('トークンの発行元がこのアプリと一致しません。')
+    }
+  }
+  if (!info.email) throw new Error('トークンからメールアドレスを取得できませんでした。')
+  return { email: info.email }
+}
+
+/**
+ * Finds the acting member from the Members sheet by email.
+ * Returns { id, role, project_ids } or throws if not found.
+ */
+function getActingMember(email) {
+  var sheet = getSheet(SHEET_MEMBERS)
+  var headers = headerRow(sheet)
+  var emailCol = headers.indexOf('email')
+  var idCol = headers.indexOf('id')
+  var roleCol = headers.indexOf('role')
+  var projectIdsCol = headers.indexOf('project_ids')
+  if (emailCol < 0 || idCol < 0) throw new Error('Membersシートの構造が不正です。')
+  var data = sheet.getDataRange().getValues()
+  var lc = email.toLowerCase()
+  for (var i = 1; i < data.length; i++) {
+    var rowEmails = String(data[i][emailCol] || '').split(',').map(function (e) { return e.trim().toLowerCase() })
+    if (rowEmails.indexOf(lc) >= 0) {
+      return {
+        id: String(data[i][idCol]),
+        role: String(data[i][roleCol] || ''),
+        project_ids: String(data[i][projectIdsCol] || '').split(',').map(function (s) { return s.trim() }).filter(Boolean),
+      }
+    }
+  }
+  throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+}
+
+/**
+ * Enforces per-action role-based access control.
+ * Throws with a human-readable Japanese error on denial.
+ *
+ * Tiers (most to least restrictive):
+ *   代表のみ        — organization leader only
+ *   代表 or 班長    — any admin role (isLeader)
+ *   selfOrAdmin     — acting on body.memberId === self, or any admin
+ *   本人のみ        — acting on body.memberId === self only
+ *   誰でも          — any logged-in member (with extra checks where noted)
+ */
+function authorizeAction(acting, action, body) {
+  var role = acting.role
+  // isLeader: true for any role that is not '一般' (i.e. any admin-level role).
+  // We cannot enumerate all possible role names (they are user-configurable in Admin → Tags),
+  // so we match '代表' specially and treat everything else non-一般 as 班長-equivalent.
+  var isDaihyo = role === '代表'
+  var isLeader = !isDaihyo && role !== '一般' && role !== ''
+
+  // 代表 can do anything
+  if (isDaihyo) return
+
+  // --- 代表のみ ---
+  var daihyoOnly = [
+    'updateRole',              // ロール変更は代表のみ
+    'removeMember',            // メンバー削除は代表のみ
+    'removeProject',           // プロジェクト削除は代表のみ
+    'updateDiscordWebhookUrl', // システム設定は代表のみ
+    'updateSetting',           // システム設定は代表のみ
+    'addMember',               // メンバー追加は代表のみ
+    'updateEmail',             // 他人のメールアドレス変更は代表のみ
+    'updateJoinedAt',          // 所属開始日の編集は代表のみ（人事記録）
+    'updateReportsTo',         // 報告先の設定は代表のみ（組織図操作）
+    'updateMentor',            // メンター設定は代表のみ（HR操作）
+    'updateEvaluationHistory', // 評価履歴は代表のみ（人事機密）
+    'updateTransferHistory',   // 異動履歴は代表のみ（人事機密）
+    'updateOneOnOnes',         // 1on1記録は管理者のみ（管理者専用タブ）
+    'updateCompetencies',      // コンピテンシー評価は管理者のみ
+    'notifyTrainingDecision',  // 研修承認通知は代表のみ（承認権限）
+  ]
+  if (daihyoOnly.indexOf(action) >= 0) {
+    throw new Error('この操作は代表のみ実行できます。')
+  }
+
+  // --- 代表 or 班長 (任意の管理者ロール) ---
+  var daihyoOrLeader = [
+    'approveTask',          // タスク承認
+    'updateJudgment',       // 評価タグの編集（管理者権限）
+    'assignTask',           // タスクのアサイン
+    'updateTaskDetails',    // タスク詳細編集
+    'updateVisibility',     // タスク公開範囲の変更
+    'updateReviewer',       // レビュアー設定
+    'updateReviewers',      // レビュアー設定（複数）
+    'removeTask',           // タスク削除
+    'createProject',        // プロジェクト作成
+    'updateProjectDetails', // プロジェクト詳細編集
+    'updateProjectOwner',   // オーナー変更
+    'updateProjectParent',  // 親プロジェクト変更
+    'updateProjectArchived',// アーカイブ操作
+    'updateProjectMembers', // プロジェクトメンバー管理
+    'updateMemberProjects', // メンバーのプロジェクト担当割り当て
+    'updatePriority',       // 優先度（管理者が設定するケースが主）
+    'updateDifficulty',     // 難易度（管理者が設定するケースが主）
+    'updateSchedule',       // 日程設定
+    'updateDependsOn',      // 依存関係設定
+    'setBlocker',           // ブロッカー設定（班長が管理）
+    'notifyTaskRejected',   // タスク却下通知（管理者が送信）
+    'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
+  ]
+  if (daihyoOrLeader.indexOf(action) >= 0) {
+    if (!isLeader) {
+      throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
+    }
+    return
+  }
+
+  // --- 本人 or 管理者 (selfOrAdmin) ---
+  // これらのアクションは本人が自分の情報を編集するか、管理者が代理編集する。
+  var selfOrAdmin = [
+    'updateSkillLevels',    // 本人・管理者双方が編集可（タスク完了時に自動登録も）
+    'updateCareerGoals',    // 本人・管理者双方が編集可
+    'updateDevelopmentPlan',// 本人・管理者双方が編集可
+    'updateCareerHistory',  // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
+    'updateQualifications', // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
+    'updateTrainingHistory',// 本人が申請、管理者が更新（ステータス変更）
+    'notifyTrainingRequest',// 本人が申請するが念のため本人or管理者に制限
+  ]
+  if (selfOrAdmin.indexOf(action) >= 0) {
+    var targetId = String(body.memberId || '')
+    if (targetId !== acting.id && !isLeader) {
+      throw new Error('この操作は本人または管理者のみ実行できます。')
+    }
+    return
+  }
+
+  // --- 本人のみ (selfOnly) ---
+  var selfOnly = [
+    'updateWill',            // 得意分野・希望タグは本人のみ
+    'updateNotify',          // 通知設定は本人のみ
+    'updateNotifySettings',  // 通知設定詳細は本人のみ
+    'updateAvatar',          // アイコン変更は本人のみ
+    'uploadAvatar',          // 画像アップロードは本人のみ
+    'updateDisplayName',     // 表示名変更は本人のみ
+    'updateUnavailableDates',// 稼働不可日は本人のみ
+  ]
+  if (selfOnly.indexOf(action) >= 0) {
+    var selfTargetId = String(body.memberId || '')
+    if (selfTargetId !== acting.id) {
+      throw new Error('この操作は本人のみ実行できます。')
+    }
+    return
+  }
+
+  // --- ログイン済みなら誰でも ---
+  var anyLoggedIn = [
+    'createTasks',
+    'updateTaskStatus',      // 担当者チェックあり（下記）
+    'updateProgress',
+    'updateComments',
+    'notifyMention',
+    'updateEstimatedHours',
+    'updateActualHours',
+    'updateRetrospective',
+    'updateTaskSchedule',
+    'notifyScheduleResult',
+    'updateTaskForm',
+    'notifyFormResult',
+    'updateHistory',
+    'updateDeliverables',
+  ]
+  if (anyLoggedIn.indexOf(action) >= 0) {
+    // updateTaskStatus: 担当者のみステータスを変更できる（管理者は上の層で処理済み）
+    if (action === 'updateTaskStatus') {
+      var taskId = String(body.taskId || '')
+      var task = findRow(SHEET_TASKS, taskId)
+      if (task) {
+        var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+        if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
+          throw new Error('このタスクの担当者のみステータスを変更できます。')
+        }
+      }
+    }
+    return
+  }
+
+  // Unknown action — 安全側に倒して管理者限定（新しいactionが追加された際の保護）
+  if (!isLeader) {
+    // コメント: 未分類のactionは代表/班長のみに制限（新機能追加時の安全装置）
+    throw new Error('この操作は代表または管理者のみ実行できます。(未分類のaction: ' + action + ')')
+  }
+}
+
 function doPost(e) {
   var result
   try {
     var body = JSON.parse(e.postData.contents)
+
+    // ---- Token verification & authorization --------------------------------
+    // Every write must carry an authToken (Google access token obtained at
+    // login via GIS initTokenClient). We verify it against Google's tokeninfo
+    // endpoint, extract the email, find the acting member in the Members sheet,
+    // and check whether they have permission for this action.
+    //
+    // Auth errors are returned with authError:true so the frontend can
+    // distinguish them from business logic errors and attempt a silent
+    // token refresh + retry automatically.
+    var actingMember
+    try {
+      actingMember = getActingMember(verifyToken(body.authToken || '').email)
+      authorizeAction(actingMember, body.action, body)
+    } catch (authErr) {
+      return jsonOutput({ ok: false, error: String(authErr), authError: true })
+    }
+    // ------------------------------------------------------------------------
+
     switch (body.action) {
       case 'createTasks':
         result = createTasks(body.tasks)

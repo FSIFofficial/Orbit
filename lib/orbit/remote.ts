@@ -39,6 +39,7 @@ import type {
   NotifyKind,
 } from './types'
 import { STATUS_LABEL, isAdminRole } from './types'
+import { getGasAuthToken, refreshGasAuthToken } from './google-sheet-sync'
 
 // NEXT_PUBLIC_ vars are inlined at build time by Next.js. They must be
 // referenced by their literal full name (not a dynamic key) to be inlined.
@@ -471,14 +472,32 @@ export interface CreateTaskPayload {
 
 async function postToGas<T = unknown>(action: string, payload: Record<string, unknown>): Promise<T> {
   if (!GAS_URL) throw new Error('GAS Web App URL is not configured')
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    // text/plain avoids a CORS preflight (Apps Script doesn't handle
-    // OPTIONS); the body is still JSON, parsed server-side with JSON.parse.
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload }),
-  })
-  const json = await res.json()
+
+  const doFetch = async (authToken: string | null) => {
+    const res = await fetch(GAS_URL!, {
+      method: 'POST',
+      // text/plain avoids a CORS preflight (Apps Script doesn't handle
+      // OPTIONS); the body is still JSON, parsed server-side with JSON.parse.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, authToken, ...payload }),
+    })
+    return res.json() as Promise<{ ok: boolean; result?: T; error?: string; authError?: boolean }>
+  }
+
+  let json = await doFetch(getGasAuthToken())
+
+  // Auth error (expired token): silently refresh and retry once.
+  // GIS prompt:'' avoids showing a popup if the user's Google session is active.
+  if (!json.ok && json.authError) {
+    try {
+      const newToken = await refreshGasAuthToken()
+      json = await doFetch(newToken)
+    } catch {
+      // Silent refresh failed (Google session also expired) — surface original error
+      throw new Error(json.error || `GAS action "${action}" failed`)
+    }
+  }
+
   if (!json.ok) throw new Error(json.error || `GAS action "${action}" failed`)
   return json.result as T
 }

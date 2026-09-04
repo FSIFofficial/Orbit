@@ -87,6 +87,28 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<{ email:
   return res.json() as Promise<{ email: string }>
 }
 
+// ---- GAS auth token cache (module-level, browser-only) -------------------
+// The access token from requestGoogleLoginToken() is reused for every GAS
+// write request. It is stored here after login and cleared on logout.
+
+let _gasAuthToken: string | null = null
+
+export function setGasAuthToken(token: string | null): void {
+  _gasAuthToken = token
+}
+
+export function getGasAuthToken(): string | null {
+  return _gasAuthToken
+}
+
+/** Silently requests a new Google access token (no popup) and updates the cache. */
+export function refreshGasAuthToken(): Promise<string> {
+  return requestToken(LOGIN_SCOPE, /* silent= */ true).then((token) => {
+    _gasAuthToken = token
+    return token
+  })
+}
+
 // ---- personal sheet sync (spreadsheets scope) ----------------------------
 
 export function requestSheetsToken(silent = false): Promise<string> {
