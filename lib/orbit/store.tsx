@@ -1472,6 +1472,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       setCurrentUserId(userId)
       setModeState('output')
 
+      // lastLogin を現在時刻で更新
+      const nowIso = new Date().toISOString()
+      setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, lastLogin: nowIso } : m))
+      if (isRemoteConfigured) runRemote(remoteApi.updateLastLogin(userId))
+
       // 既に初期タスクを付与済みか、タスクが存在する場合はスキップ
       try {
         const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
@@ -1497,7 +1502,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projects],
+    [projects, runRemote],
   )
 
   const logout = useCallback(() => {
@@ -2705,7 +2710,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
             : t,
         ),
       )
-      if (isRemoteConfigured) runRemote(remoteApi.updateReviewers(id, reviewerIds))
+      if (isRemoteConfigured) runRemote(remoteApi.updateReviewers(id, reviewerIds, requiredApprovals))
     },
     [appendHistory, runRemote],
   )
@@ -3236,10 +3241,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
-  // 不在日の更新 — localStorageで管理（GAS同期は将来対応）
   const updateAbsentDates = useCallback((memberId: string, dates: string[]) => {
     setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, absentDates: dates } : m))
-  }, [])
+    if (isRemoteConfigured) runRemote(remoteApi.updateAbsentDates(memberId, dates))
+  }, [runRemote])
 
   const getMember = useCallback(
     (id: string | null) => members.find((m) => m.id === id),
