@@ -234,6 +234,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     departmentPath: r.department_path || undefined,
     permissionOverrides: parseJsonArray<PermissionOverride>(r.permission_overrides_json),
     skillPoints: parseJsonObject<SkillPoints>(r.skill_points_json),
+    inactive: r.inactive === 'TRUE' ? true : undefined,
   }
 }
 
