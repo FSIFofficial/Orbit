@@ -460,12 +460,20 @@ function authorizeAction(acting, action, body) {
             throw new Error('重要度が「重要」または「対外公開」のタスクは、全権管理者のみ承認できます。')
           }
         } else {
-          // non-escalated: reviewer_ids / reviewer_id が設定されていれば acting.id と照合
-          var rawReviewers = String(taskForApprove.reviewer_ids || taskForApprove.reviewer_id || '').trim()
-          var reviewerIdList = rawReviewers.split(',').map(function(s) { return s.trim() }).filter(Boolean)
-          if (reviewerIdList.length > 0 && reviewerIdList.indexOf(acting.id) < 0 && !isActingFullAdmin(acting)) {
-            if (checkPermissionOverride(acting, action, body)) return
-            throw new Error('このタスクの承認者として指定されていないため、承認できません。')
+          // non-escalated: タスク登録者の上長（creator の reports_to_id）のみ承認可能
+          if (!isActingFullAdmin(acting)) {
+            var creatorId = String(taskForApprove.creator_id || '').trim()
+            var approverId = ''
+            if (creatorId) {
+              try {
+                var creatorRow = findRow(SHEET_MEMBERS, creatorId)
+                approverId = String(creatorRow.reports_to_id || '').trim()
+              } catch(e) {}
+            }
+            if (approverId && acting.id !== approverId) {
+              if (checkPermissionOverride(acting, action, body)) return
+              throw new Error('このタスクの承認者として指定されていないため、承認できません。')
+            }
           }
         }
       }
