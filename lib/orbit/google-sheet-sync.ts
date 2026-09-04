@@ -24,6 +24,7 @@ declare global {
 
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const LOGIN_SCOPE = 'openid email profile'
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
 
 function waitForGIS(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -218,4 +219,26 @@ export function savePersonalSheetId(userId: string, sheetId: string): void {
   } catch {
     // ignore
   }
+}
+
+// ---- Google Calendar token cache (module-level, browser-only) -------------
+// Separate from the GAS auth token — Calendar scope is requested incrementally
+// when the user first accesses calendar features, not at login time.
+
+let _calendarToken: string | null = null
+
+export function getCalendarToken(): string | null {
+  return _calendarToken
+}
+
+export function setCalendarToken(token: string | null): void {
+  _calendarToken = token
+}
+
+/** Request (or silently refresh) the Calendar scope token. */
+export function requestCalendarToken(silent = false): Promise<string> {
+  return requestToken(CALENDAR_SCOPE, silent).then((token) => {
+    _calendarToken = token
+    return token
+  })
 }

@@ -216,6 +216,7 @@ interface OrbitContextValue extends OrbitState {
   dismissNotification: (notificationId: string) => void
   setSlackWebhookUrl: (url: string) => void
   toggleMemberInactive: (memberId: string) => void
+  updateAbsentDates: (memberId: string, dates: string[]) => void
   // item 20: 1on1ワークシート質問項目
   oneOnOneQuestions: string[]
   setOneOnOneQuestions: (questions: string[]) => void
@@ -3166,6 +3167,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // 不在日の更新 — localStorageで管理（GAS同期は将来対応）
+  const updateAbsentDates = useCallback((memberId: string, dates: string[]) => {
+    setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, absentDates: dates } : m))
+  }, [])
+
   const getMember = useCallback(
     (id: string | null) => members.find((m) => m.id === id),
     [members],
@@ -3356,6 +3362,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           }
         })
     }
+    // カレンダースコープ追加告知 — 一度「消す」まで表示する
+    items.push({
+      id: 'calendar-scope-notice',
+      kind: 'info' as const,
+      title: 'Googleカレンダー連携が追加されました',
+      detail: 'カレンダー画面から「Googleカレンダーと連携」ボタンで接続できます',
+      taskId: '',
+    })
     const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []
     return items.filter((n) => !dismissedHere.includes(n.id))
   }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds, dismissedNotificationIds, members])
@@ -3474,6 +3488,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     dismissNotification,
     setSlackWebhookUrl,
     toggleMemberInactive,
+    updateAbsentDates,
     oneOnOneQuestions,
     setOneOnOneQuestions,
     login,

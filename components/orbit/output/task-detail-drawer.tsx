@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getCalendarToken, requestCalendarToken, isGoogleOAuthConfigured } from '@/lib/orbit/google-sheet-sync'
+import { createCalendarEvent } from '@/lib/orbit/google-calendar'
 import { Drawer, Modal } from '../modal'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
@@ -2210,6 +2212,57 @@ const SCHEDULE_RESPONSE_COLOR: Record<ScheduleResponseValue, string> = {
   '×': 'bg-rose-50 text-rose-700',
 }
 
+// Googleカレンダーへの追加ボタン — 日程調整完了後に表示する
+function AddToGCalButton({ task }: { task: Task }) {
+  const toast = useToast()
+  const [added, setAdded] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  if (!isGoogleOAuthConfigured() || added) return null
+
+  const add = async () => {
+    setLoading(true)
+    try {
+      let token = getCalendarToken()
+      if (!token) token = await requestCalendarToken()
+      const title = task.name
+      const desc = task.description ?? ''
+      if (task.deadline) {
+        const iso = task.dueTime
+          ? `${task.deadline}T${task.dueTime}:00+09:00`
+          : undefined
+        const endIso = task.dueTime
+          ? `${task.deadline}T${String(parseInt(task.dueTime.slice(0, 2)) + 1).padStart(2, '0')}${task.dueTime.slice(2)}:00+09:00`
+          : undefined
+        await createCalendarEvent(token, {
+          summary: `[Orbit] ${title}`,
+          description: desc,
+          ...(iso ? { startDateTime: iso, endDateTime: endIso ?? iso } : { startDate: task.deadline }),
+        })
+      } else {
+        await createCalendarEvent(token, { summary: `[Orbit] ${title}`, description: desc, startDate: new Date().toISOString().slice(0, 10) })
+      }
+      setAdded(true)
+      toast('Googleカレンダーに追加しました')
+    } catch (e) {
+      toast(`カレンダー追加に失敗しました: ${String(e)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={add}
+      disabled={loading}
+      className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50"
+    >
+      <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      {loading ? '追加中...' : 'Googleカレンダーに追加'}
+    </button>
+  )
+}
+
 // 日程調整ツール — 候補日時＋招待メンバーを作成者/管理者が設定し、招待者は
 // 候補ごとに〇×△で回答する。全員が回答し終えるとタスクは自動的に完了になる
 // （store.tsx の respondToSchedule）
@@ -2271,6 +2324,28 @@ function ScheduleSection({
   const canSubmitResponse =
     !!schedule && schedule.candidates.every((c) => !!responseDraft[c.id])
 
+  // GCal空き確認 — カレンダートークンがあれば候補に対してFreeBusyを取得する
+  const [freeBusy, setFreeBusy] = useState<Record<string, boolean>>({}) // candidateId -> busy
+  const checkFreeBusy = async () => {
+    if (!schedule || !isInvited) return
+    const token = getCalendarToken()
+    if (!token) return
+    const { fetchFreeBusy } = await import('@/lib/orbit/google-calendar')
+    for (const c of schedule.candidates) {
+      try {
+        // labelからISO日時を復元するのが難しいため、labelに日時が含まれる場合のみ
+        // 例: "9/5(金) 14:00" → 現在年の9月5日14:00を試みる
+        const m = c.label.match(/(\d+)\/(\d+)[^0-9]*(\d{2}):(\d{2})/)
+        if (!m) continue
+        const now = new Date()
+        const dt = new Date(now.getFullYear(), parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]))
+        const dtEnd = new Date(dt.getTime() + 60 * 60 * 1000)
+        const busy = await fetchFreeBusy(token, dt.toISOString(), dtEnd.toISOString())
+        setFreeBusy((prev) => ({ ...prev, [c.id]: busy.length > 0 }))
+      } catch { /* ignore */ }
+    }
+  }
+
   return (
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between">
@@ -2296,11 +2371,26 @@ function ScheduleSection({
         <div className="flex flex-col gap-3">
           {canRespond && (
             <div className="rounded-lg border border-border bg-secondary/40 p-3">
-              <p className="mb-2 text-xs text-muted-foreground">候補ごとに回答してください</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">候補ごとに回答してください</p>
+                {isGoogleOAuthConfigured() && getCalendarToken() && (
+                  <button onClick={checkFreeBusy} className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    GCalで空き確認
+                  </button>
+                )}
+              </div>
               <div className="flex flex-col gap-1.5">
                 {schedule.candidates.map((c) => (
                   <div key={c.id} className="flex items-center justify-between gap-2">
-                    <span className="text-sm">{c.label}</span>
+                    <span className="flex items-center gap-1.5 text-sm">
+                      {c.label}
+                      {freeBusy[c.id] !== undefined && (
+                        <span className={cn('rounded-full px-1.5 py-0.5 text-[9px] font-medium', freeBusy[c.id] ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400')}>
+                          {freeBusy[c.id] ? '予定あり' : '空き'}
+                        </span>
+                      )}
+                    </span>
                     <div className="flex items-center gap-1">
                       {SCHEDULE_RESPONSE_OPTIONS.map((v) => (
                         <button
@@ -2379,7 +2469,10 @@ function ScheduleSection({
             </table>
           </div>
           {task.status === 'done' && (
-            <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+              <AddToGCalButton task={task} />
+            </div>
           )}
         </div>
       )}

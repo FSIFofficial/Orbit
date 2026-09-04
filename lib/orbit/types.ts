@@ -156,6 +156,9 @@ export interface Member {
   // Orbitへの最終アクセス日時（ISO datetime）— GAS側でlogin actionを
   // 受け取ったときに更新。25日間アクセスなしで管理者に通知（item 25）
   lastLogin?: string
+  // 不在日リスト（YYYY-MM-DD）— カレンダービューで自分で登録し、
+  // Googleカレンダーとも同期する
+  absentDates?: string[]
 
   // ---- talent-management fields (タレントマネジメント) --------------------
   // 人材DB／スキル管理／人材検索／育成・キャリア — wired end-to-end (store.tsx
@@ -684,7 +687,7 @@ export interface NotificationItem {
   // 進行中タスクの更新が7日以上ない場合に表示
   // 'mention' = コメントで@メンションされた（未読のみ表示。store.tsxの
   // seenMentionIds/markMentionSeen参照）
-  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention'
+  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info'
   title: string
   detail: string
   taskId: string
