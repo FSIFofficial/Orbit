@@ -13,6 +13,7 @@ import {
   AtSign,
   Bell,
   BookOpen,
+  Building2,
   CalendarClock,
   CheckCheck,
   ChevronDown,
@@ -46,6 +47,7 @@ export function Header() {
     markMentionSeen,
     orgName,
     orgLogoUrl,
+    isFullAdmin,
   } = useOrbit()
   const { screen, go, goBack, canGoBack } = useNav()
   const { theme, toggle } = useTheme()
@@ -387,6 +389,17 @@ export function Header() {
                   <ClipboardList className="size-4" />
                   体験アンケート
                 </MenuItem>
+                {isFullAdmin && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false)
+                      go({ name: 'org-settings' })
+                    }}
+                  >
+                    <Building2 className="size-4" />
+                    団体設定
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={() => {
                     setMenuOpen(false)

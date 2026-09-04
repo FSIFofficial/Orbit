@@ -28,6 +28,8 @@ export type Screen =
   | { name: 'dailyreport' }
   // item 22: メンバー体験定点測定アンケート
   | { name: 'survey' }
+  // 団体設定（Admin権限者向け）
+  | { name: 'org-settings' }
 
 interface NavValue {
   screen: Screen

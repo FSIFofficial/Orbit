@@ -61,7 +61,15 @@ function useGCalEvents(year: number, month: number, weekStart?: Date, dayDate?: 
 
   useEffect(() => {
     const token = getCalendarToken()
-    if (token) { setHasToken(true); load(token) }
+    if (token) {
+      setHasToken(true)
+      load(token)
+    } else {
+      // try silent re-auth (no popup) to auto-reconnect after page reload
+      requestCalendarToken(true)
+        .then((t) => { setHasToken(true); load(t) })
+        .catch(() => { /* silent re-auth failed — user must click Connect */ })
+    }
   }, [load])
 
   const connect = async () => {

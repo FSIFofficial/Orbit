@@ -225,20 +225,31 @@ export function savePersonalSheetId(userId: string, sheetId: string): void {
 // Separate from the GAS auth token — Calendar scope is requested incrementally
 // when the user first accesses calendar features, not at login time.
 
+const GCAL_TOKEN_KEY = 'orbit-gcal-token'
 let _calendarToken: string | null = null
 
 export function getCalendarToken(): string | null {
+  if (_calendarToken) return _calendarToken
+  // restore from sessionStorage (survives page reload within the same tab)
+  try {
+    const stored = typeof window !== 'undefined' ? window.sessionStorage.getItem(GCAL_TOKEN_KEY) : null
+    if (stored) { _calendarToken = stored }
+  } catch { /* ignore */ }
   return _calendarToken
 }
 
 export function setCalendarToken(token: string | null): void {
   _calendarToken = token
+  try {
+    if (token) window.sessionStorage.setItem(GCAL_TOKEN_KEY, token)
+    else window.sessionStorage.removeItem(GCAL_TOKEN_KEY)
+  } catch { /* ignore */ }
 }
 
 /** Request (or silently refresh) the Calendar scope token. */
 export function requestCalendarToken(silent = false): Promise<string> {
   return requestToken(CALENDAR_SCOPE, silent).then((token) => {
-    _calendarToken = token
+    setCalendarToken(token)
     return token
   })
 }
