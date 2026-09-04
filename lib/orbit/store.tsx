@@ -75,7 +75,7 @@ import {
   toCreatePayload,
 } from './remote'
 import { daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
-import { setGasAuthToken } from './google-sheet-sync'
+import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
 
 type Mode = 'input' | 'output'
 type RemoteStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -1507,6 +1507,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     setCurrentUserId(null)
     setGasAuthToken(null)
+    setCalendarToken(null)
   }, [])
 
   const setMode = useCallback((m: Mode) => setModeState(m), [])
