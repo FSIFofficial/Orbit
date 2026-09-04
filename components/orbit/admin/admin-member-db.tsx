@@ -2,8 +2,9 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
-import { Download, Upload, Eye, EyeOff, Search } from 'lucide-react'
+import { Download, Upload, Eye, Search } from 'lucide-react'
 import type { Member } from '@/lib/orbit/types'
+import { BASE_ROLE } from '@/lib/orbit/types'
 
 // ---------- column definitions ----------
 
@@ -31,8 +32,21 @@ const BASE_COLS: ColDef[] = [
   { key: 'joinedAt', label: '所属開始日', getValue: (m) => m.joinedAt ?? '', editable: true, width: 110 },
   { key: 'careerAspiration', label: 'キャリア目標', getValue: (m) => m.careerAspiration ?? '', editable: true, width: 180 },
   { key: 'desiredFutureRole', label: '希望役職', getValue: (m) => m.desiredFutureRole ?? '', editable: true, width: 120 },
+  // admin-only: hidden from 一般 (see filterColsForViewer)
   { key: 'email', label: 'メール', getValue: (m) => m.email ?? '', editable: false, width: 180 },
 ]
+
+// Keys that must not be shown to non-admin (一般) viewers.
+// Keep this in sync with the server-side GAS restriction list.
+const ADMIN_ONLY_COL_KEYS = new Set([
+  'email',
+])
+
+// Returns the subset of columns a viewer with the given admin status may see.
+function filterColsForViewer(cols: ColDef[], isAnyAdmin: boolean): ColDef[] {
+  if (isAnyAdmin) return cols
+  return cols.filter((c) => !ADMIN_ONLY_COL_KEYS.has(c.key))
+}
 
 // ---------- CSV helpers ----------
 
@@ -57,9 +71,35 @@ function downloadCsv(filename: string, rows: string[][]) {
 // ---------- main component ----------
 
 export function AdminMemberDb() {
-  const { members, skillOptions, updateSearchProfile, updateCareerGoals, updateJoinedAt, bulkUpdateSkills } = useOrbit()
+  const {
+    members,
+    skillOptions,
+    updateSearchProfile,
+    updateCareerGoals,
+    updateJoinedAt,
+    bulkUpdateSkills,
+    currentUser,
+    isFullAdmin,
+    adminProjects,
+  } = useOrbit()
 
-  // visible columns
+  // true for any admin role (代表・班長 etc.), false for 一般
+  const isAnyAdmin = !!(currentUser?.role) && currentUser.role !== BASE_ROLE
+
+  // Columns the current viewer is allowed to see/export
+  const allowedCols = useMemo(() => filterColsForViewer(BASE_COLS, isAnyAdmin), [isAnyAdmin])
+
+  // Members scoped to this viewer's access:
+  //   full admin  → all members
+  //   班長 (non-full admin) → only members belonging to their managed projects
+  //   一般 → shouldn't reach this screen, but fall back to all as defensive
+  const scopedMembers = useMemo(() => {
+    if (isFullAdmin || !isAnyAdmin) return members
+    const memberIdSet = new Set(adminProjects.flatMap((p) => p.memberIds ?? []))
+    return members.filter((m) => memberIdSet.has(m.id))
+  }, [isFullAdmin, isAnyAdmin, members, adminProjects])
+
+  // visible columns (after user-toggled hiddenCols)
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
   const [colPanelOpen, setColPanelOpen] = useState(false)
 
@@ -75,18 +115,18 @@ export function AdminMemberDb() {
   const [skillCsvError, setSkillCsvError] = useState('')
   const [skillCsvOk, setSkillCsvOk] = useState(false)
 
-  const visibleCols = BASE_COLS.filter((c) => !hiddenCols.has(c.key))
+  const visibleCols = allowedCols.filter((c) => !hiddenCols.has(c.key))
 
-  // filtered rows
+  // filtered rows (applied on top of the already-scoped member list)
   const filteredMembers = useMemo(() => {
-    return members.filter((m) => {
-      return BASE_COLS.every((col) => {
+    return scopedMembers.filter((m) => {
+      return allowedCols.every((col) => {
         const f = filters[col.key]?.toLowerCase().trim()
         if (!f) return true
         return col.getValue(m).toLowerCase().includes(f)
       })
     })
-  }, [members, filters])
+  }, [scopedMembers, allowedCols, filters])
 
   // ---- commit cell edit ----
   const commitEdit = useCallback((memberId: string, colKey: string, val: string) => {
@@ -110,17 +150,18 @@ export function AdminMemberDb() {
     setEditCell(null)
   }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt])
 
-  // ---- member CSV export ----
+  // ---- member CSV export (uses viewer-scoped cols and members) ----
   const exportMemberCsv = () => {
-    const headers = visibleCols.map((c) => c.label)
-    const rows = filteredMembers.map((m) => visibleCols.map((c) => c.getValue(m)))
+    const cols = visibleCols
+    const headers = cols.map((c) => c.label)
+    const rows = filteredMembers.map((m) => cols.map((c) => c.getValue(m)))
     downloadCsv('members.csv', [headers, ...rows])
   }
 
   // ---- skill level CSV export ----
   const exportSkillCsv = () => {
     const headers = ['氏名', ...skillOptions]
-    const rows = members.map((m) => {
+    const rows = scopedMembers.map((m) => {
       return [m.name, ...skillOptions.map((sk) => skillLevelText(m, sk))]
     })
     downloadCsv('skills.csv', [headers, ...rows])
@@ -186,7 +227,7 @@ export function AdminMemberDb() {
             </button>
             {colPanelOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 rounded-md border border-border bg-card shadow-md p-3 space-y-1 min-w-[160px]">
-                {BASE_COLS.map((col) => (
+                {allowedCols.map((col) => (
                   <label key={col.key} className="flex items-center gap-2 text-xs cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -248,7 +289,7 @@ export function AdminMemberDb() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        {filteredMembers.length} / {members.length} 件表示 · セルをクリックで編集
+        {filteredMembers.length} / {scopedMembers.length} 件表示 · セルをクリックで編集
       </p>
 
       {/* Table */}

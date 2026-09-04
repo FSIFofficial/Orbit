@@ -58,6 +58,7 @@ export const DEFAULT_NON_TOP_SECTIONS: AdminSection[] = [
   'approvals',
   'assignments',
   'projects',
+  'memberdb',
 ]
 
 // visibility gate for 幹部 (leadership)-only tasks — see Task.visibility

@@ -85,20 +85,33 @@ export function AdminMembers() {
 
   const handleBulkAdd = () => {
     if (!csvPreview) return
-    csvPreview.forEach((r) => addMember(r.name, r.email, r.affiliation, r.role))
-    toast(`${csvPreview.length}人を一括登録しました`)
+    const rows = csvPreview
     setCsvPreview(null)
+    Promise.allSettled(rows.map((r) => addMember(r.name, r.email, r.affiliation, r.role))).then(
+      (results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length
+        if (failed > 0) {
+          const firstErr = (results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason
+          toast(`${failed}件の登録に失敗しました: ${firstErr instanceof Error ? firstErr.message : String(firstErr)}`)
+        } else {
+          toast(`${rows.length}人を一括登録しました`)
+        }
+      },
+    )
   }
 
   const handleAddMember = () => {
     const name = newName.trim()
     if (!name) return
-    addMember(name, newEmail.trim(), newAffiliation.trim(), newRole)
-    toast(`${name} を登録しました`)
     setNewName('')
     setNewEmail('')
     setNewAffiliation('')
     setNewRole(BASE_ROLE)
+    addMember(name, newEmail.trim(), newAffiliation.trim(), newRole)
+      .then(() => toast(`${name} を登録しました`))
+      .catch((err: unknown) => {
+        toast(`登録に失敗しました: ${err instanceof Error ? err.message : String(err)}`)
+      })
   }
 
   const activeCount = (m: Member) =>

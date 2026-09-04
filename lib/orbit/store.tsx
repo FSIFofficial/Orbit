@@ -264,7 +264,7 @@ interface OrbitContextValue extends OrbitState {
   activeProjects: Project[]
   setProjectArchived: (projectId: string, archived: boolean) => void
   setProjectOrder: (orderedIds: string[]) => void
-  addMember: (name: string, email: string, affiliation: string, role: string) => void
+  addMember: (name: string, email: string, affiliation: string, role: string) => Promise<void>
   removeMember: (memberId: string) => void
   updateNotify: (memberId: string, notify: boolean) => void
   updateNotifySettings: (memberId: string, settings: Partial<Record<NotifyKind, NotifyFrequency>>) => void
@@ -2358,7 +2358,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   const addMember = useCallback(
-    (name: string, email: string, affiliation: string, role: string) => {
+    (name: string, email: string, affiliation: string, role: string): Promise<void> => {
       const tempId = `m-${Math.random().toString(36).slice(2, 9)}`
       const newMember: Member = {
         id: tempId,
@@ -2375,15 +2375,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       }
       setMembers((prev) => [...prev, newMember])
 
-      if (isRemoteConfigured) {
-        remoteApi
-          .addMember(name, email, affiliation, role)
-          .then(({ id }) => {
-            setMembers((prev) => prev.map((m) => (m.id === tempId ? { ...m, id } : m)))
-            setRemoteError(null)
-          })
-          .catch(reportRemoteError)
-      }
+      if (!isRemoteConfigured) return Promise.resolve()
+
+      return remoteApi
+        .addMember(name, email, affiliation, role)
+        .then(({ id }) => {
+          setMembers((prev) => prev.map((m) => (m.id === tempId ? { ...m, id } : m)))
+          setRemoteError(null)
+        })
+        .catch((err: unknown) => {
+          // Roll back the optimistic add so the local state stays consistent
+          setMembers((prev) => prev.filter((m) => m.id !== tempId))
+          reportRemoteError(err)
+          throw err
+        })
     },
     [reportRemoteError],
   )
