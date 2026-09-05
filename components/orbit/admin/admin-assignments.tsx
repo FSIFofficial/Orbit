@@ -8,9 +8,11 @@ import { useToast } from '@/components/orbit/toast'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, Sparkles, Info } from 'lucide-react'
 import type { Task, Member } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function AdminAssignments() {
   const { adminTasks: tasks, members, getProject, assignTask } = useOrbit()
+  const { t: tr } = useI18n()
   const unassigned = tasks.filter((t) => t.assigneeIds.length === 0 && t.status !== 'done')
   const [selectedId, setSelectedId] = useState<string | null>(unassigned[0]?.id ?? null)
 
@@ -20,20 +22,20 @@ export function AdminAssignments() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Assignments</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        未アサインのタスクに担当者を割り当てます。Orbitは候補を提案しますが、最終判断は管理者が行います。
+        {tr('admin.assignments.subtitle')}
       </p>
 
       {unassigned.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed border-border bg-card p-10 text-center">
-          <p className="text-sm font-medium">未アサインのタスクはありません</p>
-          <p className="mt-1 text-xs text-muted-foreground">すべてのタスクに担当者が設定されています。</p>
+          <p className="text-sm font-medium">{tr('admin.assignments.empty.title')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{tr('admin.assignments.empty.desc')}</p>
         </div>
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
           {/* Task list */}
           <div className="rounded-lg border border-border bg-card lg:sticky lg:top-[4.5rem] lg:self-start">
             <div className="border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground">
-              未アサイン {unassigned.length}件
+              {tr('admin.assignments.unassignedCount', { count: unassigned.length })}
             </div>
             <ul className="max-h-[calc(100vh-14rem)] divide-y divide-border overflow-y-auto orbit-scroll">
               {unassigned.map((t) => (
@@ -86,6 +88,7 @@ function MatchPanel({
   projectName: string
 }) {
   const toast = useToast()
+  const { t } = useI18n()
   const ranked = rankCandidates(task, members, allTasks)
   const rankedIds = new Set(ranked.map((r) => r.member.id))
   const others = members.filter((m) => !rankedIds.has(m.id))
@@ -93,7 +96,7 @@ function MatchPanel({
 
   function handleAssign(m: Member) {
     assignTask(task.id, [...task.assigneeIds, m.id])
-    toast(`${m.displayName || m.name} をアサインしました`)
+    toast(t('admin.assignments.assignedToast', { name: m.displayName || m.name }))
   }
 
   return (
@@ -105,13 +108,13 @@ function MatchPanel({
             <h2 className="text-base font-semibold">{task.name}</h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <ProjectTag name={projectName} />
-              <span className="text-xs text-muted-foreground">期限：{formatDeadline(task.deadline)}</span>
+              <span className="text-xs text-muted-foreground">{t('admin.assignments.deadlineLabel', { date: formatDeadline(task.deadline) })}</span>
               <DifficultyBadge difficulty={task.difficulty} />
             </div>
           </div>
         </div>
         <div className="mt-4">
-          <div className="text-xs font-medium text-muted-foreground">要求スキル</div>
+          <div className="text-xs font-medium text-muted-foreground">{t('admin.assignments.requiredSkills')}</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {task.skills.map((s) => (
               <Tag key={s}>{s}</Tag>
@@ -123,17 +126,17 @@ function MatchPanel({
       {/* Recommended candidates */}
       <div className="mt-5 flex items-center gap-2">
         <Sparkles className="size-4 text-primary" />
-        <h3 className="text-sm font-semibold">おすすめ担当</h3>
+        <h3 className="text-sm font-semibold">{t('admin.assignments.recommended.title')}</h3>
       </div>
       <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Info className="size-3.5" />
-        スキルの一致・本人のWill・過去の実績にもとづく提案です。点数評価ではありません。
+        {t('admin.assignments.recommended.desc')}
       </p>
 
       <div className="mt-3 space-y-3">
         {ranked.length === 0 && (
           <div className="rounded-lg border border-dashed border-border bg-card px-4 py-6 text-center text-xs text-muted-foreground">
-            スキルが一致する候補が見つかりませんでした。下から任意のメンバーを選択できます。
+            {t('admin.assignments.noMatches')}
           </div>
         )}
         {ranked.map(({ member, matches }) => (
@@ -156,7 +159,7 @@ function MatchPanel({
             className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronDown className={`size-3.5 transition-transform ${showOthers ? 'rotate-180' : ''}`} />
-            その他のメンバーから選ぶ（{others.length}）
+            {t('admin.assignments.otherMembers', { count: others.length })}
           </button>
           {showOthers && (
             <div className="mt-3 space-y-3">
@@ -218,6 +221,7 @@ function CandidateCard({
   recommended?: boolean
   weeklyHours?: number
 }) {
+  const { t } = useI18n()
   return (
     <div
       className={`rounded-lg border bg-card p-4 ${
@@ -235,9 +239,9 @@ function CandidateCard({
             {!!weeklyHours && (
               <span
                 className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                title="今週が期限の、未完了タスクの想定時間合計"
+                title={t('admin.assignments.weeklyHoursTitle')}
               >
-                今週の工数 {weeklyHours}h
+                {t('admin.assignments.weeklyHoursLabel', { hours: weeklyHours })}
               </span>
             )}
           </div>
@@ -246,7 +250,7 @@ function CandidateCard({
           {matches.length > 0 ? (
             <div className="mt-2">
               <div className="text-[11px] font-medium text-muted-foreground">
-                一致したスキル（{matches.length}）
+                {t('admin.assignments.matchedSkills', { count: matches.length })}
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {matches.map((s) => (
@@ -260,13 +264,13 @@ function CandidateCard({
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-[11px] text-muted-foreground">一致したスキルはありません</div>
+            <div className="mt-2 text-[11px] text-muted-foreground">{t('admin.assignments.noMatchedSkills')}</div>
           )}
 
           {/* Will */}
           {member.will.length > 0 && (
             <div className="mt-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/70">Will：</span>
+              <span className="font-medium text-foreground/70">{t('admin.assignments.willLabel')}</span>
               {member.will.join(' / ')}
             </div>
           )}
@@ -274,13 +278,13 @@ function CandidateCard({
           {/* Fact */}
           {member.facts.length > 0 && (
             <div className="mt-1 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/70">実績：</span>
-              {member.facts.slice(0, 2).map((f) => `${f.label} ${f.count}件`).join(' / ')}
+              <span className="font-medium text-foreground/70">{t('admin.assignments.factLabel')}</span>
+              {member.facts.slice(0, 2).map((f) => t('admin.assignments.factItem', { label: f.label, count: f.count })).join(' / ')}
             </div>
           )}
         </div>
         <Button size="sm" onClick={onAssign} className="shrink-0">
-          アサイン
+          {t('admin.assignments.assign')}
         </Button>
       </div>
     </div>
