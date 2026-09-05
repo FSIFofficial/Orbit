@@ -527,7 +527,18 @@ async function postToGas<T = unknown>(action: string, payload: Record<string, un
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action, authToken, ...payload }),
     })
-    return res.json() as Promise<{ ok: boolean; result?: T; error?: string; authError?: boolean }>
+    // GAS always returns JSON from doPost. A non-JSON response (HTML) means
+    // the request was redirected to a login page (auth config issue) or the
+    // script itself failed to load (syntax error, undeployed version, etc.).
+    const text = await res.text()
+    try {
+      return JSON.parse(text) as { ok: boolean; result?: T; error?: string; authError?: boolean }
+    } catch {
+      throw new Error(
+        'GASスクリプトからJSONが返りませんでした。' +
+        'GASのデプロイ設定（「全員」アクセス）またはスクリプトのコピーを確認してください。',
+      )
+    }
   }
 
   let json = await doFetch(getGasAuthToken())
