@@ -5,6 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { MessageSquare, TrendingUp, Filter } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 type ActivityKind = 'all' | 'comment' | 'progress'
 
@@ -14,6 +15,7 @@ export function ActivityScreen() {
   const { currentUser, members, visibleTasks } = useOrbit()
   const { goBack } = useNav()
   const { openTask } = useTaskDrawer()
+  const { t } = useI18n()
   const [kind, setKind] = useState<ActivityKind>('all')
   const [memberId, setMemberId] = useState(currentUser?.id ?? '')
 
@@ -65,7 +67,7 @@ export function ActivityScreen() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-center gap-2.5">
         <MessageSquare className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold">アクティビティ</h1>
+        <h1 className="text-xl font-semibold">{t('activity.title')}</h1>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -75,7 +77,7 @@ export function ActivityScreen() {
           onChange={(e) => setMemberId(e.target.value)}
           className="h-8 rounded-lg border border-border bg-card px-2 text-sm outline-none focus:border-primary"
         >
-          <option value="">全員</option>
+          <option value="">{t('common.everyone')}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName || m.name}
@@ -92,7 +94,7 @@ export function ActivityScreen() {
                 : 'border-border text-foreground hover:bg-secondary'
             }`}
           >
-            {k === 'all' ? 'すべて' : k === 'comment' ? 'コメント' : '進捗報告'}
+            {k === 'all' ? t('activity.filter.all') : k === 'comment' ? t('activity.filter.comment') : t('activity.filter.progress')}
           </button>
         ))}
       </div>
@@ -101,7 +103,7 @@ export function ActivityScreen() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-16 text-center">
           <MessageSquare className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            {member ? `${member.displayName || member.name} さんのアクティビティがありません` : '活動がありません'}
+            {member ? t('activity.emptyForMember', { name: member.displayName || member.name }) : t('activity.emptyGeneric')}
           </p>
         </div>
       ) : (
@@ -133,7 +135,7 @@ export function ActivityScreen() {
 
       <div className="mt-6">
         <button onClick={goBack} className="text-sm text-muted-foreground hover:text-foreground">
-          ← 戻る
+          {t('activity.back')}
         </button>
       </div>
     </div>

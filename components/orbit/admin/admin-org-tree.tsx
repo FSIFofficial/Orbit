@@ -7,6 +7,7 @@ import { Avatar } from '@/components/orbit/primitives'
 import { parseDepartmentPath, formatDepartmentPath, getDepartmentTops } from '@/lib/orbit/utils'
 import { ChevronRight, Users } from 'lucide-react'
 import type { Member } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 interface TreeNode {
   label: string
@@ -116,6 +117,7 @@ function TreeNodeRow({
 export function AdminOrgTree() {
   const { members } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
   const [selected, setSelected] = useState<string | null>(null)
 
   const paths = useMemo(
@@ -140,7 +142,7 @@ export function AdminOrgTree() {
       <div className="mx-auto max-w-4xl px-6 py-8">
         <h1 className="text-xl font-semibold tracking-tight">Org Tree</h1>
         <p className="mt-4 text-sm text-muted-foreground">
-          department_path が設定されているメンバーがいません。メンバーページで組織パスを設定してください。
+          {t('admin.orgTree.noPaths')}
         </p>
       </div>
     )
@@ -150,14 +152,14 @@ export function AdminOrgTree() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Org Tree</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        部署を選択してメンバーを確認できます。
+        {t('admin.orgTree.subtitle')}
       </p>
 
       <div className="mt-6 flex gap-4">
         {/* Tree panel */}
         <div className="w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className="border-b border-border px-4 py-2.5 text-xs font-medium text-muted-foreground">
-            組織ツリー
+            {t('admin.orgTree.treeHeading')}
           </div>
           <div className="p-2">
             {tree.map((node) => (
@@ -177,20 +179,20 @@ export function AdminOrgTree() {
         <div className="min-w-0 flex-1">
           {!selected ? (
             <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-              左のツリーから部署を選択してください
+              {t('admin.orgTree.selectPrompt')}
             </div>
           ) : (
             <div className="rounded-lg border border-border bg-card">
               <div className="border-b border-border px-4 py-3">
                 <div className="font-semibold">{formatDepartmentPath(selected)}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {deptMembers.length} 名
+                  {t('admin.orgTree.memberCount', { count: deptMembers.length })}
                 </div>
               </div>
 
               {tops.length > 0 && (
                 <div className="border-b border-border px-4 py-3">
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">部署トップ</div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">{t('admin.orgTree.deptTop')}</div>
                   <div className="flex flex-wrap gap-2">
                     {tops.map((m) => (
                       <button
@@ -209,7 +211,7 @@ export function AdminOrgTree() {
               <div className="p-2">
                 {deptMembers.length === 0 ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
-                    この部署に直接所属するメンバーはいません。
+                    {t('admin.orgTree.noDirectMembers')}
                   </p>
                 ) : (
                   deptMembers.map((m) => (
