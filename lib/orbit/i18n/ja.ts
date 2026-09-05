@@ -304,6 +304,10 @@ export const ja = {
   'expenseApplication.justificationPlaceholder': '領収書がない場合、理由を詳しく記載してください',
   'expenseApplication.approvalFlow': '承認フロー: {count}段階の承認が必要です',
   'expenseApplication.submit': '申請する',
+  'gantt.noDeadline.title': '期限が設定されたタスクがありません',
+  'gantt.noDeadline.desc': '期限を設定するとガントチャートが表示されます。',
+  'gantt.taskColumnHeader': 'タスク',
+  'gantt.monthLabel': '{year}年{month}月',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

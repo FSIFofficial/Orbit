@@ -304,6 +304,10 @@ export const en = {
   'expenseApplication.justificationPlaceholder': 'If you have no receipt, describe the reason in detail',
   'expenseApplication.approvalFlow': 'Approval flow: {count} approval step(s) required',
   'expenseApplication.submit': 'Submit',
+  'gantt.noDeadline.title': 'No tasks have a deadline set',
+  'gantt.noDeadline.desc': 'Setting a deadline will show the Gantt chart.',
+  'gantt.taskColumnHeader': 'Task',
+  'gantt.monthLabel': '{month}/{year}',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',
