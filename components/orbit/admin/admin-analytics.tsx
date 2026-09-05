@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 function BarRow({
   label,
@@ -16,6 +17,7 @@ function BarRow({
   max: number
   suffix?: string
 }) {
+  const { t } = useI18n()
   const pct = max > 0 ? Math.round((count / max) * 100) : 0
   return (
     <div className="flex items-center gap-3">
@@ -26,7 +28,7 @@ function BarRow({
         <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
       <div className="w-20 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-        {suffix ?? `${count}人`}
+        {suffix ?? t('admin.analytics.peopleSuffix', { count })}
       </div>
     </div>
   )
@@ -44,12 +46,13 @@ function sortedCounts(map: Map<string, number>): [string, number][] {
 // 個別に許可することは可能）。
 export function AdminAnalytics() {
   const { members, visibleTasks, archivedTasks } = useOrbit()
+  const { t } = useI18n()
 
   const roleCounts = new Map<string, number>()
   const affiliationCounts = new Map<string, number>()
   members.forEach((m) => {
     roleCounts.set(m.role, (roleCounts.get(m.role) ?? 0) + 1)
-    const aff = m.affiliation || '未設定'
+    const aff = m.affiliation || t('admin.analytics.unset')
     affiliationCounts.set(aff, (affiliationCounts.get(aff) ?? 0) + 1)
   })
   const roleRows = sortedCounts(roleCounts)
@@ -114,13 +117,12 @@ export function AdminAnalytics() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        メンバーの登録データから集計した人員構成・スキル・評価の分布です。データの入力は
-        個人ページの「経歴・キャリア」タブ、または Admin → Members から行えます。
+        {t('admin.analytics.subtitle')}
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
-          <SectionLabel>人員構成（役職別）</SectionLabel>
+          <SectionLabel>{t('admin.analytics.roleComposition')}</SectionLabel>
           <div className="mt-4 flex flex-col gap-2.5">
             {roleRows.map(([role, count]) => (
               <BarRow key={role} label={role} count={count} max={maxRole} />
@@ -129,7 +131,7 @@ export function AdminAnalytics() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <SectionLabel>人員構成（所属別）</SectionLabel>
+          <SectionLabel>{t('admin.analytics.affiliationComposition')}</SectionLabel>
           <div className="mt-4 flex flex-col gap-2.5">
             {affiliationRows.map(([aff, count]) => (
               <BarRow key={aff} label={aff} count={count} max={maxAffiliation} />
@@ -139,13 +141,12 @@ export function AdminAnalytics() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <SectionLabel>スキル分布（習熟度入力ベース）</SectionLabel>
+        <SectionLabel>{t('admin.analytics.skillDistribution.title')}</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
-          個人ページの「経歴・キャリア」タブでスキルレベル（1〜5）を入力しているメンバーの
-          集計です。人数はそのスキルを保有すると回答した人数、括弧内は習熟度の平均値です。
+          {t('admin.analytics.skillDistribution.desc')}
         </p>
         {skillRows.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">まだ入力がありません。</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.skillDistribution.empty')}</p>
         ) : (
           <div className="mt-4 flex flex-col gap-2.5">
             {skillRows.map(({ skill, count, avg }) => (
@@ -154,7 +155,7 @@ export function AdminAnalytics() {
                 label={skill}
                 count={count}
                 max={maxSkill}
-                suffix={`${count}人（${avg.toFixed(1)}）`}
+                suffix={t('admin.analytics.skillDistribution.suffix', { count, avg: avg.toFixed(1) })}
               />
             ))}
           </div>
@@ -162,13 +163,12 @@ export function AdminAnalytics() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <SectionLabel>評価分布（各メンバーの直近評価）</SectionLabel>
+        <SectionLabel>{t('admin.analytics.ratingDistribution.title')}</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
-          個人ページの「経歴・キャリア」タブに管理者が入力した評価履歴のうち、各メンバーの
-          最新の評価を集計しています（評価データがあるメンバー: {evaluatedCount}人）。
+          {t('admin.analytics.ratingDistribution.desc', { count: evaluatedCount })}
         </p>
         {ratingRows.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">まだ評価データがありません。</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.ratingDistribution.empty')}</p>
         ) : (
           <div className="mt-4 flex flex-col gap-2.5">
             {ratingRows.map(([rating, count]) => (
@@ -178,12 +178,10 @@ export function AdminAnalytics() {
         )}
       </div>
 
-      {/* item 14: スキル×稼働量 散布図 */}
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <SectionLabel>スキル数 × 担当中タスク数（稼働マップ）</SectionLabel>
+        <SectionLabel>{t('admin.analytics.scatter.title')}</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
-          横軸：スキル数（能力の幅）、縦軸：担当中タスク数（現在の稼働量）。
-          右下ほど能力があって余力があるメンバーです。
+          {t('admin.analytics.scatter.desc')}
         </p>
         <div className="relative mt-4 h-60 overflow-hidden rounded-md border border-border/40 bg-secondary/20">
           {[25, 50, 75].map((pct) => (
@@ -200,25 +198,25 @@ export function AdminAnalytics() {
                 key={m.id}
                 className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer"
                 style={{ left: `${x}%`, top: `${y}%` }}
-                title={`${m.displayName || m.name}: スキル${skillCount} / 担当${activeTaskCount}件`}
+                title={t('admin.analytics.scatter.tooltip', { name: m.displayName || m.name, skillCount, taskCount: activeTaskCount })}
               >
                 <Avatar member={m} size={22} />
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background group-hover:block">
-                  {m.displayName || m.name} ({activeTaskCount}件)
+                  {t('admin.analytics.scatter.hoverLabel', { name: m.displayName || m.name, count: activeTaskCount })}
                 </div>
               </div>
             )
           })}
-          <span className="absolute bottom-1 right-2 text-[9px] text-muted-foreground">スキル数 →</span>
+          <span className="absolute bottom-1 right-2 text-[9px] text-muted-foreground">{t('admin.analytics.scatter.axisLabel')}</span>
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-muted-foreground">
-                <th className="py-1 pr-3 font-medium">メンバー</th>
-                <th className="py-1 pr-3 text-right font-medium">スキル数</th>
-                <th className="py-1 pr-3 text-right font-medium">担当中</th>
-                <th className="py-1 text-right font-medium">完了累計</th>
+                <th className="py-1 pr-3 font-medium">{t('admin.analytics.scatter.colMember')}</th>
+                <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.scatter.colSkillCount')}</th>
+                <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.scatter.colActive')}</th>
+                <th className="py-1 text-right font-medium">{t('admin.analytics.scatter.colCompleted')}</th>
               </tr>
             </thead>
             <tbody>
