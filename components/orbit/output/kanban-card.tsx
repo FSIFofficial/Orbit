@@ -8,7 +8,7 @@ import { Avatar, DifficultyBadge, DepartmentTag } from '../primitives'
 import { TranslatedText } from '../translated-text'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
-import type { TranslationKey } from '@/lib/orbit/i18n'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 import { cn } from '@/lib/utils'
 import { TriangleAlert } from 'lucide-react'
 
@@ -55,6 +55,7 @@ export function KanbanCard({
 }) {
   const { getMember, getProject, currentUser } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
   const assignees = task.assigneeIds.map((id) => getMember(id)).filter(Boolean) as Array<
     NonNullable<ReturnType<typeof getMember>>
   >
@@ -111,17 +112,17 @@ export function KanbanCard({
         {task.pendingApproval && (
           <span
             className="shrink-0 rounded-md bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700"
-            title="管理者の承認待ちです。承認されるまで自分以外には表示されません"
+            title={t('kanban.pendingApprovalTitle')}
           >
-            承認待ち
+            {t('kanban.pendingApproval')}
           </span>
         )}
         {needsScheduleResponse && (
           <span
             className="shrink-0 rounded-md bg-primary-muted px-1 py-0.5 text-[10px] font-semibold text-primary"
-            title="日程調整への回答が必要です"
+            title={t('kanban.scheduleResponseNeededTitle')}
           >
-            要回答
+            {t('kanban.scheduleResponseNeeded')}
           </span>
         )}
       </p>
@@ -147,12 +148,12 @@ export function KanbanCard({
                   ))}
                 </div>
                 <span className="truncate text-xs text-muted-foreground">
-                  {assignees.map((m) => m.displayName || m.name).join('、')}
+                  {assignees.map((m) => m.displayName || m.name).join(t('kanban.listSeparator'))}
                 </span>
               </div>
             ) : (
               <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
-                未アサイン
+                {t('output.list.unassigned')}
               </span>
             )}
           </div>
