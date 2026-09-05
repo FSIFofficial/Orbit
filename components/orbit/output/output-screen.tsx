@@ -12,7 +12,7 @@ import { DifficultyBoard } from './difficulty-board'
 import { DependencyView } from './dependency-view'
 import { GanttView } from './gantt-view'
 import { TaskDetailDrawer } from './task-detail-drawer'
-import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_LABEL, type KanbanCardField } from './kanban-card'
+import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_KEY, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
 import {
   ArrowUpDown,
@@ -36,17 +36,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
 import { CustomFormModal } from '@/components/orbit/custom-form-modal'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
 type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt'
 
 const DEFAULT_TARGET_ORDER: Target[] = ['mine', 'all', 'people', 'projects', 'archive']
-const TARGET_LABEL: Record<Target, string> = {
-  mine: '自分',
-  all: '一覧',
-  people: '個人',
-  projects: 'プロジェクト',
-  archive: 'アーカイブ',
+const TARGET_KEY: Record<Target, TranslationKey> = {
+  mine: 'output.target.mine',
+  all: 'output.target.all',
+  people: 'output.target.people',
+  projects: 'output.target.projects',
+  archive: 'output.target.archive',
 }
 
 // 対象タブの並び順もブラウザごとの個人的な好みなので localStorage に保存する。
@@ -106,6 +107,7 @@ function loadHiddenProjects(userId: string | null | undefined): Set<string> {
 export function OutputScreen() {
   const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks, expenseCategories, customFormDefs } = useOrbit()
   const { go } = useNav()
+  const { t: tr } = useI18n()
   const [targetOrder, setTargetOrder] = useState<Target[]>(() => loadTargetOrder(currentUser?.id))
   const [target, setTarget] = useState<Target>(() => loadTargetOrder(currentUser?.id)[0])
   const [view, setView] = useState<View>('workflow')
@@ -240,11 +242,11 @@ export function OutputScreen() {
       <div className="mb-5 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">ワークスペース</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{tr('output.title')}</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {target === 'mine'
-                ? 'あなたが担当しているタスクをまとめて確認します。'
-                : '登録済みのタスクを組織の視点で確認します。'}
+                ? tr('output.subtitle.mine')
+                : tr('output.subtitle.all')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -254,7 +256,7 @@ export function OutputScreen() {
                 className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <Receipt className="size-3.5" />
-                経費申請
+                {tr('output.expenseApply')}
               </button>
             )}
             {customFormDefs.length > 0 && (
@@ -263,25 +265,25 @@ export function OutputScreen() {
                 className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <FileText className="size-3.5" />
-                フォーム申請
+                {tr('output.formApply')}
               </button>
             )}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <Segment label="対象">
-            {targetOrder.map((t) => (
-              <Seg key={t} active={target === t} onClick={() => setTarget(t)}>
-                {t === 'mine' && <User className="size-3.5" />}
-                {t === 'archive' && <Archive className="size-3.5" />}
-                {TARGET_LABEL[t]}
-                {t === 'mine' && myTasks.length > 0 && (
+          <Segment label={tr('output.target.label')}>
+            {targetOrder.map((tg) => (
+              <Seg key={tg} active={target === tg} onClick={() => setTarget(tg)}>
+                {tg === 'mine' && <User className="size-3.5" />}
+                {tg === 'archive' && <Archive className="size-3.5" />}
+                {tr(TARGET_KEY[tg])}
+                {tg === 'mine' && myTasks.length > 0 && (
                   <span className="rounded-full bg-secondary px-1.5 text-[10px] tabular-nums">
                     {myTasks.length}
                   </span>
                 )}
-                {t === 'archive' && archivedTasks.length > 0 && (
+                {tg === 'archive' && archivedTasks.length > 0 && (
                   <span className="rounded-full bg-secondary px-1.5 text-[10px] tabular-nums">
                     {archivedTasks.length}
                   </span>
@@ -296,82 +298,82 @@ export function OutputScreen() {
               onClick={() => setOrderOpen((o) => !o)}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
               aria-expanded={orderOpen}
-              title="対象タブの並び替え"
+              title={tr('output.reorder.title')}
             >
               <ArrowUpDown className="size-3.5" />
-              並び替え
+              {tr('output.reorder')}
             </button>
             {orderOpen && (
               <div className="absolute left-0 top-full z-10 mt-1.5 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
                 <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                  ドラッグで並び替え（一番上が既定表示）
+                  {tr('output.reorder.hint')}
                 </p>
-                {targetOrder.map((t) => (
+                {targetOrder.map((tg) => (
                   <div
-                    key={t}
+                    key={tg}
                     draggable
-                    onDragStart={() => setDraggingTarget(t)}
+                    onDragStart={() => setDraggingTarget(tg)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => {
-                      if (draggingTarget) reorderTarget(draggingTarget, t)
+                      if (draggingTarget) reorderTarget(draggingTarget, tg)
                       setDraggingTarget(null)
                     }}
                     onDragEnd={() => setDraggingTarget(null)}
                     className={cn(
                       'flex cursor-grab items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground transition-colors hover:bg-secondary',
-                      draggingTarget === t && 'opacity-40',
+                      draggingTarget === tg && 'opacity-40',
                     )}
                   >
                     <GripVertical className="size-3.5 shrink-0 text-muted-foreground" />
-                    {TARGET_LABEL[t]}
+                    {tr(TARGET_KEY[tg])}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <Segment label="表示">
+          <Segment label={tr('output.view.label')}>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'workflow'}
               onClick={() => selectView('workflow')}
             >
               <Columns3 className="size-3.5" />
-              ワークフロー
+              {tr('output.view.workflow')}
             </Seg>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'list'}
               onClick={() => selectView('list')}
             >
               <LayoutList className="size-3.5" />
-              リスト
+              {tr('output.view.list')}
             </Seg>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'calendar'}
               onClick={() => selectView('calendar')}
             >
               <CalendarDays className="size-3.5" />
-              カレンダー
+              {tr('output.view.calendar')}
             </Seg>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'difficulty'}
               onClick={() => selectView('difficulty')}
             >
               <GaugeCircle className="size-3.5" />
-              難易度
+              {tr('output.view.difficulty')}
             </Seg>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'dependency'}
               onClick={() => selectView('dependency')}
             >
               <GitBranch className="size-3.5" />
-              依存関係
+              {tr('output.view.dependency')}
             </Seg>
             <Seg
               active={(target === 'all' || target === 'mine') && view === 'gantt'}
               onClick={() => selectView('gantt')}
             >
               <BarChart2 className="size-3.5" />
-              ガント
+              {tr('output.view.gantt')}
             </Seg>
           </Segment>
 
@@ -385,12 +387,12 @@ export function OutputScreen() {
                 aria-expanded={fieldsOpen}
               >
                 <SlidersHorizontal className="size-3.5" />
-                表示項目
+                {tr('output.fields.button')}
               </button>
               {fieldsOpen && (
                 <div className="absolute left-0 top-full z-10 mt-1.5 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
                   <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                    カードに表示する項目（タスク名は常に表示）
+                    {tr('output.fields.hint')}
                   </p>
                   {KANBAN_CARD_FIELDS.map((f) => {
                     const checked = cardFields.has(f)
@@ -411,7 +413,7 @@ export function OutputScreen() {
                         >
                           <Check className="size-3" strokeWidth={3} />
                         </span>
-                        {KANBAN_CARD_FIELD_LABEL[f]}
+                        {tr(KANBAN_CARD_FIELD_KEY[f])}
                       </button>
                     )
                   })}
@@ -429,7 +431,7 @@ export function OutputScreen() {
                 aria-expanded={projectVisibilityOpen}
               >
                 <FolderKanban className="size-3.5" />
-                プロジェクト表示
+                {tr('output.projectVisibility.button')}
                 {hiddenProjectIds.size > 0 && (
                   <span className="rounded-full bg-secondary px-1.5 text-[10px] tabular-nums">
                     {projects.length - hiddenProjectIds.size}/{projects.length}
@@ -439,7 +441,7 @@ export function OutputScreen() {
               {projectVisibilityOpen && (
                 <div className="absolute left-0 top-full z-10 mt-1.5 w-52 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
                   <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                    依存関係に表示するプロジェクト
+                    {tr('output.projectVisibility.hint')}
                   </p>
                   <div className="max-h-72 overflow-y-auto orbit-scroll">
                     {projects.map((p) => {
@@ -467,7 +469,7 @@ export function OutputScreen() {
                     })}
                     {projects.length === 0 && (
                       <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
-                        プロジェクトがありません
+                        {tr('output.projectVisibility.empty')}
                       </p>
                     )}
                   </div>
@@ -483,7 +485,7 @@ export function OutputScreen() {
                 onChange={(e) => setProjectFilter(e.target.value)}
                 className="h-8 cursor-pointer rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-primary"
               >
-                <option value="">すべてのプロジェクト</option>
+                <option value="">{tr('output.filter.allProjects')}</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -494,15 +496,15 @@ export function OutputScreen() {
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                title="期間（開始）"
+                title={tr('output.filter.fromTitle')}
                 className="h-8 rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-primary"
               />
-              <span className="text-xs text-muted-foreground">〜</span>
+              <span className="text-xs text-muted-foreground">{tr('output.filter.tilde')}</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                title="期間（終了）"
+                title={tr('output.filter.toTitle')}
                 className="h-8 rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-primary"
               />
               {hasActiveFilter && (
@@ -515,7 +517,7 @@ export function OutputScreen() {
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <X className="size-3.5" />
-                  クリア
+                  {tr('output.filter.clear')}
                 </button>
               )}
             </div>
@@ -527,9 +529,9 @@ export function OutputScreen() {
         archivedTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
             <Archive className="mx-auto size-6 text-muted-foreground" />
-            <p className="mt-3 text-sm font-medium">アーカイブされたタスクはありません</p>
+            <p className="mt-3 text-sm font-medium">{tr('output.archive.empty.title')}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              完了から14日以上経過したタスクが自動でここに移動します。
+              {tr('output.archive.empty.desc')}
             </p>
           </div>
         ) : (
@@ -607,32 +609,34 @@ function Seg({
 }
 
 function EmptyState({ onInput }: { onInput: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
       <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-secondary">
         <Inbox className="size-6 text-muted-foreground" />
       </div>
-      <h2 className="text-base font-semibold">まだタスクがありません</h2>
-      <p className="mt-1 text-sm text-muted-foreground">最初のタスクを入力してみましょう。</p>
+      <h2 className="text-base font-semibold">{t('output.empty.title')}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t('output.empty.desc')}</p>
       <Button className="mt-5 h-9" onClick={onInput}>
-        タスクを入力
+        {t('output.empty.cta')}
       </Button>
     </div>
   )
 }
 
 function MineEmptyState({ onShowAll }: { onShowAll: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
       <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-secondary">
         <User className="size-6 text-muted-foreground" />
       </div>
-      <h2 className="text-base font-semibold">担当しているタスクはありません</h2>
+      <h2 className="text-base font-semibold">{t('output.mineEmpty.title')}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        あなたが担当者になっているタスクがまだありません。
+        {t('output.mineEmpty.desc')}
       </p>
       <Button variant="ghost" className="mt-5 h-9" onClick={onShowAll}>
-        組織全体の一覧を見る
+        {t('output.mineEmpty.cta')}
       </Button>
     </div>
   )
