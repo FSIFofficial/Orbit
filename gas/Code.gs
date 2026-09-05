@@ -361,14 +361,12 @@ function authorizeAction(acting, action, body) {
     'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
     'updateMemberProjects',         // プロジェクト割り当ては代表のみ（自己昇権の抜け穴防止）
   ]
-  // isActingFullAdmin = lib/orbit/permissions.ts の isFullAdmin と同じ基準
-  // (non-empty, non-一般, not in restricted_roles)。代表は上の早期 return で
-  // 通過済みなので、ここでは「その他の全権管理者ロール」を許可する。
+  // 代表は関数冒頭の if (isDaihyo) return でここに到達しないため、
+  // このブロックに到達した時点で非代表が確定している。
+  // isActingFullAdmin は使わない（restricted_roles 依存で穴が開くため）。
   if (daihyoOnly.indexOf(action) >= 0) {
-    if (!isActingFullAdmin(acting)) {
-      if (checkPermissionOverride(acting, action, body)) return
-      throw new Error('この操作は全権管理者のみ実行できます。')
-    }
+    if (checkPermissionOverride(acting, action, body)) return
+    throw new Error('この操作は代表のみ実行できます。')
   }
 
   // --- 代表 or 班長 (任意の管理者ロール) ---
