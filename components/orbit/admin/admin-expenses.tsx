@@ -5,6 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import type { ApprovalStep, ExpenseApplication, ExpenseCategory } from '@/lib/orbit/types'
 import { Plus, Trash2, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Modal } from '@/components/orbit/modal'
+import { useI18n } from '@/lib/orbit/i18n'
 
 // ---- ApprovalStepEditor ----
 
@@ -19,6 +20,7 @@ function ApprovalStepEditor({
   members: { id: string; name: string; displayName?: string }[]
   roleLevels: string[]
 }) {
+  const { t } = useI18n()
   const addStep = () => {
     onChange([
       ...steps,
@@ -42,8 +44,8 @@ function ApprovalStepEditor({
               onChange={(e) => updateStep(step.id, { type: e.target.value as 'member' | 'role', memberId: undefined, role: undefined })}
               className="rounded border border-border bg-background px-2 py-1 text-xs"
             >
-              <option value="member">特定の個人</option>
-              <option value="role">役職（誰でも）</option>
+              <option value="member">{t('admin.expenses.approvalStep.person')}</option>
+              <option value="role">{t('admin.expenses.approvalStep.role')}</option>
             </select>
             {step.type === 'member' ? (
               <select
@@ -68,7 +70,7 @@ function ApprovalStepEditor({
                 </select>
                 <input
                   type="text"
-                  placeholder="部署名（任意）"
+                  placeholder={t('admin.expenses.approvalStep.departmentPlaceholder')}
                   value={step.department ?? ''}
                   onChange={(e) => updateStep(step.id, { department: e.target.value || undefined })}
                   className="w-28 rounded border border-border bg-background px-2 py-1 text-xs"
@@ -81,10 +83,10 @@ function ApprovalStepEditor({
                   }}
                   className="rounded border border-border bg-background px-2 py-1 text-xs"
                 >
-                  <option value={1}>1人</option>
-                  <option value={2}>2人</option>
-                  <option value={3}>3人</option>
-                  <option value="all">全員</option>
+                  <option value={1}>{t('admin.expenses.approvalStep.count1')}</option>
+                  <option value={2}>{t('admin.expenses.approvalStep.count2')}</option>
+                  <option value={3}>{t('admin.expenses.approvalStep.count3')}</option>
+                  <option value="all">{t('admin.expenses.approvalStep.countAll')}</option>
                 </select>
               </>
             )}
@@ -98,7 +100,7 @@ function ApprovalStepEditor({
         onClick={addStep}
         className="flex items-center gap-1 text-xs text-primary hover:underline"
       >
-        <Plus className="size-3" /> ステップを追加
+        <Plus className="size-3" /> {t('admin.expenses.approvalStep.add')}
       </button>
     </div>
   )
@@ -119,6 +121,7 @@ function CategoryEditor({
   members: { id: string; name: string; displayName?: string }[]
   roleLevels: string[]
 }) {
+  const { t } = useI18n()
   const [label, setLabel] = useState(initial?.label ?? '')
   const [steps, setSteps] = useState<ApprovalStep[]>(initial?.approvalSteps ?? [])
 
@@ -131,31 +134,31 @@ function CategoryEditor({
   return (
     <Modal open={true} onClose={onClose}>
       <div className="space-y-4 p-4">
-        <h3 className="font-semibold">{initial ? 'カテゴリ編集' : 'カテゴリ追加'}</h3>
+        <h3 className="font-semibold">{initial ? t('admin.expenses.category.editTitle') : t('admin.expenses.category.addTitle')}</h3>
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">カテゴリ名</label>
+          <label className="text-xs text-muted-foreground">{t('admin.expenses.category.nameLabel')}</label>
           <input
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-            placeholder="例: 交通費、備品購入"
+            placeholder={t('admin.expenses.category.namePlaceholder')}
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">承認ステップ（順番に通過）</label>
+          <label className="text-xs text-muted-foreground">{t('admin.expenses.category.approvalStepsLabel')}</label>
           <ApprovalStepEditor steps={steps} onChange={setSteps} members={members} roleLevels={roleLevels} />
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm">
-            キャンセル
+            {t('admin.expenses.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={!label.trim()}
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
           >
-            保存
+            {t('admin.expenses.save')}
           </button>
         </div>
       </div>
@@ -178,6 +181,7 @@ function ApplicationCard({
   getMember: (id: string | null) => { name: string; displayName?: string } | undefined
   getCategory: (id: string) => ExpenseCategory | undefined
 }) {
+  const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectOpen, setRejectOpen] = useState(false)
@@ -187,10 +191,10 @@ function ApplicationCard({
   const currentStep = app.approvalSteps[app.currentStepIndex]
 
   const statusLabel: Record<ExpenseApplication['status'], string> = {
-    pending: '承認待ち',
-    approved: '承認済み',
-    rejected: '却下',
-    withdrawn: '取り下げ',
+    pending: t('admin.expenses.status.pending'),
+    approved: t('admin.expenses.status.approved'),
+    rejected: t('admin.expenses.status.rejected'),
+    withdrawn: t('admin.expenses.status.withdrawn'),
   }
   const statusColor: Record<ExpenseApplication['status'], string> = {
     pending: 'text-yellow-600',
@@ -224,20 +228,19 @@ function ApplicationCard({
       {expanded && (
         <div className="space-y-3 border-t border-border px-4 py-3">
           {app.purpose && (
-            <div className="text-sm"><span className="text-muted-foreground">用途: </span>{app.purpose}</div>
+            <div className="text-sm"><span className="text-muted-foreground">{t('admin.expenses.purposeLabel')}</span>{app.purpose}</div>
           )}
           {app.receiptUrl && (
-            <div className="text-sm"><span className="text-muted-foreground">領収書: </span>
-              <a href={app.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">表示</a>
+            <div className="text-sm"><span className="text-muted-foreground">{t('admin.expenses.receiptLabel')}</span>
+              <a href={app.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">{t('admin.expenses.receiptShow')}</a>
             </div>
           )}
           {app.justification && (
-            <div className="text-sm"><span className="text-muted-foreground">理由: </span>{app.justification}</div>
+            <div className="text-sm"><span className="text-muted-foreground">{t('admin.expenses.justificationLabel')}</span>{app.justification}</div>
           )}
 
-          {/* 承認ステップ進捗 */}
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">承認ステップ</div>
+            <div className="text-xs font-semibold text-muted-foreground">{t('admin.expenses.approvalStepsTitle')}</div>
             {app.approvalSteps.map((step, i) => {
               const approvedHere = app.approvals.filter((a) => a.stepId === step.id && a.action === 'approved')
               const isDone = i < app.currentStepIndex || app.status === 'approved'
@@ -250,8 +253,8 @@ function ApplicationCard({
                       ? (getMember(step.memberId ?? null)?.displayName ?? getMember(step.memberId ?? null)?.name ?? step.memberId)
                       : `${step.role}${step.department ? `（${step.department}）` : ''}`}
                   </span>
-                  {isDone && <span className="text-green-600">✓ 承認済み({approvedHere.length}名)</span>}
-                  {isCurrent && <span className="font-semibold text-primary">← 現在のステップ</span>}
+                  {isDone && <span className="text-green-600">{t('admin.expenses.approvedCount', { count: approvedHere.length })}</span>}
+                  {isCurrent && <span className="font-semibold text-primary">{t('admin.expenses.currentStep')}</span>}
                 </div>
               )
             })}
@@ -263,19 +266,19 @@ function ApplicationCard({
                 onClick={() => onApprove(currentStep.id)}
                 className="flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700"
               >
-                <CheckCircle className="size-3.5" /> 承認
+                <CheckCircle className="size-3.5" /> {t('admin.expenses.approve')}
               </button>
               <button
                 onClick={() => setRejectOpen(true)}
                 className="flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
               >
-                <XCircle className="size-3.5" /> 却下
+                <XCircle className="size-3.5" /> {t('admin.expenses.reject')}
               </button>
             </div>
           )}
           {app.rejectionReason && (
             <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
-              却下理由: {app.rejectionReason}
+              {t('admin.expenses.rejectionReasonLabel', { reason: app.rejectionReason })}
             </div>
           )}
         </div>
@@ -284,24 +287,24 @@ function ApplicationCard({
       {rejectOpen && (
         <Modal open={true} onClose={() => setRejectOpen(false)}>
           <div className="space-y-3 p-4">
-            <h3 className="font-semibold">却下理由</h3>
+            <h3 className="font-semibold">{t('admin.expenses.rejectModal.title')}</h3>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
               rows={3}
-              placeholder="却下理由を入力してください"
+              placeholder={t('admin.expenses.rejectModal.placeholder')}
             />
             <div className="flex justify-end gap-2">
               <button onClick={() => setRejectOpen(false)} className="rounded-md border border-border px-3 py-1.5 text-sm">
-                キャンセル
+                {t('admin.expenses.cancel')}
               </button>
               <button
                 disabled={!rejectReason.trim()}
                 onClick={() => { onReject(rejectReason); setRejectOpen(false) }}
                 className="rounded-md bg-destructive px-3 py-1.5 text-sm text-white disabled:opacity-50"
               >
-                却下する
+                {t('admin.expenses.rejectModal.submit')}
               </button>
             </div>
           </div>
@@ -325,6 +328,7 @@ export function AdminExpenses() {
     getMember,
   } = useOrbit()
 
+  const { t } = useI18n()
   const [tab, setTab] = useState<'categories' | 'applications'>('applications')
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null | 'new'>(null)
 
@@ -349,15 +353,15 @@ export function AdminExpenses() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">経費申請</h2>
+        <h2 className="text-xl font-semibold">{t('admin.expenses.title')}</h2>
         <div className="flex rounded-md border border-border bg-card">
-          {(['applications', 'categories'] as const).map((t) => (
+          {(['applications', 'categories'] as const).map((tabKey) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-sm transition-colors ${tab === t ? 'bg-accent font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
+              className={`px-3 py-1.5 text-sm transition-colors ${tab === tabKey ? 'bg-accent font-medium' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              {t === 'applications' ? '申請一覧' : 'カテゴリ設定'}
+              {tabKey === 'applications' ? t('admin.expenses.tab.applications') : t('admin.expenses.tab.categories')}
             </button>
           ))}
         </div>
@@ -367,7 +371,7 @@ export function AdminExpenses() {
         <div className="space-y-4">
           {pendingApps.length > 0 && (
             <div>
-              <div className="mb-2 text-sm font-semibold text-yellow-600">承認待ち ({pendingApps.length})</div>
+              <div className="mb-2 text-sm font-semibold text-yellow-600">{t('admin.expenses.pendingTitle', { count: pendingApps.length })}</div>
               <div className="space-y-2">
                 {pendingApps.map((app) => (
                   <ApplicationCard
@@ -384,7 +388,7 @@ export function AdminExpenses() {
           )}
           {otherApps.length > 0 && (
             <div>
-              <div className="mb-2 text-sm font-semibold text-muted-foreground">過去の申請</div>
+              <div className="mb-2 text-sm font-semibold text-muted-foreground">{t('admin.expenses.pastTitle')}</div>
               <div className="space-y-2">
                 {otherApps.map((app) => (
                   <ApplicationCard
@@ -400,7 +404,7 @@ export function AdminExpenses() {
             </div>
           )}
           {expenseApplications.length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">申請はまだありません</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">{t('admin.expenses.noApplications')}</div>
           )}
         </div>
       )}
@@ -411,11 +415,11 @@ export function AdminExpenses() {
             onClick={() => setEditingCategory('new')}
             className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
           >
-            <Plus className="size-4" /> カテゴリを追加
+            <Plus className="size-4" /> {t('admin.expenses.addCategory')}
           </button>
           {expenseCategories.length === 0 && (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              カテゴリがまだありません。追加してください。
+              {t('admin.expenses.noCategories')}
             </div>
           )}
           {expenseCategories.map((cat) => (
@@ -423,7 +427,7 @@ export function AdminExpenses() {
               <div>
                 <div className="font-medium text-sm">{cat.label}</div>
                 <div className="text-xs text-muted-foreground">
-                  承認ステップ: {cat.approvalSteps.length}段階
+                  {t('admin.expenses.approvalStepsCount', { count: cat.approvalSteps.length })}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -431,13 +435,13 @@ export function AdminExpenses() {
                   onClick={() => setEditingCategory(cat)}
                   className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
                 >
-                  編集
+                  {t('admin.expenses.edit')}
                 </button>
                 <button
                   onClick={() => handleDeleteCategory(cat.id)}
                   className="rounded-md border border-border px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
                 >
-                  削除
+                  {t('admin.expenses.delete')}
                 </button>
               </div>
             </div>
