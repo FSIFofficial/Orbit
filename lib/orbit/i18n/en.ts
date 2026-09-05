@@ -353,6 +353,10 @@ export const en = {
   'excelMapping.valueMapping.title': '{field} value mapping',
   'excelMapping.valueMapping.desc': 'For each value found in the "{header}" column, choose the corresponding {field}. Changes here apply to all rows.',
   'excelMapping.valueMapping.noMatch': '(No match)',
+  'app.loading': 'Loading data…',
+  'app.syncFailed': 'Failed to sync with the spreadsheet',
+  'app.syncFailedBanner': 'Failed to sync with the spreadsheet. The data shown may not be up to date.',
+  'app.skillCertifiedToast': '{name} was certified in "{skill}"',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',

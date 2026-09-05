@@ -353,6 +353,10 @@ export const ja = {
   'excelMapping.valueMapping.title': '{field}の値の対応',
   'excelMapping.valueMapping.desc': '「{header}」列に含まれる値ごとに、対応する{field}を選べます。ここで直すと全ての行に反映されます。',
   'excelMapping.valueMapping.noMatch': '（マッチさせない）',
+  'app.loading': 'データを読み込んでいます…',
+  'app.syncFailed': 'スプレッドシートとの同期に失敗しました',
+  'app.syncFailedBanner': 'スプレッドシートとの同期に失敗しました。表示中のデータが最新でない可能性があります。',
+  'app.skillCertifiedToast': '{name} さんのスキルに「{skill}」が認定されました',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',
