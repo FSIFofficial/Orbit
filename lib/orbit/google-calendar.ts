@@ -93,8 +93,9 @@ export async function fetchFreeBusy(
 
 /** Delete an event by ID from the primary calendar. */
 export async function deleteCalendarEvent(token: string, eventId: string): Promise<void> {
-  await fetch(`${BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+  const res = await fetch(`${BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   })
+  if (!res.ok) throw new Error(`Delete event API error: ${res.status}`)
 }

@@ -613,19 +613,13 @@ function authorizeAction(acting, action, body) {
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
-    // updateTaskStatus: 全権管理者は制限なし。担当者は「完了」以外のステータスのみ変更可。
+    // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
     if (action === 'updateTaskStatus') {
       if (!isActingFullAdmin(acting)) {
         var taskId = String(body.taskId || '')
         var task = findRow(SHEET_TASKS, taskId)
-        if (task) {
-          var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
-          if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
-            throw new Error('このタスクの担当者のみステータスを変更できます。')
-          }
-        }
         if (body.status === '完了') {
-          // 確認者（reviewer_id / reviewer_ids）に含まれていれば完了を許可
+          // 「完了」への変更は確認者（reviewer_id / reviewer_ids）のみ許可
           var reviewerAllowed = false
           if (task) {
             var reviewerIdsRaw = String(task.reviewer_ids || task.reviewer_id || '').trim()
@@ -634,6 +628,14 @@ function authorizeAction(acting, action, body) {
           }
           if (!reviewerAllowed) {
             throw new Error('担当者は「完了」に変更できません。確認者または管理者に依頼してください。')
+          }
+        } else {
+          // 「完了」以外のステータス変更は担当者のみ許可
+          if (task) {
+            var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+            if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
+              throw new Error('このタスクの担当者のみステータスを変更できます。')
+            }
           }
         }
       }
