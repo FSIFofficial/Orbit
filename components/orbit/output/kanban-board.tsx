@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import type { Task, TaskStatus } from '@/lib/orbit/types'
-import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, isAdminRole } from '@/lib/orbit/types'
+import { STATUS_COLOR, STATUS_ORDER, isAdminRole } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '../toast'
 import { KanbanCard, KANBAN_CARD_FIELDS, type KanbanCardField } from './kanban-card'
 import { incompletePrerequisites } from '@/lib/orbit/utils'
 import { cn } from '@/lib/utils'
+import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
 
 export function KanbanBoard({
   tasks,
@@ -20,6 +21,7 @@ export function KanbanBoard({
 }) {
   const { updateTaskStatus, currentUser, visibleTasks } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [overColumn, setOverColumn] = useState<TaskStatus | null>(null)
 
@@ -28,11 +30,11 @@ export function KanbanBoard({
       const draggingTask = visibleTasks.find((t) => t.id === draggingId)
       // only an admin can move a card straight to 完了 — see task-detail-drawer
       if (status === 'done' && !(currentUser && isAdminRole(currentUser.role))) {
-        toast('「完了」への変更は管理者のみ行えます。「確認待ち」にしてください。')
+        toast(t('kanban.board.doneAdminOnlyToast'))
       } else if (status === 'done' && draggingTask) {
         const blockers = incompletePrerequisites(draggingTask, visibleTasks)
         if (blockers.length > 0) {
-          toast(`前提タスクが未完了のため「完了」にできません：${blockers.map((b) => b.name).join('、')}`)
+          toast(t('kanban.board.blockedByDepsToast', { names: blockers.map((b) => b.name).join(t('kanban.listSeparator')) }))
         } else {
           updateTaskStatus(draggingId, status)
         }
@@ -77,7 +79,7 @@ export function KanbanBoard({
                   className="size-2 rounded-full"
                   style={{ backgroundColor: STATUS_COLOR[status] }}
                 />
-                {STATUS_LABEL[status]}
+                {t(STATUS_KEY[status])}
               </span>
               <span className="rounded-md bg-card px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {columnTasks.length}
@@ -99,7 +101,7 @@ export function KanbanBoard({
               ))}
               {columnTasks.length === 0 && (
                 <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
-                  ここにドロップ
+                  {t('kanban.board.dropHere')}
                 </div>
               )}
             </div>

@@ -400,6 +400,13 @@ export const en = {
   'project.card.tasksCount': '{count} tasks',
   'project.card.waitingCount': '{count} awaiting review',
   'project.card.progress': 'Progress',
+  'kanban.board.doneAdminOnlyToast': 'Only an admin can mark this as "Done". Please set it to "In review" instead.',
+  'kanban.board.blockedByDepsToast': 'Cannot mark as "Done" — prerequisite tasks are incomplete: {names}',
+  'kanban.board.dropHere': 'Drop here',
+  'peopleView.assignedStat': 'Assigned',
+  'editableTags.removeAria': 'Remove {tag}',
+  'editableTags.selectExistingAria': 'Add from existing options',
+  'editableTags.selectPlaceholder': 'Select to add',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',

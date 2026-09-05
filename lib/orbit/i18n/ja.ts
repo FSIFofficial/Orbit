@@ -400,6 +400,13 @@ export const ja = {
   'project.card.tasksCount': 'タスク {count}',
   'project.card.waitingCount': '確認待ち {count}',
   'project.card.progress': '進捗',
+  'kanban.board.doneAdminOnlyToast': '「完了」への変更は管理者のみ行えます。「確認待ち」にしてください。',
+  'kanban.board.blockedByDepsToast': '前提タスクが未完了のため「完了」にできません：{names}',
+  'kanban.board.dropHere': 'ここにドロップ',
+  'peopleView.assignedStat': '担当',
+  'editableTags.removeAria': '{tag} を削除',
+  'editableTags.selectExistingAria': '既存の選択肢から追加',
+  'editableTags.selectPlaceholder': '選択して追加',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

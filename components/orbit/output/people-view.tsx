@@ -4,10 +4,12 @@ import { useOrbit } from '@/lib/orbit/store'
 import { Avatar } from '@/components/orbit/primitives'
 import { useNav } from '@/lib/orbit/nav'
 import { BASE_ROLE } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function PeopleView() {
   const { members, visibleTasks: tasks } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -34,10 +36,10 @@ export function PeopleView() {
               </div>
             </div>
             <div className="grid grid-cols-4 gap-2 border-t border-border pt-3 text-center">
-              <Stat label="担当" value={mine.length} />
-              <Stat label="進行中" value={inProgress} />
-              <Stat label="確認待ち" value={waiting} accent={waiting > 0} />
-              <Stat label="完了" value={done} />
+              <Stat label={t('peopleView.assignedStat')} value={mine.length} />
+              <Stat label={t('status.progress')} value={inProgress} />
+              <Stat label={t('admin.leadership.kpi.reviewing')} value={waiting} accent={waiting > 0} />
+              <Stat label={t('status.done')} value={done} />
             </div>
           </button>
         )
