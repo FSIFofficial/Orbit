@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Search, FileSpreadsheet } from 'lucide-react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
-import { STATUS_LABEL, STATUS_ORDER, DEPARTMENTS } from '@/lib/orbit/types'
+import { STATUS_ORDER, DEPARTMENTS } from '@/lib/orbit/types'
 import type { Task } from '@/lib/orbit/types'
 import { formatDeadline, isOverdue } from '@/lib/orbit/utils'
 import { exportTasksToExcel } from '@/lib/orbit/export-excel'
@@ -12,6 +12,7 @@ import { Avatar, DifficultyBadge, ProjectTag, DepartmentTag } from '@/components
 import type { TaskStatus } from '@/lib/orbit/types'
 import { Button } from '@/components/ui/button'
 import { allowedStatusOptions } from '@/lib/orbit/permissions'
+import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
 
 export function ListView({
   tasks,
@@ -22,6 +23,7 @@ export function ListView({
 }) {
   const { projects, members, updateTaskStatus, currentUser, isFullAdmin } = useOrbit()
   const { go } = useNav()
+  const { t: tr } = useI18n()
   const [query, setQuery] = useState('')
   const [projectFilter, setProjectFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -65,12 +67,12 @@ export function ListView({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="タスクを検索"
+            placeholder={tr('output.list.searchPlaceholder')}
             className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
           />
         </div>
         <select className={selectCls} value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-          <option value="all">プロジェクト: すべて</option>
+          <option value="all">{tr('output.list.projectAll')}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -78,16 +80,16 @@ export function ListView({
           ))}
         </select>
         <select className={selectCls} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">ステータス: すべて</option>
+          <option value="all">{tr('output.list.statusAll')}</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
-              {STATUS_LABEL[s]}
+              {tr(STATUS_KEY[s])}
             </option>
           ))}
         </select>
         <select className={selectCls} value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
-          <option value="all">担当: すべて</option>
-          <option value="unassigned">未アサイン</option>
+          <option value="all">{tr('output.list.assigneeAll')}</option>
+          <option value="unassigned">{tr('output.list.unassigned')}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName || m.name}
@@ -99,7 +101,7 @@ export function ListView({
           value={departmentFilter}
           onChange={(e) => setDepartmentFilter(e.target.value)}
         >
-          <option value="all">部門: すべて</option>
+          <option value="all">{tr('output.list.departmentAll')}</option>
           {DEPARTMENTS.map((d) => (
             <option key={d} value={d}>
               {d}
@@ -115,7 +117,7 @@ export function ListView({
           onClick={() => exportTasksToExcel(filtered, projects, members)}
         >
           <FileSpreadsheet className="size-4" />
-          Excel出力
+          {tr('output.list.exportExcel')}
         </Button>
       </div>
 
@@ -123,14 +125,14 @@ export function ListView({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-secondary/50 text-left text-xs text-muted-foreground">
-              <th className="px-4 py-2.5 font-medium">タスク</th>
-              <th className="px-4 py-2.5 font-medium">担当</th>
-              <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-              <th className="px-4 py-2.5 font-medium">部門</th>
-              <th className="px-4 py-2.5 font-medium">期限</th>
-              <th className="px-4 py-2.5 font-medium">ステータス</th>
-              <th className="px-4 py-2.5 font-medium">カテゴリ</th>
-              <th className="px-4 py-2.5 font-medium">難易度</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colTask')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colAssignee')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colProject')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colDepartment')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colDeadline')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colStatus')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colCategory')}</th>
+              <th className="px-4 py-2.5 font-medium">{tr('output.list.colDifficulty')}</th>
             </tr>
           </thead>
           <tbody>
@@ -171,7 +173,7 @@ export function ListView({
                         ))}
                       </div>
                     ) : (
-                      <span className="text-amber-600">未アサイン</span>
+                      <span className="text-amber-600">{tr('output.list.unassigned')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -202,11 +204,11 @@ export function ListView({
                         className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-xs outline-none hover:border-border focus:border-border-strong"
                       >
                         {statusOptions.map((s) => (
-                          <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                          <option key={s} value={s}>{tr(STATUS_KEY[s])}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-xs text-muted-foreground">{STATUS_LABEL[t.status]}</span>
+                      <span className="text-xs text-muted-foreground">{tr(STATUS_KEY[t.status])}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{t.category}</td>
@@ -219,7 +221,7 @@ export function ListView({
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  条件に一致するタスクがありません。
+                  {tr('output.list.empty')}
                 </td>
               </tr>
             )}

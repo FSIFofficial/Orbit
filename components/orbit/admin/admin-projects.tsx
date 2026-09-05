@@ -34,6 +34,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/orbit/i18n'
 
 // 暫定値、要調整: プロジェクトの「人材不足」閾値（未完了タスク数÷担当人数）
 const UNDERSTAFFED_RATIO_THRESHOLD = 3
@@ -80,6 +81,7 @@ export function AdminProjects() {
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   const [removing, setRemoving] = useState<Project | null>(null)
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null)
   const [applyingTo, setApplyingTo] = useState<Project | null>(null)
@@ -127,7 +129,7 @@ export function AdminProjects() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{t('admin.projects.title')}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {isFullAdmin
           ? '新しいプロジェクトを追加します。種類を選ぶと、その種類のテンプレートタスクが自動で作成されます。'
@@ -205,7 +207,7 @@ export function AdminProjects() {
               <th className="px-4 py-2.5 font-medium">担当者</th>
               <th className="px-4 py-2.5 font-medium">責任者</th>
               <th className="px-4 py-2.5 font-medium">タスク数</th>
-              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">人材</th>
+              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">{t('admin.projects.colStaffing')}</th>
               {isFullAdmin && <th className="px-4 py-2.5 font-medium" />}
             </tr>
           </thead>
@@ -334,7 +336,7 @@ export function AdminProjects() {
                         title={`未完了タスク/担当者比率: ${staffingRatio === Infinity ? '∞' : staffingRatio.toFixed(1)}（閾値 ${UNDERSTAFFED_RATIO_THRESHOLD}、暫定値・要調整）`}
                       >
                         <AlertTriangle className="size-3" />
-                        不足
+                        {t('admin.projects.staffingShort')}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>

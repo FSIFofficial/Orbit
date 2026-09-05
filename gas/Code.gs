@@ -581,6 +581,7 @@ function authorizeAction(acting, action, body) {
     'updateDisplayName',     // 表示名変更は本人のみ
     'updateUnavailableDates',// 稼働不可日は本人のみ
     'updateAbsentDates',    // 不在日は本人のみ
+    'updateTimezone',       // タイムゾーン設定は本人のみ
   ]
   if (selfOnly.indexOf(action) >= 0) {
     var selfTargetId = String(body.memberId || '')
@@ -735,6 +736,9 @@ function doPost(e) {
         } catch (err) {
           console.error('updateWill notification failed: ' + err)
         }
+        break
+      case 'updateTimezone':
+        result = updateMemberFields(body.memberId, { timezone: body.timezone || '' })
         break
       case 'updateJudgment':
         result = updateMemberFields(body.memberId, {
@@ -2534,6 +2538,7 @@ function setupOrbit() {
     'absent_dates',            // 不在日リスト（カンマ区切り YYYY-MM-DD）
     'last_login',              // 最終ログイン日時（ISO datetime）
     'last_inactive_notified',  // 未アクセス通知を最後に送った日（YYYY-MM-DD）
+    'timezone',                // 本人のタイムゾーン（IANA名、例: "Asia/Tokyo"）
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',

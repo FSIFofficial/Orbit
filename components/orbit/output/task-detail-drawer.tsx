@@ -37,6 +37,8 @@ import {
 } from '@/lib/orbit/types'
 import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
+import { useI18n } from '@/lib/orbit/i18n'
+import { formatDateTimeInTz, DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import {
   Ban,
@@ -165,6 +167,7 @@ export function TaskDetailDrawer({
   const [editOpen, setEditOpen] = useState(false)
   const [awardOpen, setAwardOpen] = useState(false)
 
+  const { locale } = useI18n()
   const task = tasks.find((t) => t.id === taskId) ?? null
   const open = !!taskId
   const sourceInput = getInput(task?.originalInputId)
@@ -256,7 +259,7 @@ export function TaskDetailDrawer({
               {sourceInput.text}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {formatDateTime(sourceInput.createdAt)} ・ この入力から{sourceInput.generatedTaskIds.length}件のタスクが生成されました
+              {formatDateTimeInTz(sourceInput.createdAt, currentUser?.timezone ?? DEFAULT_TIMEZONE, locale)} ・ この入力から{sourceInput.generatedTaskIds.length}件のタスクが生成されました
             </p>
           </>
         ) : (

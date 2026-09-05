@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { formatDeadlineFull, formatTenure, memberSkillFieldProgress } from '@/lib/orbit/utils'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
+import { useI18n, SUPPORTED_LOCALES } from '@/lib/orbit/i18n'
+import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import {
   ArrowLeft,
@@ -86,6 +88,7 @@ export function PersonDetail({ id }: { id: string }) {
     getProjectMembers,
     updateDisplayName,
     updateJoinedAt,
+    setMemberTimezone,
     toggleUnavailableDate,
     updateAvatar,
     uploadAvatarImage,
@@ -121,6 +124,7 @@ export function PersonDetail({ id }: { id: string }) {
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
+  const { t, locale, setLocale } = useI18n()
   const [tab, setTab] = useState<Tab>('overview')
   const [taskView, setTaskView] = useState<TaskView>('list')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
@@ -1029,6 +1033,35 @@ export function PersonDetail({ id }: { id: string }) {
             こちらはGCal連携でイベントをOrbitのカレンダーに重ねて表示する。 */}
       {tab === 'calendar' && (
         <div className="mt-5 flex flex-col gap-4">
+          {isSelf && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <SectionLabel>{t('settings.language')} / {t('settings.timezone')}</SectionLabel>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <select
+                  value={locale}
+                  onChange={(e) => setLocale(e.target.value as (typeof SUPPORTED_LOCALES)[number]['code'])}
+                  className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                >
+                  {SUPPORTED_LOCALES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={member.timezone ?? DEFAULT_TIMEZONE}
+                  onChange={(e) => setMemberTimezone(member.id, e.target.value)}
+                  className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                >
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
           {isSelf && (
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2">

@@ -79,6 +79,7 @@ Google スプレッドシート（データの保存場所）
 | absent_dates | 不在日リスト（カンマ区切り、`YYYY-MM-DD`）。個人ページから本人が編集できます |
 | last_login | 最終ログイン日時（ISO datetime）。ログイン時に自動更新されます |
 | last_inactive_notified | 未アクセス通知を最後に送った日（`YYYY-MM-DD`）。重複通知防止に使われます |
+| timezone | 本人のタイムゾーン（IANA名、例: `Asia/Tokyo`）。個人ページの「言語 / タイムゾーン」から本人が設定できます。未設定時はJST扱い |
 
 > Admin → Membersの「メンバーを登録」フォームから新規メンバーを直接追加できます。
 > スプレッドシートに直接行を追加することもできます。
@@ -414,7 +415,7 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 | updateRole, removeMember, removeProject, updateDiscordWebhookUrl, updateSlackWebhookUrl, updateSetting, uploadOrgLogo, addMember, updateEmail, updateJoinedAt, updateReportsTo, updateMentor, notifyTrainingDecision, updatePermissionOverrides, updateMemberProjects | 最上位ロール（代表）のみ |
 | approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies 等 | 任意の管理者ロール（代表 または 班長以上） |
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
-| updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates | 本人のみ |
+| updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates, updateTimezone | 本人のみ |
 | createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables 等 | ログイン済みなら誰でも |
 
 ---

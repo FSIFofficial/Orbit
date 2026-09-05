@@ -237,6 +237,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     inactive: r.inactive === 'TRUE' ? true : undefined,
     absentDates: splitTags(r.absent_dates),
     lastLogin: r.last_login || undefined,
+    timezone: r.timezone || undefined,
   }
 }
 
@@ -636,6 +637,8 @@ export const remoteApi = {
     postToGas('updateJoinedAt', { memberId, joinedAt }),
   updateUnavailableDates: (memberId: string, dates: string[]) =>
     postToGas('updateUnavailableDates', { memberId, dates }),
+  updateTimezone: (memberId: string, timezone: string) =>
+    postToGas('updateTimezone', { memberId, timezone }),
   updateSchedule: (taskId: string, startDate: string | null, deadline: string | null) =>
     postToGas('updateSchedule', { taskId, startDate, deadline }),
   updateDependsOn: (taskId: string, dependsOnIds: string[]) =>
