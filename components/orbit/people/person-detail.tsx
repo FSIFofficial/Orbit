@@ -89,6 +89,7 @@ export function PersonDetail({ id }: { id: string }) {
     updateDisplayName,
     updateJoinedAt,
     setMemberTimezone,
+    setMemberLocale,
     toggleUnavailableDate,
     updateAvatar,
     uploadAvatarImage,
@@ -541,6 +542,42 @@ export function PersonDetail({ id }: { id: string }) {
             member={member}
             onUpdate={(settings) => updateNotifySettings(member.id, settings)}
           />
+        </div>
+      )}
+
+      {/* 言語 / タイムゾーン — self only。全画面の表示に影響するため、
+          特定のタブの中ではなくプロフィール上部（タブの外）に置く */}
+      {isSelf && (
+        <div className="mt-4 rounded-xl border border-border bg-card p-4">
+          <SectionLabel>{t('settings.language')} / {t('settings.timezone')}</SectionLabel>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <select
+              value={locale}
+              onChange={(e) => {
+                const next = e.target.value as (typeof SUPPORTED_LOCALES)[number]['code']
+                setLocale(next)
+                setMemberLocale(member.id, next)
+              }}
+              className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+            >
+              {SUPPORTED_LOCALES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={member.timezone ?? DEFAULT_TIMEZONE}
+              onChange={(e) => setMemberTimezone(member.id, e.target.value)}
+              className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+            >
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 
@@ -1033,35 +1070,6 @@ export function PersonDetail({ id }: { id: string }) {
             こちらはGCal連携でイベントをOrbitのカレンダーに重ねて表示する。 */}
       {tab === 'calendar' && (
         <div className="mt-5 flex flex-col gap-4">
-          {isSelf && (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <SectionLabel>{t('settings.language')} / {t('settings.timezone')}</SectionLabel>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <select
-                  value={locale}
-                  onChange={(e) => setLocale(e.target.value as (typeof SUPPORTED_LOCALES)[number]['code'])}
-                  className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-                >
-                  {SUPPORTED_LOCALES.map((l) => (
-                    <option key={l.code} value={l.code}>
-                      {l.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={member.timezone ?? DEFAULT_TIMEZONE}
-                  onChange={(e) => setMemberTimezone(member.id, e.target.value)}
-                  className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-                >
-                  {TIMEZONE_OPTIONS.map((tz) => (
-                    <option key={tz.value} value={tz.value}>
-                      {tz.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
           {isSelf && (
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2">

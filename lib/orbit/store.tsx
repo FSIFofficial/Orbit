@@ -314,6 +314,7 @@ interface OrbitContextValue extends OrbitState {
   updateDisplayName: (memberId: string, displayName: string) => void
   updateJoinedAt: (memberId: string, joinedAt: string | null) => void
   setMemberTimezone: (memberId: string, timezone: string) => void
+  setMemberLocale: (memberId: string, locale: string) => void
   toggleUnavailableDate: (memberId: string, date: string) => void
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
@@ -2676,6 +2677,17 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // 本人の表示言語設定 — I18nProvider（ブラウザのlocalStorage）とは別に、
+  // 他デバイス/ブラウザでも同じ言語で開けるようスプレッドシートにも保存する。
+  // selfOnly（GAS側）なので本人のみ変更可能。
+  const setMemberLocale = useCallback(
+    (memberId: string, locale: string) => {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, locale } : m)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateLocale(memberId, locale))
+    },
+    [runRemote],
+  )
+
   const toggleUnavailableDate = useCallback(
     (memberId: string, date: string) => {
       const member = members.find((m) => m.id === memberId)
@@ -3663,6 +3675,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateDisplayName,
     updateJoinedAt,
     setMemberTimezone,
+    setMemberLocale,
     toggleUnavailableDate,
     updateSchedule,
     updateDependsOn,

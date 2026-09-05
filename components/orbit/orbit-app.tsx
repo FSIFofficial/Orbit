@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { OrbitProvider, useOrbit } from '@/lib/orbit/store'
 import { NavProvider, useNav } from '@/lib/orbit/nav'
 import { ThemeProvider } from '@/lib/orbit/theme'
-import { I18nProvider } from '@/lib/orbit/i18n'
+import { I18nProvider, useI18n, SUPPORTED_LOCALES } from '@/lib/orbit/i18n'
 import { TaskDrawerProvider, useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { ToastProvider, useToast } from './toast'
 import { LoginScreen } from './login-screen'
@@ -78,6 +78,25 @@ function SkillCertifiedWatcher() {
   return null
 }
 
+// currentUser.locale（スプレッドシート保存済みの言語設定）が分かった時点で
+// I18nの表示言語に反映する。ブラウザのlocalStorage（ログイン前のデフォルト、
+// 未ログイン状態でも機能する）より、ログイン後はこちらを優先する。
+// 本人が言語を変更した場合は setMemberLocale が両方を更新するので
+// ここでの上書きとは競合しない。
+function LocaleSyncWatcher() {
+  const { currentUser } = useOrbit()
+  const { locale, setLocale } = useI18n()
+
+  useEffect(() => {
+    const saved = currentUser?.locale
+    if (!saved || saved === locale) return
+    if (!SUPPORTED_LOCALES.some((l) => l.code === saved)) return
+    setLocale(saved as (typeof SUPPORTED_LOCALES)[number]['code'])
+  }, [currentUser?.locale, locale, setLocale])
+
+  return null
+}
+
 function Router() {
   const { currentUser, currentUserId, needsOnboarding, remoteEnabled, remoteStatus, remoteError, dataReady } =
     useOrbit()
@@ -134,6 +153,7 @@ export function OrbitApp() {
         <OrbitProvider>
           <ToastProvider>
             <SkillCertifiedWatcher />
+            <LocaleSyncWatcher />
             <NavProvider>
               <TaskDrawerProvider>
                 <Router />
