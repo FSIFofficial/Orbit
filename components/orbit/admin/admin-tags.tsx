@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection } from '@/lib/orbit/types'
 import { Plus, Check, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 // dashboard always stays visible (it's the redirect target for a
 // disallowed section — see store.tsx's visibleAdminSections), so there's
@@ -42,6 +43,7 @@ export function AdminTags() {
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   // item 17: ポジション要件 — every role, including 一般, has a position
   const jobTypes = [BASE_ROLE, ...roleLevels]
 
@@ -49,39 +51,37 @@ export function AdminTags() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Tags</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        INPUT画面の「要求スキル」「カテゴリ」や、Membersの「役職」で選べる選択肢です。ここで消すまで残り続けます。
+        {t('admin.tags.subtitle')}
       </p>
 
       <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <TagGroup
-          title="要求スキル"
+          title={t('admin.tags.requiredSkills')}
           options={skillOptions}
           onAdd={addSkillOption}
           onRemove={removeSkillOption}
         />
         <div>
           <TagGroup
-            title="要求分野"
+            title={t('admin.tags.requiredFields')}
             options={skillFieldOptions}
             onAdd={addSkillFieldOption}
             onRemove={removeSkillFieldOption}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            要求スキルの上位グルーピングです（例：デザイン、営業、AI活用）。メンバーに直接
-            割り当てるのは要求スキルのみで、分野は下の「要求分野の構成」で紐づけたスキルの
-            保有率から自動的に判定されます。
+            {t('admin.tags.requiredFieldsDesc')}
           </p>
         </div>
         <TagGroup
-          title="カテゴリ"
+          title={t('admin.tags.categories')}
           options={categoryOptions}
           onAdd={addCategoryOption}
           onRemove={removeCategoryOption}
         />
         <div>
-          <SectionLabel>権限レベル（一般より上）</SectionLabel>
+          <SectionLabel>{t('admin.tags.permissionLevels')}</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            「制限あり���にしたレベルは、見せるセクションを下の「権限レベルごとの表示範囲」で個別に設定できます。それ以外は全管理者権限を持ちます。
+            {t('admin.tags.permissionLevelsDesc')}
           </p>
           <div className="mt-3 flex flex-col gap-1">
             {roleLevels.map((level, i) => {
@@ -113,7 +113,7 @@ export function AdminTags() {
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {isRestricted ? '制限あり' : '制限なし'}
+                    {isRestricted ? t('admin.tags.restricted') : t('admin.tags.unrestricted')}
                   </button>
                 </div>
               )
@@ -124,14 +124,13 @@ export function AdminTags() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <SectionLabel>要求分野の構成</SectionLabel>
+        <SectionLabel>{t('admin.tags.fieldComposition')}</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
-          各分野に属する要求スキルを設定します。メンバーがその分野のスキルをしきい値以上
-          保有すると、分野を「取得」したものとして個人ページの人材育成タブに表示されます。
+          {t('admin.tags.fieldCompositionDesc')}
         </p>
         <div className="mt-3 flex items-center gap-2">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="skill-field-threshold">
-            取得のしきい値
+            {t('admin.tags.thresholdLabel')}
           </label>
           <input
             id="skill-field-threshold"
@@ -143,11 +142,11 @@ export function AdminTags() {
             onChange={(e) => setSkillFieldThreshold(Number(e.target.value) / 100)}
             className="h-8 w-20 rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
           />
-          <span className="text-xs text-muted-foreground">%（数字は仮の初期値です）</span>
+          <span className="text-xs text-muted-foreground">{t('admin.tags.thresholdUnitNote')}</span>
         </div>
         {skillFieldOptions.length === 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            先に「要求分野」の選択肢を追加してください。
+            {t('admin.tags.addFieldsFirst')}
           </p>
         ) : (
           <div className="mt-4 flex flex-col gap-4">
@@ -165,9 +164,9 @@ export function AdminTags() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <SectionLabel>ポジション要件</SectionLabel>
+        <SectionLabel>{t('admin.tags.positionRequirements')}</SectionLabel>
         <p className="mt-1 text-xs text-muted-foreground">
-          役職ごとに求めるスキルを設定します。個人ページの人材育成タブで、本人の現在のスキルとの比較が表示されます。
+          {t('admin.tags.positionRequirementsDesc')}
         </p>
         <div className="mt-4 flex flex-col gap-4">
           {jobTypes.map((role) => (
@@ -183,13 +182,13 @@ export function AdminTags() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-          <SectionLabel>権限レベルごとの表示範囲</SectionLabel>
+          <SectionLabel>{t('admin.tags.visibilityByLevel')}</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            「制限あり」に設定したレベルのみ表示されます。未設定の場合は Members・Tags 以外の全セクションが既定で表示されます。
+            {t('admin.tags.visibilityByLevelDesc')}
           </p>
           {restrictedRoles.length === 0 && (
             <p className="mt-2 text-xs text-muted-foreground">
-              制限ありのレベルがありません。上のリストで「制限なし」ボタンをクリックして制限ありに変更してください。
+              {t('admin.tags.noRestrictedLevels')}
             </p>
           )}
           <div className="mt-4 flex flex-col gap-4">
@@ -271,6 +270,7 @@ function JobRequirementsRow({
   options: string[]
   onChange: (next: string[]) => void
 }) {
+  const { t } = useI18n()
   const toggle = (skill: string) => {
     onChange(skills.includes(skill) ? skills.filter((s) => s !== skill) : [...skills, skill])
   }
@@ -279,7 +279,7 @@ function JobRequirementsRow({
       <div className="text-sm font-medium">{role}</div>
       {options.length === 0 ? (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          先に「要求スキル」の選択肢を追加してください。
+          {t('admin.tags.addSkillsFirst')}
         </p>
       ) : (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -307,6 +307,7 @@ function JobRequirementsRow({
 }
 
 function RoleLevelAdd({ onAdd }: { onAdd: (name: string) => void }) {
+  const { t } = useI18n()
   const [draft, setDraft] = useState('')
   const submit = () => {
     const v = draft.trim()
@@ -321,7 +322,7 @@ function RoleLevelAdd({ onAdd }: { onAdd: (name: string) => void }) {
           if (e.nativeEvent.isComposing || e.keyCode === 229) return
           if (e.key === 'Enter') { e.preventDefault(); submit() }
         }}
-        placeholder="レベルを追加"
+        placeholder={t('admin.tags.levelAddPlaceholder')}
         className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
       />
       <button
@@ -346,6 +347,7 @@ function TagGroup({
   onAdd: (name: string) => void
   onRemove: (name: string) => void
 }) {
+  const { t } = useI18n()
   const [draft, setDraft] = useState('')
 
   const submit = () => {
@@ -359,7 +361,7 @@ function TagGroup({
       <SectionLabel>{title}</SectionLabel>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {options.length === 0 && (
-          <span className="text-sm text-muted-foreground">選択肢がありません</span>
+          <span className="text-sm text-muted-foreground">{t('admin.tags.noOptions')}</span>
         )}
         {options.map((o) => (
           <Tag key={o} onRemove={() => onRemove(o)}>
@@ -378,14 +380,14 @@ function TagGroup({
               submit()
             }
           }}
-          placeholder="新しい選択肢を追加"
+          placeholder={t('admin.tags.newOptionPlaceholder')}
           className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <button
           onClick={submit}
           disabled={!draft.trim()}
           className="flex size-8 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
-          aria-label="追加"
+          aria-label={t('admin.tags.addAriaLabel')}
         >
           <Plus className="size-4" />
         </button>
@@ -398,6 +400,7 @@ function TagGroup({
 function OneOnOneQuestionsEditor() {
   const { oneOnOneQuestions, setOneOnOneQuestions } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   const [draft, setDraft] = useState('')
 
   const add = () => {
@@ -405,16 +408,15 @@ function OneOnOneQuestionsEditor() {
     if (!v || oneOnOneQuestions.includes(v)) { setDraft(''); return }
     setOneOnOneQuestions([...oneOnOneQuestions, v])
     setDraft('')
-    toast('質問項目を追加しました')
+    toast(t('admin.tags.oneOnOne.addedToast'))
   }
   const remove = (q: string) => setOneOnOneQuestions(oneOnOneQuestions.filter((x) => x !== q))
 
   return (
     <div className="mt-6 rounded-lg border border-border bg-card p-4">
-      <SectionLabel>1on1ワークシート 質問項目</SectionLabel>
+      <SectionLabel>{t('admin.tags.oneOnOne.title')}</SectionLabel>
       <p className="mt-1 text-xs text-muted-foreground">
-        1on1記録フォームで表示される質問項目です。設定した質問ごとに入力欄が表示され、
-        回答が整形されて記録に保存されます。未設定の場合は自由入力になります。
+        {t('admin.tags.oneOnOne.desc')}
       </p>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {oneOnOneQuestions.map((q) => (
@@ -426,7 +428,7 @@ function OneOnOneQuestionsEditor() {
             <button
               onClick={() => remove(q)}
               className="ml-0.5 opacity-60 hover:opacity-100"
-              aria-label="削除"
+              aria-label={t('admin.tags.oneOnOne.deleteAriaLabel')}
             >
               ×
             </button>
@@ -441,12 +443,12 @@ function OneOnOneQuestionsEditor() {
             if (e.nativeEvent.isComposing || e.keyCode === 229) return
             if (e.key === 'Enter') { e.preventDefault(); add() }
           }}
-          placeholder="例: 今月のハイライトは？"
+          placeholder={t('admin.tags.oneOnOne.placeholder')}
           className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <Button variant="outline" className="h-8 text-xs" disabled={!draft.trim()} onClick={add}>
           <Plus className="size-3.5" />
-          追加
+          {t('admin.tags.oneOnOne.add')}
         </Button>
       </div>
     </div>
@@ -473,18 +475,18 @@ const DEFAULT_NOTIFY_SETTINGS: NotifySettings = {
   assign: 'immediate',
 }
 
-const NOTIFY_KIND_LABEL: Record<keyof NotifySettings, string> = {
-  overdue: '期限超過タスク',
-  approval: '承認・確認待ち',
-  inactive: '長期未ログインメンバー',
-  assign: '新規タスクアサイン',
+const NOTIFY_KIND_KEY: Record<keyof NotifySettings, TranslationKey> = {
+  overdue: 'admin.tags.notify.kind.overdue',
+  approval: 'admin.tags.notify.kind.approval',
+  inactive: 'admin.tags.notify.kind.inactive',
+  assign: 'admin.tags.notify.kind.assign',
 }
 
-const FREQ_LABEL: Record<NotifyFrequency, string> = {
-  immediate: '即時',
-  daily: '日次',
-  weekly: '週次',
-  off: 'OFF',
+const FREQ_KEY: Record<NotifyFrequency, TranslationKey> = {
+  immediate: 'admin.tags.notify.freq.immediate',
+  daily: 'admin.tags.notify.freq.daily',
+  weekly: 'admin.tags.notify.freq.weekly',
+  off: 'admin.tags.notify.freq.off',
 }
 const FREQ_OPTIONS: NotifyFrequency[] = ['immediate', 'daily', 'weekly', 'off']
 
@@ -502,24 +504,25 @@ function NotifySettingsEditor() {
     return loadNotifySettings()
   })
   const toast = useToast()
+  const { t } = useI18n()
 
   const update = (kind: keyof NotifySettings, freq: NotifyFrequency) => {
     const next = { ...settings, [kind]: freq }
     setSettings(next)
     try { window.localStorage.setItem(NOTIFY_SETTINGS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-    toast(`「${NOTIFY_KIND_LABEL[kind]}」通知を${FREQ_LABEL[freq]}に設定しました`)
+    toast(t('admin.tags.notify.updatedToast', { kind: t(NOTIFY_KIND_KEY[kind]), freq: t(FREQ_KEY[freq]) }))
   }
 
   return (
     <div className="mt-6 rounded-lg border border-border bg-card p-4">
-      <SectionLabel>通知種別・頻度設定</SectionLabel>
+      <SectionLabel>{t('admin.tags.notify.title')}</SectionLabel>
       <p className="mt-1 text-xs text-muted-foreground">
-        各通知の頻度を設定します。OFFにすると該当通知は表示されません（ブラウザのローカル設定です）。
+        {t('admin.tags.notify.desc')}
       </p>
       <div className="mt-3 flex flex-col gap-2">
-        {(Object.keys(NOTIFY_KIND_LABEL) as (keyof NotifySettings)[]).map((kind) => (
+        {(Object.keys(NOTIFY_KIND_KEY) as (keyof NotifySettings)[]).map((kind) => (
           <div key={kind} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 text-sm">{NOTIFY_KIND_LABEL[kind]}</span>
+            <span className="w-40 shrink-0 text-sm">{t(NOTIFY_KIND_KEY[kind])}</span>
             <div className="flex gap-1">
               {FREQ_OPTIONS.map((freq) => (
                 <button
@@ -527,7 +530,7 @@ function NotifySettingsEditor() {
                   onClick={() => update(kind, freq)}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${settings[kind] === freq ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}
                 >
-                  {FREQ_LABEL[freq]}
+                  {t(FREQ_KEY[freq])}
                 </button>
               ))}
             </div>
