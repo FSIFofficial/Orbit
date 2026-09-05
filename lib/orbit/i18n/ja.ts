@@ -235,6 +235,32 @@ export const ja = {
   'feedback.error.wantReply': '返信希望を選択してください',
   'feedback.error.submitFailed': '送信に失敗しました。ネットワーク接続を確認して、もう一度お試しください。',
 
+  // ---- career-tab（各セクションの見出し・説明のみ）--------------------------
+  'career.searchProfile.title': '人材検索プロフィール',
+  'career.searchProfile.desc': 'Admin → Membersの人材検索フィルタで使われます。',
+  'career.skillLevels.title': 'スキルレベル',
+  'career.skillLevels.desc': '各スキルの習熟度（1〜5）です。Lv.1は「何もできない」ではなく「やり始めたばかり」の意味です。タスクを完了するとLv.1で自動登録され、団体外の経験なども自分で追加できます。要求分野の認定は、ここに登録されたスキルの保有率で判定されます。',
+  'career.radarChart.title': 'スキルレーダーチャート',
+  'career.radarChart.desc': '設定された軸ごとのスキルレベルを可視化します。',
+  'career.goals.title': 'キャリア目標',
+  'career.quiz.title': '検定',
+  'career.quiz.desc': '合格するとスキルレベルが自動的に引き上がります。',
+  'career.competencies.title': 'コンピテンシー',
+  'career.competencies.desc': '役職に関連する評価項目です（管理者が設定）。',
+  'career.history.title': '経歴',
+  'career.qualifications.title': '資格',
+  'career.training.title': '研修履歴',
+  'career.training.desc': '申請すると管理者の承認後に確定します',
+  'career.developmentPlan.title': '育成計画',
+  'career.oneOnOnes.title': '1on1記録',
+  'career.evaluation.title': '評価履歴',
+  'career.transfer.title': '異動履歴',
+  'career.adminOnlyDesc': '管理者のみ編集できます。',
+  'career.skillTimeline.title': 'スキル取得タイムライン',
+  'career.skillTimeline.desc': 'acquiredAt が記録されているスキルを時系列で表示します。新規追加分から記録されます。',
+  'career.skillGrowth.title': 'スキル習得推移',
+  'career.skillGrowth.desc': '累積取得スキル数の折れ線グラフです。',
+
   // ---- 部門（DEPARTMENTS、types.tsで固定8種）--------------------------------
   // 組織が追加できる自由ロール名とは違い、この8種は決め打ちの定数なので
   // 安全に辞書化できる。GAS/シートには引き続きこの日本語のまま保存される。
