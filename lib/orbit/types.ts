@@ -160,6 +160,10 @@ export interface Member {
   // 不在日リスト（YYYY-MM-DD）— カレンダービューで自分で登録し、
   // Googleカレンダーとも同期する
   absentDates?: string[]
+  // 本人のタイムゾーン（IANA名、例: 'Asia/Tokyo'）— コメントの投稿日時など
+  // 時刻を含む表示のみに使う。日付のみのフィールド（deadline等）はTZに
+  // 関係ないカレンダー日として扱うため対象外（lib/orbit/timezone.ts）
+  timezone?: string
 
   // ---- talent-management fields (タレントマネジメント) --------------------
   // 人材DB／スキル管理／人材検索／育成・キャリア — wired end-to-end (store.tsx

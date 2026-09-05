@@ -13,6 +13,7 @@ import { BASE_ROLE } from '@/lib/orbit/types'
 import type { Member, Role } from '@/lib/orbit/types'
 import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
 import { PermissionOverridesButton } from './admin-permission-overrides'
+import { useI18n } from '@/lib/orbit/i18n'
 
 function workload(count: number): { label: string; className: string } {
   if (count <= 2) return { label: '稼働少なめ', className: 'text-muted-foreground' }
@@ -41,6 +42,7 @@ export function AdminMembers() {
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [removing, setRemoving] = useState<Member | null>(null)
   const [assigningProjects, setAssigningProjects] = useState<Member | null>(null)
@@ -289,15 +291,15 @@ export function AdminMembers() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Member</th>
-                <th className="px-4 py-3 font-medium">役職</th>
-                <th className="px-4 py-3 font-medium">報告先</th>
-                {isFullAdmin && <th className="px-4 py-3 font-medium">担当プロジェクト</th>}
-                <th className="px-4 py-3 font-medium">Active</th>
-                <th className="px-4 py-3 font-medium">Will</th>
-                <th className="px-4 py-3 font-medium">Judgment</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">新規タスク通知</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colMember')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colRole')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colReportsTo')}</th>
+                {isFullAdmin && <th className="px-4 py-3 font-medium">{t('admin.members.colProjects')}</th>}
+                <th className="px-4 py-3 font-medium">{t('admin.members.colActive')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colWill')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colJudgment')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colStatus')}</th>
+                <th className="px-4 py-3 font-medium">{t('admin.members.colNotify')}</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
@@ -342,7 +344,7 @@ export function AdminMembers() {
                           onChange={(e) => updateReportsTo(m.id, e.target.value || null)}
                           className="h-8 w-32 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
                         >
-                          <option value="">（デフォルト）</option>
+                          <option value="">{t('admin.members.reportsToDefault')}</option>
                           {members
                             .filter((cand) => cand.id !== m.id && cand.role !== BASE_ROLE)
                             .map((cand) => (
@@ -355,7 +357,7 @@ export function AdminMembers() {
                         <span className="text-xs text-muted-foreground">
                           {members.find((cand) => cand.id === m.reportsToId)?.displayName ??
                             members.find((cand) => cand.id === m.reportsToId)?.name ??
-                            '（デフォルト）'}
+                            t('admin.members.reportsToDefault')}
                         </span>
                       )}
                     </td>
@@ -443,7 +445,7 @@ export function AdminMembers() {
                     colSpan={isFullAdmin ? 10 : 9}
                     className="px-4 py-10 text-center text-sm text-muted-foreground"
                   >
-                    条件に一致するメンバーがいません。
+                    {t('admin.members.empty')}
                   </td>
                 </tr>
               )}

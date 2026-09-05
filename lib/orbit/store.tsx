@@ -75,6 +75,7 @@ import {
   toCreatePayload,
 } from './remote'
 import { daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
+import { cacheTimezone, DEFAULT_TIMEZONE } from './timezone'
 import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
 
 type Mode = 'input' | 'output'
@@ -312,6 +313,7 @@ interface OrbitContextValue extends OrbitState {
   updateOneOnOnes: (memberId: string, entries: OneOnOneRecord[]) => void
   updateDisplayName: (memberId: string, displayName: string) => void
   updateJoinedAt: (memberId: string, joinedAt: string | null) => void
+  setMemberTimezone: (memberId: string, timezone: string) => void
   toggleUnavailableDate: (memberId: string, date: string) => void
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
@@ -2663,6 +2665,17 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // 本人のタイムゾーン設定 — コメント等の時刻表示にのみ影響する
+  // (lib/orbit/timezone.ts)。selfOnly（GAS側）なので本人のみ変更可能。
+  const setMemberTimezone = useCallback(
+    (memberId: string, timezone: string) => {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, timezone } : m)))
+      cacheTimezone(timezone)
+      if (isRemoteConfigured) runRemote(remoteApi.updateTimezone(memberId, timezone))
+    },
+    [runRemote],
+  )
+
   const toggleUnavailableDate = useCallback(
     (memberId: string, date: string) => {
       const member = members.find((m) => m.id === memberId)
@@ -3407,7 +3420,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     visibleTasks
       .filter((t) => t.assigneeIds.includes(currentUser.id) && t.status !== 'done')
       .forEach((t) => {
-        const dl = deadlineLevel(t)
+        const dl = deadlineLevel(t, currentUser.timezone ?? DEFAULT_TIMEZONE)
         if (dl.level === 'overdue' || dl.level === 'today' || dl.level === 'soon' || dl.level === 'near') {
           items.push({
             id: `deadline-${t.id}`,
@@ -3649,6 +3662,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateOneOnOnes,
     updateDisplayName,
     updateJoinedAt,
+    setMemberTimezone,
     toggleUnavailableDate,
     updateSchedule,
     updateDependsOn,

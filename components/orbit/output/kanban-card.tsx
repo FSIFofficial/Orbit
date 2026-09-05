@@ -5,7 +5,9 @@ import { PRIORITY_LINE } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { Avatar, DifficultyBadge, DepartmentTag } from '../primitives'
+import { TranslatedText } from '../translated-text'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import { TriangleAlert } from 'lucide-react'
 
@@ -47,7 +49,7 @@ export function KanbanCard({
     NonNullable<ReturnType<typeof getMember>>
   >
   const project = getProject(task.projectId)
-  const deadline = deadlineLevel(task)
+  const deadline = deadlineLevel(task, currentUser?.timezone ?? DEFAULT_TIMEZONE)
   const urgent = deadline.level === 'overdue' || deadline.level === 'today'
   const soon = deadline.level === 'soon' || deadline.level === 'near'
   const showProject = fields.has('project')
@@ -95,7 +97,7 @@ export function KanbanCard({
       )}
 
       <p className="flex items-center gap-1.5 text-sm font-medium leading-snug text-pretty">
-        {task.name}
+        <TranslatedText text={task.name} />
         {task.pendingApproval && (
           <span
             className="shrink-0 rounded-md bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700"

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useTheme } from '@/lib/orbit/theme'
+import { useI18n } from '@/lib/orbit/i18n'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { isAdminRole } from '@/lib/orbit/types'
 import { Avatar, OrbitMark } from './primitives'
@@ -51,6 +52,7 @@ export function Header() {
   } = useOrbit()
   const { screen, go, goBack, canGoBack } = useNav()
   const { theme, toggle } = useTheme()
+  const { t } = useI18n()
   const { openTask } = useTaskDrawer()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -130,8 +132,8 @@ export function Header() {
               type="button"
               onClick={goBack}
               className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="前の画面に戻る"
-              title="戻る"
+              aria-label={t('header.back.aria')}
+              title={t('header.back')}
             >
               <ArrowLeft className="size-[18px]" />
             </button>
@@ -148,7 +150,7 @@ export function Header() {
                 <span className="hidden text-muted-foreground/40 sm:inline" aria-hidden>|</span>
                 {orgLogoUrl && (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={orgLogoUrl} alt={orgName || 'ロゴ'} className="size-[18px] rounded object-contain" />
+                  <img src={orgLogoUrl} alt={orgName || t('header.logoAlt')} className="size-[18px] rounded object-contain" />
                 )}
                 {orgName && (
                   <span className="hidden text-[13px] text-muted-foreground sm:inline">{orgName}</span>
@@ -163,14 +165,14 @@ export function Header() {
           <ModeButton
             active={isInputActive}
             onClick={() => handleMode('input')}
-            sub="仕事を書く"
+            sub={t('header.mode.input')}
           >
             INPUT
           </ModeButton>
           <ModeButton
             active={isOutputActive}
             onClick={() => handleMode('output')}
-            sub="組織で見る"
+            sub={t('header.mode.output')}
           >
             OUTPUT
           </ModeButton>
@@ -178,7 +180,7 @@ export function Header() {
             <ModeButton
               active={isAdminActive}
               onClick={() => go({ name: 'admin', section: 'dashboard' })}
-              sub="管理する"
+              sub={t('header.mode.admin')}
             >
               ADMIN
             </ModeButton>
@@ -192,7 +194,7 @@ export function Header() {
               type="button"
               onClick={() => setNotifOpen((o) => !o)}
               className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="通知"
+              aria-label={t('header.notifications')}
               aria-expanded={notifOpen}
             >
               <Bell className="size-[18px]" />
@@ -204,12 +206,12 @@ export function Header() {
             </button>
             {notifOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-80 overflow-hidden rounded-xl border border-border bg-popover shadow-lg animate-in fade-in slide-in-from-top-1">
-                <div className="border-b border-border px-3 py-2 text-sm font-semibold">通知</div>
+                <div className="border-b border-border px-3 py-2 text-sm font-semibold">{t('header.notifications')}</div>
                 <div className="max-h-96 overflow-y-auto orbit-scroll">
                   {notifications.length === 0 && (
                     <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground">
                       <CheckCheck className="size-4" />
-                      新しい通知はありません
+                      {t('header.notifications.empty')}
                     </div>
                   )}
                   {notifications.map((n) => (
@@ -246,8 +248,8 @@ export function Header() {
                       <button
                         onClick={() => dismissNotification(n.id)}
                         className="flex size-8 shrink-0 items-center justify-center self-center text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label="通知を閉じる"
-                        title="消す"
+                        aria-label={t('header.notifications.dismiss')}
+                        title={t('header.notifications.dismiss.title')}
                       >
                         <X className="size-3.5" />
                       </button>
@@ -264,8 +266,8 @@ export function Header() {
               onClick={refreshAll}
               disabled={refreshing}
               className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-60"
-              aria-label="情報を更新"
-              title="情報を更新"
+              aria-label={t('header.refresh')}
+              title={t('header.refresh')}
             >
               <RefreshCw className={cn('size-[18px]', refreshing && 'animate-spin')} />
             </button>
@@ -293,11 +295,11 @@ export function Header() {
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="タスクを検索…"
+                      placeholder={t('header.search.placeholder')}
                       className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                     {query && (
-                      <button onClick={() => setQuery('')} aria-label="クリア">
+                      <button onClick={() => setQuery('')} aria-label={t('header.search.clear')}>
                         <X className="size-3.5 text-muted-foreground" />
                       </button>
                     )}
@@ -306,7 +308,7 @@ export function Header() {
                     <div className="mt-1 max-h-56 overflow-y-auto orbit-scroll rounded-lg">
                       {searchResults.length === 0 ? (
                         <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-                          該当するタスクがありません
+                          {t('header.search.empty')}
                         </div>
                       ) : (
                         searchResults.map(({ task: t, snippet }) => (
@@ -351,7 +353,7 @@ export function Header() {
                 {/* Theme toggle */}
                 <MenuItem onClick={toggle}>
                   {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                  {theme === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'}
+                  {theme === 'dark' ? t('header.theme.light') : t('header.theme.dark')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
@@ -360,7 +362,7 @@ export function Header() {
                   }}
                 >
                   <User className="size-4" />
-                  プロフィール
+                  {t('header.menu.profile')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
@@ -369,7 +371,7 @@ export function Header() {
                   }}
                 >
                   <Activity className="size-4" />
-                  アクティビティ
+                  {t('header.menu.activity')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
@@ -378,7 +380,7 @@ export function Header() {
                   }}
                 >
                   <BookOpen className="size-4" />
-                  日報・週報
+                  {t('header.menu.dailyreport')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
@@ -387,7 +389,7 @@ export function Header() {
                   }}
                 >
                   <ClipboardList className="size-4" />
-                  体験アンケート
+                  {t('header.menu.survey')}
                 </MenuItem>
                 {isFullAdmin && (
                   <MenuItem
@@ -397,7 +399,7 @@ export function Header() {
                     }}
                   >
                     <Building2 className="size-4" />
-                    団体設定
+                    {t('header.menu.orgSettings')}
                   </MenuItem>
                 )}
                 <MenuItem
@@ -407,12 +409,12 @@ export function Header() {
                   }}
                 >
                   <MessageSquare className="size-4" />
-                  改善を要望する
+                  {t('header.menu.feedback')}
                 </MenuItem>
                 <div className="my-1 h-px bg-border" />
                 <MenuItem onClick={logout}>
                   <LogOut className="size-4" />
-                  ログアウト
+                  {t('header.menu.logout')}
                 </MenuItem>
               </div>
             )}

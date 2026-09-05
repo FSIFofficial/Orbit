@@ -3,13 +3,13 @@
 import { cn } from '@/lib/utils'
 import {
   STATUS_COLOR,
-  STATUS_LABEL,
   PRIORITY_LINE,
   type Difficulty,
   type Priority,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import type { Member } from '@/lib/orbit/types'
+import type { Member, Department } from '@/lib/orbit/types'
+import { useI18n, STATUS_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY } from '@/lib/orbit/i18n'
 
 export function Avatar({
   member,
@@ -66,6 +66,7 @@ export function Avatar({
 
 export function StatusBadge({ status }: { status: TaskStatus }) {
   const color = STATUS_COLOR[status]
+  const { t } = useI18n()
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
       <span
@@ -73,7 +74,7 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
         style={{ backgroundColor: color }}
         aria-hidden
       />
-      {STATUS_LABEL[status]}
+      {t(STATUS_KEY[status])}
     </span>
   )
 }
@@ -97,6 +98,7 @@ const difficultyStyles: Record<Difficulty, string> = {
 }
 
 export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
+  const { t } = useI18n()
   return (
     <span
       className={cn(
@@ -104,7 +106,7 @@ export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
         difficultyStyles[difficulty],
       )}
     >
-      {difficulty}
+      {t(DIFFICULTY_KEY[difficulty])}
     </span>
   )
 }
@@ -149,10 +151,11 @@ export function ProjectTag({ name }: { name: string }) {
   )
 }
 
-export function DepartmentTag({ name }: { name: string }) {
+export function DepartmentTag({ name }: { name: Department }) {
+  const { t } = useI18n()
   return (
     <span className="inline-flex items-center rounded-md border border-info-border bg-info-muted px-1.5 py-0.5 text-[11px] font-medium text-info">
-      {name}
+      {t(DEPARTMENT_KEY[name])}
     </span>
   )
 }

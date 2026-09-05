@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
+import { useI18n } from '@/lib/orbit/i18n'
 import { OrbitMark } from './primitives'
 import { TriangleAlert } from 'lucide-react'
 import {
@@ -14,6 +15,7 @@ import {
 
 export function LoginScreen() {
   const { login, members } = useOrbit()
+  const { t } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
@@ -23,7 +25,7 @@ export function LoginScreen() {
     setLoginError(null)
 
     if (!isGoogleOAuthConfigured()) {
-      setLoginError('Google OAuthが設定されていません。管理者にお問い合わせください。')
+      setLoginError(t('login.oauthNotConfigured'))
       return
     }
 
@@ -45,7 +47,7 @@ export function LoginScreen() {
         login(matched.id)
       } else {
         setGasAuthToken(null)
-        setLoginError(`${userInfo.email} はOrbitに登録されていません。`)
+        setLoginError(t('login.notRegistered', { email: userInfo.email }))
       }
     } catch {
       setError(true)
@@ -76,7 +78,7 @@ export function LoginScreen() {
           <span className="text-2xl font-semibold tracking-tight">Orbit</span>
         </div>
         <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground text-balance">
-          タスクを打ち上げ、組織を軌道に乗せる。
+          {t('login.tagline')}
         </p>
 
         <div className="mt-9 w-full rounded-2xl border border-border bg-card p-6 shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
@@ -88,13 +90,13 @@ export function LoginScreen() {
             disabled={loading}
           >
             <GoogleGlyph />
-            {loading ? 'ログイン中…' : 'Googleでログイン'}
+            {loading ? t('login.signingIn') : t('login.googleSignIn')}
           </Button>
 
           {error && (
             <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-destructive">
               <TriangleAlert className="size-3.5" />
-              ログインできませんでした。もう一度お試しください。
+              {t('login.failed')}
             </div>
           )}
 
@@ -106,7 +108,7 @@ export function LoginScreen() {
           )}
 
           <p className="mt-4 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Powered by Google
+            {t('login.poweredByGoogle')}
           </p>
         </div>
       </div>

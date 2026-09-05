@@ -34,6 +34,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n, PRIORITY_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY } from '@/lib/orbit/i18n'
 
 // 暫定値、要調整: プロジェクトの「人材不足」閾値（未完了タスク数÷担当人数）
 const UNDERSTAFFED_RATIO_THRESHOLD = 3
@@ -80,6 +81,7 @@ export function AdminProjects() {
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   const [removing, setRemoving] = useState<Project | null>(null)
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null)
   const [applyingTo, setApplyingTo] = useState<Project | null>(null)
@@ -127,7 +129,7 @@ export function AdminProjects() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{t('admin.projects.title')}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {isFullAdmin
           ? '新しいプロジェクトを追加します。種類を選ぶと、その種類のテンプレートタスクが自動で作成されます。'
@@ -205,7 +207,7 @@ export function AdminProjects() {
               <th className="px-4 py-2.5 font-medium">担当者</th>
               <th className="px-4 py-2.5 font-medium">責任者</th>
               <th className="px-4 py-2.5 font-medium">タスク数</th>
-              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">人材</th>
+              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">{t('admin.projects.colStaffing')}</th>
               {isFullAdmin && <th className="px-4 py-2.5 font-medium" />}
             </tr>
           </thead>
@@ -334,7 +336,7 @@ export function AdminProjects() {
                         title={`未完了タスク/担当者比率: ${staffingRatio === Infinity ? '∞' : staffingRatio.toFixed(1)}（閾値 ${UNDERSTAFFED_RATIO_THRESHOLD}、暫定値・要調整）`}
                       >
                         <AlertTriangle className="size-3" />
-                        不足
+                        {t('admin.projects.staffingShort')}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
@@ -769,6 +771,7 @@ function TemplateTypeCard({
   onChange: (tasks: ProjectTemplateTask[]) => void
   onRemoveType: () => void
 }) {
+  const { t: tr } = useI18n()
   const [draft, setDraft] = useState({
     name: '',
     department: DEPARTMENTS[0] as Department,
@@ -818,7 +821,7 @@ function TemplateTypeCard({
             <div className="min-w-0 flex-1">
               <span className="font-medium">{t.name}</span>
               <span className="ml-2 text-xs text-muted-foreground">
-                {t.department} ・ {t.category} ・ {t.difficulty} ・ 優先度{t.priority}
+                {tr(DEPARTMENT_KEY[t.department])} ・ {t.category} ・ {tr(DIFFICULTY_KEY[t.difficulty])} ・ {tr('priority.prefix')}{tr(PRIORITY_KEY[t.priority])}
               </span>
             </div>
             <button
@@ -849,7 +852,7 @@ function TemplateTypeCard({
         >
           {DEPARTMENTS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DEPARTMENT_KEY[d])}
             </option>
           ))}
         </select>
@@ -866,7 +869,7 @@ function TemplateTypeCard({
         >
           {DIFFICULTY_LABEL.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DIFFICULTY_KEY[d])}
             </option>
           ))}
         </select>
@@ -877,7 +880,7 @@ function TemplateTypeCard({
         >
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              優先度{p}
+              {tr('priority.prefix')}{tr(PRIORITY_KEY[p])}
             </option>
           ))}
         </select>
@@ -920,6 +923,7 @@ function TaskSetTemplateCard({
   onChangeItems: (items: TaskSetTemplateItem[]) => void
   onRemove: () => void
 }) {
+  const { t: tr } = useI18n()
   const [draft, setDraft] = useState(EMPTY_TASK_SET_DRAFT)
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -1023,7 +1027,7 @@ function TaskSetTemplateCard({
               <span className="font-mono text-xs text-muted-foreground">{i + 1}.</span>{' '}
               <span className="font-medium">{item.name}</span>
               <span className="ml-2 text-xs text-muted-foreground">
-                {item.department} ・ {item.category} ・ {item.difficulty} ・ 優先度{item.priority}
+                {tr(DEPARTMENT_KEY[item.department])} ・ {item.category} ・ {tr(DIFFICULTY_KEY[item.difficulty])} ・ {tr('priority.prefix')}{tr(PRIORITY_KEY[item.priority])}
               </span>
               {item.dependsOn && item.dependsOn.length > 0 && (
                 <div className="mt-0.5 text-xs text-muted-foreground">
@@ -1068,7 +1072,7 @@ function TaskSetTemplateCard({
         >
           {DEPARTMENTS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DEPARTMENT_KEY[d])}
             </option>
           ))}
         </select>
@@ -1085,7 +1089,7 @@ function TaskSetTemplateCard({
         >
           {DIFFICULTY_LABEL.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DIFFICULTY_KEY[d])}
             </option>
           ))}
         </select>
@@ -1096,7 +1100,7 @@ function TaskSetTemplateCard({
         >
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              優先度{p}
+              {tr('priority.prefix')}{tr(PRIORITY_KEY[p])}
             </option>
           ))}
         </select>
@@ -1201,6 +1205,7 @@ function RecurringRuleForm({
   onUpdate: (fields: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   onCancelEdit: () => void
 }) {
+  const { t: tr } = useI18n()
   const [draft, setDraft] = useState({ ...EMPTY_RECURRING_DRAFT, projectId: projects[0]?.id ?? '' })
 
   useEffect(() => {
@@ -1278,7 +1283,7 @@ function RecurringRuleForm({
         >
           {DEPARTMENTS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DEPARTMENT_KEY[d])}
             </option>
           ))}
         </select>

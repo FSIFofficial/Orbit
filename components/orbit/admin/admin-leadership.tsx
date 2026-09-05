@@ -6,21 +6,23 @@ import { useNav } from '@/lib/orbit/nav'
 import { STATUS_LABEL } from '@/lib/orbit/types'
 import { Crown, AlertTriangle, Users, TrendingUp, CheckCircle2, Clock, UserCheck } from 'lucide-react'
 import { isOverdue, deadlineLevel } from '@/lib/orbit/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { Avatar } from '@/components/orbit/primitives'
 
 // item 21: 幹部が見れるダッシュボードページ。
 // 組織全体の運用状況（承認待ち・期限超過・停滞タスク・稼働率）を1画面で把握。
 export function AdminLeadership() {
-  const { visibleTasks, pendingTasks, members, projects, archivedTasks } = useOrbit()
+  const { visibleTasks, pendingTasks, members, projects, archivedTasks, currentUser } = useOrbit()
   const { go } = useNav()
+  const tz = currentUser?.timezone ?? DEFAULT_TIMEZONE
 
   const stats = useMemo(() => {
     const all = [...visibleTasks, ...archivedTasks]
-    const overdue = visibleTasks.filter((t) => isOverdue(t) && t.status !== 'done')
+    const overdue = visibleTasks.filter((t) => isOverdue(t, tz) && t.status !== 'done')
     const reviewing = visibleTasks.filter((t) => t.status === 'review')
     const stale = visibleTasks.filter((t) => {
       if (t.status === 'done') return false
-      const dl = deadlineLevel(t)
+      const dl = deadlineLevel(t, tz)
       return dl.level === 'overdue'
     })
     const doneLast30 = all.filter((t) => {
@@ -34,7 +36,7 @@ export function AdminLeadership() {
     const engagedCount = activeMembers.filter((m) => assignedMemberIds.has(m.id)).length
 
     return { overdue, reviewing, stale, doneLast30, activeMembers, engagedCount }
-  }, [visibleTasks, archivedTasks, members])
+  }, [visibleTasks, archivedTasks, members, tz])
 
   // プロジェクト別進捗サマリー
   const projectSummaries = useMemo(() => {
@@ -43,14 +45,14 @@ export function AdminLeadership() {
       .map((p) => {
         const pt = visibleTasks.filter((t) => t.projectId === p.id)
         const done = pt.filter((t) => t.status === 'done').length
-        const overdue = pt.filter((t) => isOverdue(t) && t.status !== 'done').length
+        const overdue = pt.filter((t) => isOverdue(t, tz) && t.status !== 'done').length
         const review = pt.filter((t) => t.status === 'review').length
         const pct = pt.length ? Math.round((done / pt.length) * 100) : 0
         return { project: p, total: pt.length, done, overdue, review, pct }
       })
       .filter((s) => s.total > 0)
       .sort((a, b) => b.overdue - a.overdue || a.pct - b.pct)
-  }, [visibleTasks, projects])
+  }, [visibleTasks, projects, tz])
 
   // メンバー稼働ランキング（担当タスク数でソート）
   const memberRanking = useMemo(() => {
@@ -58,12 +60,12 @@ export function AdminLeadership() {
       .filter((m) => !m.inactive)
       .map((m) => {
         const myTasks = visibleTasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done')
-        const overdueCount = myTasks.filter((t) => isOverdue(t)).length
+        const overdueCount = myTasks.filter((t) => isOverdue(t, tz)).length
         return { member: m, count: myTasks.length, overdueCount }
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
-  }, [members, visibleTasks])
+  }, [members, visibleTasks, tz])
 
   // item 19: 後継者・候補者サジェスト
   // Will/Judgment/skillsのベクトル類似度で現役幹部に近いメンバーをサジェスト

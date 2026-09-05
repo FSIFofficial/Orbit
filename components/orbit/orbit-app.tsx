@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { OrbitProvider, useOrbit } from '@/lib/orbit/store'
 import { NavProvider, useNav } from '@/lib/orbit/nav'
 import { ThemeProvider } from '@/lib/orbit/theme'
+import { I18nProvider } from '@/lib/orbit/i18n'
 import { TaskDrawerProvider, useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { ToastProvider, useToast } from './toast'
 import { LoginScreen } from './login-screen'
@@ -129,16 +130,18 @@ function Router() {
 export function OrbitApp() {
   return (
     <ThemeProvider>
-      <OrbitProvider>
-        <ToastProvider>
-          <SkillCertifiedWatcher />
-          <NavProvider>
-            <TaskDrawerProvider>
-              <Router />
-            </TaskDrawerProvider>
-          </NavProvider>
-        </ToastProvider>
-      </OrbitProvider>
+      <I18nProvider>
+        <OrbitProvider>
+          <ToastProvider>
+            <SkillCertifiedWatcher />
+            <NavProvider>
+              <TaskDrawerProvider>
+                <Router />
+              </TaskDrawerProvider>
+            </NavProvider>
+          </ToastProvider>
+        </OrbitProvider>
+      </I18nProvider>
     </ThemeProvider>
   )
 }
