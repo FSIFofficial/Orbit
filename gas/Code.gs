@@ -722,6 +722,19 @@ function doPost(e) {
         break
       case 'updateWill':
         result = updateMemberFields(body.memberId, { will_tags: (body.will || []).join(',') })
+        try {
+          var willMember = findRow(SHEET_MEMBERS, body.memberId)
+          var willName = willMember ? (willMember.display_name || willMember.name || '不明') : '不明'
+          var willTags = (body.will || []).join('、') || '（タグなし）'
+          var willSubject = '[Orbit] Will タグが更新されました'
+          var willBody = willName + 'さんのWillタグが更新されました。\n\n' +
+            '【設定されたWillタグ】\n' + willTags + '\n\n' +
+            'Orbitの人材画面で確認してください。'
+          notifyAdmins(willSubject, willBody)
+          notifyChat('💡 ' + willName + 'さんのWillタグが更新されました：' + willTags)
+        } catch (err) {
+          console.error('updateWill notification failed: ' + err)
+        }
         break
       case 'updateJudgment':
         result = updateMemberFields(body.memberId, {

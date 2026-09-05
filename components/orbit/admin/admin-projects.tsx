@@ -10,10 +10,12 @@ import { DEPARTMENTS, DIFFICULTY_LABEL, PRIORITIES } from '@/lib/orbit/types'
 import type {
   Department,
   Difficulty,
+  Member,
   Priority,
   Project,
   ProjectTemplateTask,
   RecurringTaskRule,
+  Task,
   TaskSetTemplate,
   TaskSetTemplateItem,
 } from '@/lib/orbit/types'
@@ -29,8 +31,23 @@ import {
   Trash2,
   UserCog,
   UserPlus,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// 暫定値、要調整: プロジェクトの「人材不足」閾値（未完了タスク数÷担当人数）
+const UNDERSTAFFED_RATIO_THRESHOLD = 3
+
+// 未完了タスク数 ÷ アサイン済みメンバー数（重複除く）の比率を計算する。
+// メンバーがいない場合は Infinity を返す（タスクがあっても0人なら常に不足）。
+function calcStaffingRatio(projectId: string, tasks: Task[], members: Member[]): number {
+  const incomplete = tasks.filter(
+    (t) => t.projectId === projectId && t.status !== 'done' && t.assigneeIds.length > 0,
+  )
+  if (incomplete.length === 0) return 0
+  const uniqueAssignees = new Set(incomplete.flatMap((t) => t.assigneeIds))
+  return uniqueAssignees.size === 0 ? Infinity : incomplete.length / uniqueAssignees.size
+}
 
 export function AdminProjects() {
   const {
@@ -188,6 +205,7 @@ export function AdminProjects() {
               <th className="px-4 py-2.5 font-medium">担当者</th>
               <th className="px-4 py-2.5 font-medium">責任者</th>
               <th className="px-4 py-2.5 font-medium">タスク数</th>
+              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">人材</th>
               {isFullAdmin && <th className="px-4 py-2.5 font-medium" />}
             </tr>
           </thead>
@@ -197,6 +215,8 @@ export function AdminProjects() {
               const owner = members.find((m) => m.id === p.ownerId)
               const parentProject = projects.find((pp) => pp.id === p.parentId)
               const taskCount = visibleTasks.filter((t) => t.projectId === p.id).length
+              const staffingRatio = calcStaffingRatio(p.id, visibleTasks, members)
+              const isUnderstaffed = staffingRatio >= UNDERSTAFFED_RATIO_THRESHOLD
               return (
                 <tr
                   key={p.id}
@@ -307,6 +327,19 @@ export function AdminProjects() {
                     </div>
                   </td>
                   <td className="px-4 py-3 tabular-nums text-muted-foreground">{taskCount}</td>
+                  <td className="px-4 py-3">
+                    {isUnderstaffed ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                        title={`未完了タスク/担当者比率: ${staffingRatio === Infinity ? '∞' : staffingRatio.toFixed(1)}（閾値 ${UNDERSTAFFED_RATIO_THRESHOLD}、暫定値・要調整）`}
+                      >
+                        <AlertTriangle className="size-3" />
+                        不足
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                   {isFullAdmin && (
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
