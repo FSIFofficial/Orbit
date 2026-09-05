@@ -625,7 +625,16 @@ function authorizeAction(acting, action, body) {
           }
         }
         if (body.status === '完了') {
-          throw new Error('担当者は「完了」に変更できません。管理者に確認を依頼してください。')
+          // 確認者（reviewer_id / reviewer_ids）に含まれていれば完了を許可
+          var reviewerAllowed = false
+          if (task) {
+            var reviewerIdsRaw = String(task.reviewer_ids || task.reviewer_id || '').trim()
+            var reviewerIdList = reviewerIdsRaw.split(',').map(function(s) { return s.trim() }).filter(Boolean)
+            if (reviewerIdList.indexOf(acting.id) >= 0) reviewerAllowed = true
+          }
+          if (!reviewerAllowed) {
+            throw new Error('担当者は「完了」に変更できません。確認者または管理者に依頼してください。')
+          }
         }
       }
     }
@@ -2208,6 +2217,62 @@ function dailyMaintenance() {
   }
   notifyOverdueTasksToDiscord()
   notifyOverdueTasksToAssignees()
+  try { notifyInactiveMembers() } catch (err) { }
+}
+
+// 一定期間アクセスのないメンバーを管理者に通知する日次スイープ。
+// 同日に既に通知済みのメンバーはスキップ（last_inactive_notified 列で管理）。
+function notifyInactiveMembers() {
+  var INACTIVE_DAYS = 25
+  var thresholdRaw = getSettingValue('inactive_notify_days')
+  var threshold = thresholdRaw ? (parseInt(thresholdRaw, 10) || INACTIVE_DAYS) : INACTIVE_DAYS
+
+  var sheet = getSheet(SHEET_MEMBERS)
+  if (!sheet || sheet.getLastRow() <= 1) return
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var nameCol = headers.indexOf('name')
+  var inactiveCol = headers.indexOf('inactive')
+  var lastLoginCol = headers.indexOf('last_login')
+  var lastNotifiedCol = headers.indexOf('last_inactive_notified')
+  if (idCol < 0 || lastLoginCol < 0) return
+
+  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+  var now = new Date().getTime()
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues()
+  var staleMembers = []
+
+  rows.forEach(function(row, i) {
+    var inactive = String(row[inactiveCol] || '').trim().toUpperCase()
+    if (inactive === 'TRUE') return
+    var lastLogin = String(row[lastLoginCol] || '').trim()
+    if (!lastLogin) return
+    var lastLoginMs = new Date(lastLogin).getTime()
+    if (isNaN(lastLoginMs)) return
+    var days = Math.floor((now - lastLoginMs) / 86400000)
+    if (days < threshold) return
+    // 当日既に通知済みならスキップ
+    var lastNotified = lastNotifiedCol >= 0 ? String(row[lastNotifiedCol] || '').trim() : ''
+    if (lastNotified === todayStr) return
+    staleMembers.push({ rowIdx: i + 2, name: String(row[nameCol] || ''), lastLogin: lastLogin, days: days })
+  })
+
+  if (staleMembers.length === 0) return
+
+  // 通知済み日付を記録
+  if (lastNotifiedCol >= 0) {
+    staleMembers.forEach(function(m) {
+      sheet.getRange(m.rowIdx, lastNotifiedCol + 1).setValue(todayStr)
+    })
+  }
+
+  var lines = staleMembers.map(function(m) {
+    return '・' + m.name + '（最終ログイン: ' + m.lastLogin.slice(0, 10) + '、' + m.days + '日経過）'
+  })
+  var subject = 'Orbit: ' + staleMembers.length + '名のメンバーが' + threshold + '日以上未ログインです'
+  var body = '以下のメンバーが ' + threshold + ' 日以上 Orbit にログインしていません:\n\n' + lines.join('\n') + '\n\nOrbit管理画面から状況を確認してください。'
+  notifyAdmins(subject, body)
+  notifyChat('⚠️ ' + staleMembers.length + '名のメンバーが' + threshold + '日以上未ログインです。Orbitで確認してください。')
 }
 
 // 期限超過タスクを担当者本人に個別メール通知する日次スイープ。
@@ -2453,6 +2518,7 @@ function setupOrbit() {
     'inactive',                 // "TRUE" = 休止中メンバー（一覧から非表示）
     'absent_dates',            // 不在日リスト（カンマ区切り YYYY-MM-DD）
     'last_login',              // 最終ログイン日時（ISO datetime）
+    'last_inactive_notified',  // 未アクセス通知を最後に送った日（YYYY-MM-DD）
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -2735,6 +2801,43 @@ function setExpenseStatus(applicationId, status, reason, actorId) {
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) {
     sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+  }
+
+  // 取り下げ通知: 現在の承認ステップの担当者に「対応不要」を通知（best-effort）
+  if (status === 'withdrawn') {
+    try {
+      var stepsColW = headers.indexOf('approval_steps_json')
+      var stepIdxColW = headers.indexOf('current_step_index')
+      if (stepsColW >= 0 && stepIdxColW >= 0) {
+        var stepsW = JSON.parse(String(found.data[stepsColW] || '[]'))
+        var stepIdxW = Number(found.data[stepIdxColW]) || 0
+        var currentStepW = stepsW[stepIdxW]
+        var withdrawNotifyIds = []
+        if (currentStepW) {
+          if (currentStepW.type === 'member' && currentStepW.memberId) {
+            withdrawNotifyIds = [currentStepW.memberId]
+          } else if (currentStepW.type === 'role' && currentStepW.role) {
+            var wSheet = getSheet(SHEET_MEMBERS)
+            var wHeaders = headerRow(wSheet)
+            var wRoleCol = wHeaders.indexOf('role')
+            var wIdCol = wHeaders.indexOf('id')
+            if (wRoleCol >= 0 && wIdCol >= 0 && wSheet.getLastRow() > 1) {
+              var wRows = wSheet.getRange(2, 1, wSheet.getLastRow() - 1, wHeaders.length).getValues()
+              wRows.forEach(function(r) {
+                if (String(r[wRoleCol]).trim() === currentStepW.role) withdrawNotifyIds.push(String(r[wIdCol]))
+              })
+            }
+          }
+        }
+        if (withdrawNotifyIds.length > 0) {
+          var wEmails = memberEmailsByIds(withdrawNotifyIds)
+          if (wEmails.length > 0) {
+            MailApp.sendEmail({ to: wEmails.join(','), subject: 'Orbit: 経費申請が取り下げられました', body: '経費申請が取り下げられました。この申請への対応は不要です。' })
+          }
+          notifyChat('💴 経費申請が取り下げられました。この申請への対応は不要です。')
+        }
+      }
+    } catch(eW) { /* best-effort */ }
   }
 
   // 却下通知
