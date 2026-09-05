@@ -1,6 +1,7 @@
 'use client'
 
 import type { RadarAxis, SkillLevel } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 interface Props {
   axes: RadarAxis[]
@@ -19,6 +20,7 @@ export function SkillRadarChart({
   color = 'hsl(var(--primary))',
   label,
 }: Props) {
+  const { t } = useI18n()
   if (axes.length < 3) return null
 
   const cx = size / 2
@@ -48,7 +50,7 @@ export function SkillRadarChart({
   const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + ' Z'
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={label ?? 'スキルレーダーチャート'}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={label ?? t('career.radarChart.title')}>
       {/* Grid rings */}
       {gridLevels.map((lv) => {
         const pts = axes.map((_, i) => {
