@@ -156,6 +156,7 @@ export function CareerTab({
         onSave={updateSkillLevels}
       />
       <SkillTimelineSection member={member} />
+      <SkillGrowthChart member={member} />
       {radarAxes && radarAxes.length >= 3 && (
         <Section title="スキルレーダーチャート" description="設定された軸ごとのスキルレベルを可視化します。">
           <div className="flex justify-center pt-2">
@@ -1224,6 +1225,95 @@ function SkillTimelineSection({ member }: { member: Member }) {
             </div>
           )
         })}
+      </div>
+    </Section>
+  )
+}
+
+// SVGベースの累積スキル習得数折れ線グラフ。acquiredAt が1件もなければ非表示。
+function SkillGrowthChart({ member }: { member: Member }) {
+  const levels = (member.skillLevels ?? []).filter((l) => l.acquiredAt)
+  if (levels.length === 0) return null
+
+  const sorted = [...levels].sort((a, b) => (a.acquiredAt ?? '').localeCompare(b.acquiredAt ?? ''))
+
+  // 累積取得数の時系列ポイントを生成（同日複数取得はまとめて加算）
+  const points: { date: string; count: number }[] = []
+  let cumulative = 0
+  for (const l of sorted) {
+    cumulative++
+    const dateStr = (l.acquiredAt ?? '').slice(0, 10)
+    if (points.length > 0 && points[points.length - 1].date === dateStr) {
+      points[points.length - 1].count = cumulative
+    } else {
+      points.push({ date: dateStr, count: cumulative })
+    }
+  }
+
+  const W = 480
+  const H = 120
+  const PAD = { top: 10, right: 16, bottom: 28, left: 32 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  const minTs = new Date(points[0].date).getTime()
+  const maxTs = new Date(points[points.length - 1].date).getTime()
+  const tsRange = maxTs - minTs || 1
+  const maxCount = points[points.length - 1].count
+
+  const toX = (ts: number) => PAD.left + ((ts - minTs) / tsRange) * chartW
+  const toY = (c: number) => PAD.top + chartH - (c / maxCount) * chartH
+
+  const polyline = points
+    .map((p) => `${toX(new Date(p.date).getTime())},${toY(p.count)}`)
+    .join(' ')
+
+  // X軸ラベル: 最大5点
+  const step = Math.max(1, Math.floor(points.length / 4))
+  const xLabels = points.filter((_, i) => i === 0 || i === points.length - 1 || i % step === 0)
+
+  return (
+    <Section title="スキル習得推移" description="累積取得スキル数の折れ線グラフです。">
+      <div className="mt-2 overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-lg" style={{ minWidth: 240 }}>
+          {/* Y軸グリッド */}
+          {[0, 0.25, 0.5, 0.75, 1].map((r) => {
+            const y = PAD.top + chartH * (1 - r)
+            const v = Math.round(maxCount * r)
+            return (
+              <g key={r}>
+                <line x1={PAD.left} x2={PAD.left + chartW} y1={y} y2={y} stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
+                <text x={PAD.left - 4} y={y + 4} textAnchor="end" fontSize={9} fill="currentColor" fillOpacity={0.45}>{v}</text>
+              </g>
+            )
+          })}
+          {/* 折れ線 */}
+          <polyline points={polyline} fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {/* ドット */}
+          {points.map((p) => (
+            <circle
+              key={p.date}
+              cx={toX(new Date(p.date).getTime())}
+              cy={toY(p.count)}
+              r={3}
+              fill="#60a5fa"
+            />
+          ))}
+          {/* X軸ラベル */}
+          {xLabels.map((p) => (
+            <text
+              key={p.date}
+              x={toX(new Date(p.date).getTime())}
+              y={H - 6}
+              textAnchor="middle"
+              fontSize={8}
+              fill="currentColor"
+              fillOpacity={0.5}
+            >
+              {p.date.slice(0, 7)}
+            </text>
+          ))}
+        </svg>
       </div>
     </Section>
   )

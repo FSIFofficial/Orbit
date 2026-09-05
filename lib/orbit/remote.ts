@@ -404,6 +404,10 @@ export interface RemoteSettings {
   // 団体名・ロゴ — Settings キー "org_name" / "org_logo_url"
   orgName: string
   orgLogoUrl: string
+  // 1on1ワークシート質問項目 — Settings キー "one_on_one_questions"
+  oneOnOneQuestions: string[]
+  // 初ログイン時付与タスク — Settings キー "initial_tasks_json"
+  initialTasks: { name: string; description: string }[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -488,6 +492,12 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     customFormDefs: (() => {
       try { const r = byKey.get('custom_form_defs'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    oneOnOneQuestions: (() => {
+      try { const r = byKey.get('one_on_one_questions'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    initialTasks: (() => {
+      try { const r = byKey.get('initial_tasks_json'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
 }

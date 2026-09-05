@@ -11,6 +11,7 @@ import { exportTasksToExcel } from '@/lib/orbit/export-excel'
 import { Avatar, DifficultyBadge, ProjectTag, DepartmentTag } from '@/components/orbit/primitives'
 import type { TaskStatus } from '@/lib/orbit/types'
 import { Button } from '@/components/ui/button'
+import { allowedStatusOptions } from '@/lib/orbit/permissions'
 
 export function ListView({
   tasks,
@@ -19,7 +20,7 @@ export function ListView({
   tasks: Task[]
   onOpenTask: (id: string) => void
 }) {
-  const { projects, members, updateTaskStatus } = useOrbit()
+  const { projects, members, updateTaskStatus, currentUser, isFullAdmin } = useOrbit()
   const { go } = useNav()
   const [query, setQuery] = useState('')
   const [projectFilter, setProjectFilter] = useState('all')
@@ -139,6 +140,11 @@ export function ListView({
                 .filter(Boolean) as typeof members
               const project = projects.find((p) => p.id === t.projectId)
               const overdue = isOverdue(t)
+              const isAssignee = currentUser ? t.assigneeIds.includes(currentUser.id) : false
+              const taskReviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
+              const isReviewer = currentUser ? taskReviewerIds.includes(currentUser.id) : false
+              const canChange = isFullAdmin || isAssignee || isReviewer
+              const statusOptions = allowedStatusOptions(isFullAdmin, isReviewer)
               return (
                 <tr
                   key={t.id}
@@ -189,15 +195,19 @@ export function ListView({
                     {formatDeadline(t.deadline)}
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={t.status}
-                      onChange={(e) => updateTaskStatus(t.id, e.target.value as TaskStatus)}
-                      className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-xs outline-none hover:border-border focus:border-border-strong"
-                    >
-                      {STATUS_ORDER.map((s) => (
-                        <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                      ))}
-                    </select>
+                    {canChange ? (
+                      <select
+                        value={t.status}
+                        onChange={(e) => updateTaskStatus(t.id, e.target.value as TaskStatus)}
+                        className="cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-xs outline-none hover:border-border focus:border-border-strong"
+                      >
+                        {statusOptions.map((s) => (
+                          <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{STATUS_LABEL[t.status]}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{t.category}</td>
                   <td className="px-4 py-3">

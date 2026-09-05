@@ -644,8 +644,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
   // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
   const [slackWebhookUrl, setSlackWebhookUrlState] = useState<string>('')
+  // Settingsシートから取得した初期タスク定義（initial_tasks_json）
+  const [initialTasksFromSettings, setInitialTasksFromSettings] = useState<{ name: string; description: string }[]>([])
+
   // item 20: 1on1ワークシート質問項目 — org管理者が設定できる質問のリスト
-  // localStorageに保存（GAS同期は将来対応）
+  // localStorageに保存、Settingsシート設定時はGAS同期あり
   const [oneOnOneQuestions, setOneOnOneQuestionsState] = useState<string[]>(() => {
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('orbit-1on1-questions') : null
@@ -768,6 +771,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.radarAxes) setRadarAxes(s.radarAxes)
         if (s.expenseCategories) setExpenseCategories(s.expenseCategories)
         if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
+        if (s.oneOnOneQuestions.length) setOneOnOneQuestionsState(s.oneOnOneQuestions)
+        if (s.initialTasks.length) setInitialTasksFromSettings(s.initialTasks)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -828,6 +833,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.radarAxes) setRadarAxes(settings.radarAxes)
           if (settings.expenseCategories) setExpenseCategories(settings.expenseCategories)
           if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
+          if (settings.oneOnOneQuestions.length) setOneOnOneQuestionsState(settings.oneOnOneQuestions)
+          if (settings.initialTasks.length) setInitialTasksFromSettings(settings.initialTasks)
         }
         setRemoteError(null)
       })
@@ -1463,9 +1470,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   // item 1: 初ログイン時（既存タスクが0件）に初期タスクセットを自動付与。
-  // 団体名や役割は仮値 — 実際はSettingsシートの initial_tasks_json キーで
-  // 上書き可能にすることを想定。ここではハードコードで3件を生成する。
+  // Settingsシートの initial_tasks_json キーで上書き可能。未設定時はハードコードの3件。
   const INITIAL_TASKS_KEY = 'orbit-initial-tasks-given'
+  const HARDCODED_INITIAL_TASKS = [
+    { name: 'Orbitの使い方を確認する', description: 'まずINPUT画面で「今日やること」を入力し、承認を受けてみましょう。' },
+    { name: 'プロフィールを設定する', description: 'ヘッダーのアカウントメニュー →「プロフィール」でWillとスキルを登録しましょう。' },
+    { name: 'チームメンバーのタスクを確認する', description: 'OUTPUT →「一覧」タブで組織のタスク全体を把握しましょう。' },
+  ]
   const login = useCallback(
     (userId: string) => {
       setCurrentUserId(userId)
@@ -1487,11 +1498,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (prevTasks.length > 0) return prevTasks
         const now = new Date().toISOString()
         const base = { assigneeIds: [userId], status: 'todo' as const, progressHistory: [] as import('./types').ProgressEntry[], department: '未分類' as const, category: '未分類', skills: [], priority: '中' as const, difficulty: '新人歓迎' as const, deadline: null, createdAt: now, lastActivity: now.slice(0, 10) }
-        const newTasks: import('./types').Task[] = [
-          { ...base, id: `init-${userId}-1`, name: 'Orbitの使い方を確認する', description: 'INPUT→タスク登録→OUTPUT確認の流れを体験してみましょう。', projectId: projects[0]?.id ?? 'default', description: 'まずINPUT画面で「今日やること」を入力し、承認を受けてみましょう。' },
-          { ...base, id: `init-${userId}-2`, name: 'プロフィールを設定する', description: 'ヘッダーのアカウントメニュー →「プロフィール」でWillとスキルを登録しましょう。', projectId: projects[0]?.id ?? 'default' },
-          { ...base, id: `init-${userId}-3`, name: 'チームメンバーのタスクを確認する', description: 'OUTPUT →「一覧」タブで組織のタスク全体を把握しましょう。', projectId: projects[0]?.id ?? 'default' },
-        ]
+        const taskDefs = initialTasksFromSettings.length ? initialTasksFromSettings : HARDCODED_INITIAL_TASKS
+        const newTasks: import('./types').Task[] = taskDefs.map((t, i) => ({
+          ...base,
+          id: `init-${userId}-${i + 1}`,
+          name: t.name,
+          description: t.description,
+          projectId: projects[0]?.id ?? 'default',
+        }))
         try {
           const given = window.localStorage.getItem(INITIAL_TASKS_KEY)
           const givenIds: string[] = given ? JSON.parse(given) : []
@@ -1501,7 +1515,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projects, runRemote],
+    [projects, runRemote, initialTasksFromSettings],
   )
 
   const logout = useCallback(() => {
@@ -3220,7 +3234,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const setOneOnOneQuestions = useCallback((questions: string[]) => {
     setOneOnOneQuestionsState(questions)
     try { window.localStorage.setItem('orbit-1on1-questions', JSON.stringify(questions)) } catch {}
-  }, [])
+    if (isSettingsConfigured) runRemote(remoteApi.updateSetting('one_on_one_questions', JSON.stringify(questions)))
+  }, [runRemote])
 
   // 活動休止トグル（item 9）— GAS側にも反映する
   const toggleMemberInactive = useCallback(

@@ -722,6 +722,19 @@ function doPost(e) {
         break
       case 'updateWill':
         result = updateMemberFields(body.memberId, { will_tags: (body.will || []).join(',') })
+        try {
+          var willMember = findRow(SHEET_MEMBERS, body.memberId)
+          var willName = willMember ? (willMember.display_name || willMember.name || '不明') : '不明'
+          var willTags = (body.will || []).join('、') || '（タグなし）'
+          var willSubject = '[Orbit] Will タグが更新されました'
+          var willBody = willName + 'さんのWillタグが更新されました。\n\n' +
+            '【設定されたWillタグ】\n' + willTags + '\n\n' +
+            'Orbitの人材画面で確認してください。'
+          notifyAdmins(willSubject, willBody)
+          notifyChat('💡 ' + willName + 'さんのWillタグが更新されました：' + willTags)
+        } catch (err) {
+          console.error('updateWill notification failed: ' + err)
+        }
         break
       case 'updateJudgment':
         result = updateMemberFields(body.memberId, {
@@ -2965,9 +2978,34 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   var headers = found.headers
   var statusCol = headers.indexOf('status')
   var reasonCol = headers.indexOf('rejection_reason')
+  var submitterIdCol = headers.indexOf('submitter_id')
 
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+
+  // 却下時: 申請者にメール通知（best-effort）
+  if (status === 'rejected' && submitterIdCol >= 0) {
+    try {
+      var submitterId = String(found.data[submitterIdCol] || '')
+      if (submitterId) {
+        var emails = memberEmailsByIds([submitterId])
+        if (emails.length > 0) {
+          MailApp.sendEmail({
+            to: emails.join(','),
+            subject: '[Orbit] 申請フォームが却下されました',
+            body:
+              '申請フォームの申請が却下されました。\n\n' +
+              (reason ? '理由: ' + reason + '\n\n' : '') +
+              'Orbitで確認してください。',
+          })
+        }
+        notifyChat('📋 申請フォームが却下されました。' + (reason ? '（理由: ' + reason + '）' : ''))
+      }
+    } catch (eR) {
+      console.error('setFormSubmissionStatus: 却下通知送信失敗: ' + eR)
+    }
+  }
+
   return { ok: true }
 }
 
