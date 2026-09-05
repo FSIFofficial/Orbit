@@ -15,6 +15,7 @@ interface ColDef {
   setValue?: (m: Member, val: string) => void
   editable?: boolean
   width?: number
+  tooltip?: string
 }
 
 function skillLevelText(m: Member, skill: string): string {
@@ -24,7 +25,7 @@ function skillLevelText(m: Member, skill: string): string {
 
 const BASE_COLS: ColDef[] = [
   { key: 'name', label: '氏名', getValue: (m) => m.name, editable: false, width: 140 },
-  { key: 'affiliation', label: '所属', getValue: (m) => m.affiliation, editable: true, width: 140 },
+  { key: 'affiliation', label: '所属', getValue: (m) => m.affiliation, editable: false, width: 140, tooltip: 'このセルは所属プロジェクトから自動的に決まります。変更するには管理者がメンバーのプロジェクト割り当てを変更してください。' },
   { key: 'role', label: '役職', getValue: (m) => m.role, editable: false, width: 100 },
   { key: 'skills', label: 'スキル', getValue: (m) => (m.skills ?? []).join(', '), editable: false, width: 180 },
   { key: 'yearsOfExperience', label: '経験年数', getValue: (m) => m.yearsOfExperience != null ? String(m.yearsOfExperience) : '', editable: true, width: 90 },
@@ -360,7 +361,7 @@ export function AdminMemberDb() {
                             setEditVal(val)
                           }}
                           className={`block truncate ${col.editable ? 'cursor-text hover:bg-accent/40 rounded px-0.5' : ''}`}
-                          title={val}
+                          title={col.tooltip ?? val}
                         >
                           {val || <span className="text-muted-foreground/40">—</span>}
                         </span>

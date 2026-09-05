@@ -2965,9 +2965,34 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   var headers = found.headers
   var statusCol = headers.indexOf('status')
   var reasonCol = headers.indexOf('rejection_reason')
+  var submitterIdCol = headers.indexOf('submitter_id')
 
   sheet.getRange(found.row, statusCol + 1).setValue(status)
   if (reason && reasonCol >= 0) sheet.getRange(found.row, reasonCol + 1).setValue(reason)
+
+  // 却下時: 申請者にメール通知（best-effort）
+  if (status === 'rejected' && submitterIdCol >= 0) {
+    try {
+      var submitterId = String(found.data[submitterIdCol] || '')
+      if (submitterId) {
+        var emails = memberEmailsByIds([submitterId])
+        if (emails.length > 0) {
+          MailApp.sendEmail({
+            to: emails.join(','),
+            subject: '[Orbit] 申請フォームが却下されました',
+            body:
+              '申請フォームの申請が却下されました。\n\n' +
+              (reason ? '理由: ' + reason + '\n\n' : '') +
+              'Orbitで確認してください。',
+          })
+        }
+        notifyChat('📋 申請フォームが却下されました。' + (reason ? '（理由: ' + reason + '）' : ''))
+      }
+    } catch (eR) {
+      console.error('setFormSubmissionStatus: 却下通知送信失敗: ' + eR)
+    }
+  }
+
   return { ok: true }
 }
 
