@@ -38,6 +38,7 @@ import {
 import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n } from '@/lib/orbit/i18n'
+import { TranslatedText } from '@/components/orbit/translated-text'
 import { formatDateTimeInTz, DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import {
@@ -1414,7 +1415,8 @@ function DrawerBody({
   onSetForm: (fields: FormFieldDef[], invitedIds: string[]) => void
   onRespondForm: (responses: Record<string, FormAnswerValue>) => void
 }) {
-  const overdue = isOverdue(task)
+  const currentUserTz = members.find((m) => m.id === currentUserId)?.timezone ?? DEFAULT_TIMEZONE
+  const overdue = isOverdue(task, currentUserTz)
   const calendarUrl = googleCalendarUrl(task, {
     projectName,
     department: task.department,
@@ -1458,7 +1460,7 @@ function DrawerBody({
       <div className="flex-1 overflow-auto orbit-scroll px-5 py-4">
         <div className="flex items-center gap-2">
           <h2 id="task-drawer-title" className="text-lg font-semibold tracking-tight text-balance">
-            {task.name}
+            <TranslatedText text={task.name} />
           </h2>
           {task.pendingApproval && (
             <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">

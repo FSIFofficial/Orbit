@@ -41,6 +41,18 @@ export function cacheTimezone(tz: string) {
   }
 }
 
+// 指定タイムゾーンでの「今日」を YYYY-MM-DD で返す。期限超過判定
+// （isOverdue/deadlineLevel、lib/orbit/utils.ts）が使う基準日で、
+// UTC基準の Date#toISOString と違い、JST等では日付が1日ずれない。
+export function todayStrInTz(tz: string): string {
+  try {
+    // en-CA のロケールは YYYY-MM-DD 形式を返すため、そのまま使える
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date())
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_TIMEZONE }).format(new Date())
+  }
+}
+
 // 時刻を含むISO文字列（コメントの投稿日時など）を、指定タイムゾーンの
 // "M/D HH:mm" で表示する。日付のみの文字列（YYYY-MM-DD の締切など）は
 // タイムゾーンに関係なくカレンダー日そのものなので、この関数の対象外

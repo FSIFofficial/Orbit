@@ -8,13 +8,14 @@ import { CalendarView } from '../output/calendar-view'
 import { TaskDetailDrawer } from '../output/task-detail-drawer'
 import { Avatar } from '@/components/orbit/primitives'
 import { isOverdue } from '@/lib/orbit/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
 
 type Tab = 'overview' | 'workflow' | 'calendar'
 
 export function ProjectDetail({ id }: { id: string }) {
-  const { getProject, visibleTasks: tasks, members, getProjectMembers } = useOrbit()
+  const { getProject, visibleTasks: tasks, members, getProjectMembers, currentUser } = useOrbit()
   const { go } = useNav()
   const [tab, setTab] = useState<Tab>('overview')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
@@ -31,7 +32,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const pt = tasks.filter((t) => t.projectId === id)
   const done = pt.filter((t) => t.status === 'done').length
   const waiting = pt.filter((t) => t.status === 'review').length
-  const overdue = pt.filter((t) => isOverdue(t)).length
+  const overdue = pt.filter((t) => isOverdue(t, currentUser?.timezone ?? DEFAULT_TIMEZONE)).length
   const completion = pt.length ? Math.round((done / pt.length) * 100) : 0
   const projMembers = getProjectMembers(id)
   const owner = members.find((m) => m.id === project.ownerId)

@@ -75,7 +75,7 @@ import {
   toCreatePayload,
 } from './remote'
 import { daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
-import { cacheTimezone } from './timezone'
+import { cacheTimezone, DEFAULT_TIMEZONE } from './timezone'
 import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
 
 type Mode = 'input' | 'output'
@@ -3420,7 +3420,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     visibleTasks
       .filter((t) => t.assigneeIds.includes(currentUser.id) && t.status !== 'done')
       .forEach((t) => {
-        const dl = deadlineLevel(t)
+        const dl = deadlineLevel(t, currentUser.timezone ?? DEFAULT_TIMEZONE)
         if (dl.level === 'overdue' || dl.level === 'today' || dl.level === 'soon' || dl.level === 'near') {
           items.push({
             id: `deadline-${t.id}`,

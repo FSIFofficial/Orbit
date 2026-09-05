@@ -4,6 +4,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { Avatar, ProjectTag } from '@/components/orbit/primitives'
 import { isOverdue, daysSince, formatDeadline } from '@/lib/orbit/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { STATUS_LABEL } from '@/lib/orbit/types'
 import { exportAllDataToExcel } from '@/lib/orbit/export-excel'
 import { Button } from '@/components/ui/button'
@@ -28,13 +29,15 @@ export function AdminDashboard() {
     members,
     isFullAdmin,
     getProject,
+    currentUser,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
+  const tz = currentUser?.timezone ?? DEFAULT_TIMEZONE
 
   const inProgress = tasks.filter((t) => t.status === 'progress')
   const needsSupport = tasks.filter((t) => t.status === 'support')
   const waiting = tasks.filter((t) => t.status === 'review')
-  const overdue = tasks.filter((t) => isOverdue(t))
+  const overdue = tasks.filter((t) => isOverdue(t, tz))
   const unassigned = tasks.filter((t) => t.assigneeIds.length === 0 && t.status !== 'done')
   const blocked = tasks.filter((t) => !!t.blocker && t.status !== 'done')
   const stale = tasks.filter((t) => {
@@ -52,7 +55,7 @@ export function AdminDashboard() {
   const projectHealth = adminProjects
     .map((p) => {
       const pt = tasks.filter((t) => t.projectId === p.id)
-      const pOverdue = pt.filter((t) => isOverdue(t)).length
+      const pOverdue = pt.filter((t) => isOverdue(t, tz)).length
       const pWaiting = pt.filter((t) => t.status === 'review').length
       const pBlocked = pt.filter((t) => !!t.blocker && t.status !== 'done').length
       const pLoad = pt.filter((t) => t.status !== 'done').length

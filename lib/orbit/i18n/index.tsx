@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { ja } from './ja'
 import { en } from './en'
-import type { TaskStatus } from '../types'
+import type { TaskStatus, Department, Priority, Difficulty } from '../types'
 
 // 新しい言語を追加するときは: 1) この配列に追記 2) 対応する辞書ファイル
 // （xx.ts）を作り `satisfies Record<keyof typeof ja, string>` で型チェック
@@ -40,6 +40,41 @@ export const STATUS_KEY: Record<TaskStatus, TranslationKey> = {
   review: 'status.review',
   fix: 'status.fix',
   done: 'status.done',
+}
+
+// 部門(Department)・優先度(Priority)・難易度(Difficulty)は types.ts で固定
+// された定数集合なので、TaskStatus と同様に安全に辞書化できる。組織が
+// Admin > Tags で自由に追加できるロール名（BASE_ROLE=一般以外）はここでは
+// 扱わない — lib/orbit/translate.ts の機械翻訳（自由入力向け）に任せる。
+export const DEPARTMENT_KEY: Record<Department, TranslationKey> = {
+  運営: 'department.運営',
+  広報: 'department.広報',
+  開発: 'department.開発',
+  デザイン: 'department.デザイン',
+  渉外: 'department.渉外',
+  イベント: 'department.イベント',
+  リサーチ: 'department.リサーチ',
+  未分類: 'department.未分類',
+}
+
+export const PRIORITY_KEY: Record<Priority, TranslationKey> = {
+  高: 'priority.高',
+  中: 'priority.中',
+  低: 'priority.低',
+}
+
+export const DIFFICULTY_KEY: Record<Difficulty, TranslationKey> = {
+  誰でも可: 'difficulty.誰でも可',
+  新人歓迎: 'difficulty.新人歓迎',
+  少し経験必要: 'difficulty.少し経験必要',
+  経験者向け: 'difficulty.経験者向け',
+  上級者向け: 'difficulty.上級者向け',
+}
+
+// BASE_ROLE（'一般'）のみ辞書化。それ以外の組織定義ロールはこの関数を通さず
+// 元の文字列のまま（または自動翻訳経由で）表示する。
+export function roleLabelKey(role: string): TranslationKey | null {
+  return role === '一般' ? 'role.一般' : null
 }
 
 function isLocale(v: string | null): v is Locale {

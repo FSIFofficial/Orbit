@@ -9,10 +9,12 @@ import type { Task } from '@/lib/orbit/types'
 import { formatDeadline, isOverdue } from '@/lib/orbit/utils'
 import { exportTasksToExcel } from '@/lib/orbit/export-excel'
 import { Avatar, DifficultyBadge, ProjectTag, DepartmentTag } from '@/components/orbit/primitives'
+import { TranslatedText } from '@/components/orbit/translated-text'
 import type { TaskStatus } from '@/lib/orbit/types'
 import { Button } from '@/components/ui/button'
 import { allowedStatusOptions } from '@/lib/orbit/permissions'
-import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
+import { useI18n, STATUS_KEY, DEPARTMENT_KEY } from '@/lib/orbit/i18n'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 
 export function ListView({
   tasks,
@@ -104,7 +106,7 @@ export function ListView({
           <option value="all">{tr('output.list.departmentAll')}</option>
           {DEPARTMENTS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {tr(DEPARTMENT_KEY[d])}
             </option>
           ))}
         </select>
@@ -141,7 +143,7 @@ export function ListView({
                 .map((id) => members.find((m) => m.id === id))
                 .filter(Boolean) as typeof members
               const project = projects.find((p) => p.id === t.projectId)
-              const overdue = isOverdue(t)
+              const overdue = isOverdue(t, currentUser?.timezone ?? DEFAULT_TIMEZONE)
               const isAssignee = currentUser ? t.assigneeIds.includes(currentUser.id) : false
               const taskReviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
               const isReviewer = currentUser ? taskReviewerIds.includes(currentUser.id) : false
@@ -153,7 +155,9 @@ export function ListView({
                   onClick={() => onOpenTask(t.id)}
                   className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-secondary/50"
                 >
-                  <td className="px-4 py-3 font-medium text-foreground">{t.name}</td>
+                  <td className="px-4 py-3 font-medium text-foreground">
+                    <TranslatedText text={t.name} />
+                  </td>
                   <td className="px-4 py-3">
                     {assignees.length > 0 ? (
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

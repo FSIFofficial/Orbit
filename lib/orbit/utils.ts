@@ -1,4 +1,5 @@
 import type { Member, Task } from './types'
+import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
 export function parseDepartmentPath(path: string): string[] {
   return path.split('>').map((s) => s.trim()).filter(Boolean)
@@ -44,23 +45,27 @@ export function formatDeadlineFull(d: string | null): string {
   return `${y}/${m}/${day}`
 }
 
-export function isOverdue(task: Task): boolean {
+// tz省略時はJST（DEFAULT_TIMEZONE）基準。currentUser.timezoneが分かる
+// 呼び出し元（画面コンポーネント）はそちらを渡すことで、ユーザーごとの
+// タイムゾームで「今日」を判定できる（例: JSTで既に翌日でもPTではまだ
+// 当日、という食い違いを避ける）。
+export function isOverdue(task: Task, tz: string = DEFAULT_TIMEZONE): boolean {
   if (!task.deadline) return false
   if (task.status === 'done') return false
-  return task.deadline < todayStr()
+  return task.deadline < todayStrInTz(tz)
 }
 
 export type DeadlineLevel = 'overdue' | 'today' | 'soon' | 'near' | 'none'
 
 // Classify how close a task's deadline is, for color-coded warnings.
-export function deadlineLevel(task: Task): {
+export function deadlineLevel(task: Task, tz: string = DEFAULT_TIMEZONE): {
   level: DeadlineLevel
   label: string
   days: number | null
 } {
   if (!task.deadline || task.status === 'done')
     return { level: 'none', label: '', days: null }
-  const today = new Date(todayStr()).getTime()
+  const today = new Date(todayStrInTz(tz)).getTime()
   const due = new Date(task.deadline).getTime()
   const days = Math.round((due - today) / (1000 * 60 * 60 * 24))
   if (days < 0) return { level: 'overdue', label: '期限超過', days }

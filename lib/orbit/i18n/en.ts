@@ -100,4 +100,30 @@ export const en = {
   // ---- settings (language / timezone) ------------------------------------
   'settings.language': 'Language',
   'settings.timezone': 'Timezone',
+
+  // ---- department (fixed 8 values in DEPARTMENTS) -------------------------
+  'department.運営': 'Operations',
+  'department.広報': 'PR',
+  'department.開発': 'Development',
+  'department.デザイン': 'Design',
+  'department.渉外': 'External Relations',
+  'department.イベント': 'Events',
+  'department.リサーチ': 'Research',
+  'department.未分類': 'Uncategorized',
+
+  // ---- priority (fixed 3 values) ------------------------------------------
+  'priority.高': 'High',
+  'priority.中': 'Medium',
+  'priority.低': 'Low',
+  'priority.prefix': 'Priority: ',
+
+  // ---- difficulty (fixed 5 values) -----------------------------------------
+  'difficulty.誰でも可': 'Anyone',
+  'difficulty.新人歓迎': 'Beginner welcome',
+  'difficulty.少し経験必要': 'Some experience needed',
+  'difficulty.経験者向け': 'Experienced',
+  'difficulty.上級者向け': 'Advanced',
+
+  // ---- base role -------------------------------------------------------
+  'role.一般': 'General',
 } satisfies Record<keyof typeof ja, string>

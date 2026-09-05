@@ -612,6 +612,7 @@ function authorizeAction(acting, action, body) {
     'withdrawExpense',         // 取り下げは本人（下層でチェック）
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
+    'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -720,6 +721,9 @@ function doPost(e) {
           progress_history_json: JSON.stringify(body.progressHistory || []),
           last_activity: todayStr(),
         })
+        break
+      case 'translateText':
+        result = translateTexts(body.texts, body.targetLang)
         break
       case 'updateWill':
         result = updateMemberFields(body.memberId, { will_tags: (body.will || []).join(',') })
@@ -2440,6 +2444,29 @@ function sendSlackMessage(content) {
 function notifyChat(content) {
   sendDiscordMessage(content)
   sendSlackMessage(content)
+}
+
+// タスク名・説明など自由入力テキストの自動翻訳（多言語対応、item: i18n）。
+// Google組み込みの LanguageApp.translate() を使うため追加のAPIキー・課金
+// 設定は不要。1件ずつ呼ぶとレイテンシが積み上がるため、フロント側
+// (lib/orbit/translate.ts) が複数テキストをまとめて渡し、ここでバッチ処理
+// する。1件の翻訳失敗が他の件に波及しないよう、テキストごとに個別に
+// try/catchし、失敗時はその要素だけ原文を返す。
+// 無料枠のクォータ超過時もLanguageAppは例外を投げるため、同様に原文
+// フォールバックになる。
+function translateTexts(texts, targetLang) {
+  var list = Array.isArray(texts) ? texts : []
+  var lang = targetLang || 'en'
+  return list.map(function (text) {
+    var s = String(text || '')
+    if (!s.trim()) return s
+    try {
+      return LanguageApp.translate(s, '', lang)
+    } catch (err) {
+      console.error('translateTexts: failed for "' + s + '": ' + err)
+      return s
+    }
+  })
 }
 
 // A cell written as a plain 'yyyy-MM-dd' string can come back from

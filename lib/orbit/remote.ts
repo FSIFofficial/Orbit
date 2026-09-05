@@ -639,6 +639,8 @@ export const remoteApi = {
     postToGas('updateUnavailableDates', { memberId, dates }),
   updateTimezone: (memberId: string, timezone: string) =>
     postToGas('updateTimezone', { memberId, timezone }),
+  translateTexts: (texts: string[], targetLang: string) =>
+    postToGas<string[]>('translateText', { texts, targetLang }),
   updateSchedule: (taskId: string, startDate: string | null, deadline: string | null) =>
     postToGas('updateSchedule', { taskId, startDate, deadline }),
   updateDependsOn: (taskId: string, dependsOnIds: string[]) =>

@@ -100,4 +100,33 @@ export const ja = {
   // ---- settings (言語・タイムゾーン) ------------------------------------
   'settings.language': '言語',
   'settings.timezone': 'タイムゾーン',
+
+  // ---- 部門（DEPARTMENTS、types.tsで固定8種）--------------------------------
+  // 組織が追加できる自由ロール名とは違い、この8種は決め打ちの定数なので
+  // 安全に辞書化できる。GAS/シートには引き続きこの日本語のまま保存される。
+  'department.運営': '運営',
+  'department.広報': '広報',
+  'department.開発': '開発',
+  'department.デザイン': 'デザイン',
+  'department.渉外': '渉外',
+  'department.イベント': 'イベント',
+  'department.リサーチ': 'リサーチ',
+  'department.未分類': '未分類',
+
+  // ---- 優先度（Priority: 高・中・低の3値固定）--------------------------------
+  'priority.高': '高',
+  'priority.中': '中',
+  'priority.低': '低',
+  'priority.prefix': '優先度',
+
+  // ---- 難易度（DIFFICULTY_LABEL、5段階固定）----------------------------------
+  'difficulty.誰でも可': '誰でも可',
+  'difficulty.新人歓迎': '新人歓迎',
+  'difficulty.少し経験必要': '少し経験必要',
+  'difficulty.経験者向け': '経験者向け',
+  'difficulty.上級者向け': '上級者向け',
+
+  // ---- 基本ロール（BASE_ROLE。それ以外の追加ロールは組織の自由入力のため
+  // 辞書化できず、自動翻訳（lib/orbit/translate.ts）の対象にする）------------
+  'role.一般': '一般',
 } satisfies Record<string, string>

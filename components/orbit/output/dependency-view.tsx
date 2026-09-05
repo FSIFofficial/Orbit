@@ -20,6 +20,7 @@ import type { Task } from '@/lib/orbit/types'
 import { STATUS_COLOR, STATUS_LABEL } from '@/lib/orbit/types'
 import { Avatar, DifficultyBadge } from '../primitives'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { KANBAN_CARD_FIELDS, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
 import { GitBranch, GripVertical, TriangleAlert } from 'lucide-react'
@@ -60,7 +61,7 @@ export function DependencyView({
   onOpenTask: (id: string) => void
   fields?: Set<KanbanCardField>
 }) {
-  const { updateDependsOn, getMember, getProject } = useOrbit()
+  const { updateDependsOn, getMember, getProject, currentUser } = useOrbit()
   const toast = useToast()
   const cardH = cardHeightFor(fields)
   const showProject = fields.has('project')
@@ -353,7 +354,7 @@ export function DependencyView({
             const assignees = t.assigneeIds.map((id) => getMember(id)).filter(Boolean) as Array<
               NonNullable<ReturnType<typeof getMember>>
             >
-            const deadline = deadlineLevel(t)
+            const deadline = deadlineLevel(t, currentUser?.timezone ?? DEFAULT_TIMEZONE)
             const urgent = deadline.level === 'overdue' || deadline.level === 'today'
             return (
               <div
