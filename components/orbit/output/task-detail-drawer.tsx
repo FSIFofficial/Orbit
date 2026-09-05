@@ -1453,8 +1453,7 @@ function DrawerBody({
   // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
   const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
   const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
-  const canSetDone = reviewerIds.length === 0 ? isAdmin : isReviewer
-  const statusOptions = allowedStatusOptions(isAdmin).filter((s) => s !== 'done' || canSetDone)
+  const statusOptions = allowedStatusOptions(isAdmin, isReviewer)
 
   return (
     <div className="flex h-full flex-col">
