@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import type { Member, Project } from '@/lib/orbit/types'
 import { DEPARTMENTS, DIFFICULTY_LABEL, PRIORITIES } from '@/lib/orbit/types'
 import {
-  IMPORT_FIELD_LABEL,
   VALUE_MAPPED_FIELDS,
   distinctColumnValues,
   guessDepartment,
@@ -22,6 +21,20 @@ import type {
 } from '@/lib/orbit/import-excel'
 import { Button } from '@/components/ui/button'
 import { FileSpreadsheet, TriangleAlert } from 'lucide-react'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+
+const IMPORT_FIELD_KEY: Record<ImportField, TranslationKey> = {
+  name: 'excelMapping.importField.name',
+  project: 'excelMapping.importField.project',
+  department: 'excelMapping.importField.department',
+  assignee: 'excelMapping.importField.assignee',
+  priority: 'excelMapping.importField.priority',
+  difficulty: 'excelMapping.importField.difficulty',
+  category: 'excelMapping.importField.category',
+  skills: 'excelMapping.importField.skills',
+  startDate: 'excelMapping.importField.startDate',
+  deadline: 'excelMapping.importField.deadline',
+}
 
 const FIELD_ORDER: { field: ImportField; required?: boolean }[] = [
   { field: 'name', required: true },
@@ -61,17 +74,18 @@ export function ExcelColumnMapping({
   onConfirm: () => void
 }) {
   const canConfirm = !!mapping.name
+  const { t } = useI18n()
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2">
       <div className="mb-5">
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
           <FileSpreadsheet className="size-3.5 text-primary" />
-          列の対応を確認
+          {t('excelMapping.badge')}
         </div>
         <h2 className="text-xl font-semibold tracking-tight">{sheetData.fileName}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          「{sheetData.sheetName}」シート・{sheetData.rows.length}行を読み込みました。どの列を何として使うか確認してください。ズレている項目は列や値の対応を選び直せます。
+          {t('excelMapping.subtitle', { sheetName: sheetData.sheetName, rowCount: sheetData.rows.length })}
         </p>
       </div>
 
@@ -79,7 +93,7 @@ export function ExcelColumnMapping({
         {FIELD_ORDER.map(({ field, required }) => (
           <div key={field} className="flex flex-wrap items-center gap-2">
             <span className="w-24 shrink-0 text-sm font-medium text-foreground">
-              {IMPORT_FIELD_LABEL[field]}
+              {t(IMPORT_FIELD_KEY[field])}
               {required && <span className="ml-0.5 text-destructive">*</span>}
             </span>
             <select
@@ -87,7 +101,7 @@ export function ExcelColumnMapping({
               value={mapping[field] ?? ''}
               onChange={(e) => onMappingChange(field, e.target.value || undefined)}
             >
-              <option value="">使用しない</option>
+              <option value="">{t('excelMapping.notUsed')}</option>
               {sheetData.headers.map((h) => (
                 <option key={h} value={h}>
                   {h}
@@ -101,7 +115,7 @@ export function ExcelColumnMapping({
       {!mapping.name && (
         <p className="mt-2.5 flex items-center gap-1.5 text-sm text-destructive">
           <TriangleAlert className="size-4" />
-          「タスク名」に対応する列を選んでください
+          {t('excelMapping.nameRequiredWarning')}
         </p>
       )}
 
@@ -120,10 +134,10 @@ export function ExcelColumnMapping({
 
       <div className="mt-6 flex items-center justify-end gap-2 rounded-xl border border-border bg-card px-4 py-3">
         <Button variant="ghost" className="h-9" onClick={onCancel}>
-          やり直す
+          {t('excelMapping.retry')}
         </Button>
         <Button className="h-9 px-4" disabled={!canConfirm} onClick={onConfirm}>
-          この内容で取り込む
+          {t('excelMapping.confirmImport')}
         </Button>
       </div>
     </div>
@@ -149,6 +163,7 @@ function ValueMappingSection({
   projects: Project[]
   members: Member[]
 }) {
+  const { t } = useI18n()
   const splitTokens = field === 'assignee'
   const values = useMemo(
     () => distinctColumnValues(rows, header, splitTokens),
@@ -191,10 +206,10 @@ function ValueMappingSection({
   return (
     <div className="mt-3 rounded-xl border border-border bg-card p-4">
       <p className="text-sm font-medium text-foreground">
-        {IMPORT_FIELD_LABEL[field]}の値の対応
+        {t('excelMapping.valueMapping.title', { field: t(IMPORT_FIELD_KEY[field]) })}
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        「{header}」列に含まれる値ごとに、対応する{IMPORT_FIELD_LABEL[field]}を選べます。ここで直すと全ての行に反映されます。
+        {t('excelMapping.valueMapping.desc', { header, field: t(IMPORT_FIELD_KEY[field]) })}
       </p>
       <div className="mt-2.5 flex flex-col gap-1.5">
         {values.map((raw) => (
@@ -208,7 +223,7 @@ function ValueMappingSection({
               value={overrides[raw] ?? guessFor(raw)}
               onChange={(e) => onChange(raw, e.target.value)}
             >
-              {field === 'assignee' && <option value="">（マッチさせない）</option>}
+              {field === 'assignee' && <option value="">{t('excelMapping.valueMapping.noMatch')}</option>}
               {opts.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
