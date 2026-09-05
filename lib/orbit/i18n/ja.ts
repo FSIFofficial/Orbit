@@ -313,6 +313,18 @@ export const ja = {
   'dependency.alreadyPrereqToast': '「{source}」は既に「{target}」の前提タスクです',
   'dependency.cycleToast': '循環する依存関係になるため設定できません',
   'dependency.setPrereqToast': '「{source}」を「{target}」の前提タスクに設定しました',
+  'admin.radarAxes.savedToast': 'レーダーチャートの軸を保存しました',
+  'admin.radarAxes.title': 'レーダーチャート軸設定',
+  'admin.radarAxes.subtitle': 'メンバーページに表示するスキルレーダーチャートの軸を設定します（3軸以上必要）',
+  'admin.radarAxes.empty': '軸がまだありません',
+  'admin.radarAxes.displayNameLabel': '表示名: {label}',
+  'admin.radarAxes.addAxis': '軸を追加',
+  'admin.radarAxes.selectSkillPlaceholder': 'スキルを選択',
+  'admin.radarAxes.displayNamePlaceholder': '表示名（省略可）',
+  'admin.radarAxes.reset': 'リセット',
+  'admin.radarAxes.preview': 'プレビュー',
+  'admin.radarAxes.needThreeAxes': '3軸以上で表示',
+  'admin.radarAxes.previewLabel': 'プレビュー: {name}',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

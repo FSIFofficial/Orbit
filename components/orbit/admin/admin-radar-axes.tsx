@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Plus, Trash2, Radar } from 'lucide-react'
 import type { RadarAxis } from '@/lib/orbit/types'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function AdminRadarAxes() {
   const { radarAxes, updateRadarAxes, skillOptions, members, currentUser } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
   const [axes, setAxes] = useState<RadarAxis[]>(radarAxes)
   const [newSkill, setNewSkill] = useState('')
   const [newLabel, setNewLabel] = useState('')
@@ -38,7 +40,7 @@ export function AdminRadarAxes() {
 
   const save = () => {
     updateRadarAxes(axes)
-    toast('レーダーチャートの軸を保存しました')
+    toast(t('admin.radarAxes.savedToast'))
     setDirty(false)
   }
 
@@ -47,9 +49,9 @@ export function AdminRadarAxes() {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-base font-semibold">レーダーチャート軸設定</h2>
+        <h2 className="text-base font-semibold">{t('admin.radarAxes.title')}</h2>
         <p className="text-xs text-muted-foreground">
-          メンバーページに表示するスキルレーダーチャートの軸を設定します（3軸以上必要）
+          {t('admin.radarAxes.subtitle')}
         </p>
       </div>
 
@@ -58,7 +60,7 @@ export function AdminRadarAxes() {
         <div>
           <div className="mb-3 flex flex-col gap-2">
             {axes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">軸がまだありません</p>
+              <p className="text-sm text-muted-foreground">{t('admin.radarAxes.empty')}</p>
             ) : (
               <ul className="flex flex-col gap-1">
                 {axes.map((ax, i) => (
@@ -68,7 +70,7 @@ export function AdminRadarAxes() {
                   >
                     <span className="flex-1 font-medium">{ax.skill}</span>
                     {ax.label && (
-                      <span className="text-xs text-muted-foreground">表示名: {ax.label}</span>
+                      <span className="text-xs text-muted-foreground">{t('admin.radarAxes.displayNameLabel', { label: ax.label })}</span>
                     )}
                     <button
                       onClick={() => removeAxis(i)}
@@ -83,14 +85,14 @@ export function AdminRadarAxes() {
           </div>
 
           <div className="rounded-lg border border-border bg-card p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">軸を追加</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{t('admin.radarAxes.addAxis')}</p>
             <div className="flex flex-wrap gap-2">
               <select
                 value={newSkill}
                 onChange={(e) => setNewSkill(e.target.value)}
                 className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
               >
-                <option value="">スキルを選択</option>
+                <option value="">{t('admin.radarAxes.selectSkillPlaceholder')}</option>
                 {skillOptions
                   .filter((s) => !axes.some((ax) => ax.skill === s))
                   .map((s) => (
@@ -100,7 +102,7 @@ export function AdminRadarAxes() {
               <input
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="表示名（省略可）"
+                placeholder={t('admin.radarAxes.displayNamePlaceholder')}
                 className="h-8 w-32 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
               />
               <button
@@ -108,7 +110,7 @@ export function AdminRadarAxes() {
                 disabled={!newSkill}
                 className="flex h-8 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
               >
-                <Plus className="size-3.5" /> 追加
+                <Plus className="size-3.5" /> {t('common.add')}
               </button>
             </div>
           </div>
@@ -116,18 +118,18 @@ export function AdminRadarAxes() {
           <div className="mt-3 flex justify-end gap-2">
             {dirty && (
               <Button variant="outline" size="sm" onClick={syncFromStore}>
-                リセット
+                {t('admin.radarAxes.reset')}
               </Button>
             )}
             <Button size="sm" onClick={save} disabled={!dirty}>
-              保存
+              {t('common.save')}
             </Button>
           </div>
         </div>
 
         {/* Preview */}
         <div className="flex flex-col items-center gap-2">
-          <p className="text-xs font-medium text-muted-foreground">プレビュー</p>
+          <p className="text-xs font-medium text-muted-foreground">{t('admin.radarAxes.preview')}</p>
           {axes.length >= 3 ? (
             <SkillRadarChart
               axes={axes}
@@ -137,12 +139,12 @@ export function AdminRadarAxes() {
           ) : (
             <div className="flex h-[200px] w-[200px] flex-col items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
               <Radar className="size-8 opacity-40" />
-              <p className="mt-2 text-xs">3軸以上で表示</p>
+              <p className="mt-2 text-xs">{t('admin.radarAxes.needThreeAxes')}</p>
             </div>
           )}
           {previewMember && (
             <p className="text-xs text-muted-foreground">
-              プレビュー: {previewMember.displayName ?? previewMember.name}
+              {t('admin.radarAxes.previewLabel', { name: previewMember.displayName ?? previewMember.name })}
             </p>
           )}
         </div>

@@ -313,6 +313,18 @@ export const en = {
   'dependency.alreadyPrereqToast': '"{source}" is already a prerequisite of "{target}"',
   'dependency.cycleToast': "Can't set this — it would create a circular dependency",
   'dependency.setPrereqToast': 'Set "{source}" as a prerequisite of "{target}"',
+  'admin.radarAxes.savedToast': 'Saved radar chart axes',
+  'admin.radarAxes.title': 'Radar chart axis settings',
+  'admin.radarAxes.subtitle': 'Set the axes for the skill radar chart shown on member pages (3 or more required)',
+  'admin.radarAxes.empty': 'No axes yet',
+  'admin.radarAxes.displayNameLabel': 'Display name: {label}',
+  'admin.radarAxes.addAxis': 'Add axis',
+  'admin.radarAxes.selectSkillPlaceholder': 'Select a skill',
+  'admin.radarAxes.displayNamePlaceholder': 'Display name (optional)',
+  'admin.radarAxes.reset': 'Reset',
+  'admin.radarAxes.preview': 'Preview',
+  'admin.radarAxes.needThreeAxes': 'Shown with 3+ axes',
+  'admin.radarAxes.previewLabel': 'Preview: {name}',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',
