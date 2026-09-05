@@ -1177,4 +1177,21 @@ export const ja = {
   'admin.quiz.empty': '検定がまだありません',
   'admin.quiz.meta': '合格ライン {passRate}% / {count}問',
   'admin.quiz.editTitle': '検定を編集',
+
+  // ---- admin approvals ------------------------------------------------
+  'admin.approvals.subtitle': 'INPUTから登録されたタスクは、承認するまでワークスペースに表示されません。',
+  'admin.approvals.empty': '承認待ちのタスクはありません',
+  'admin.approvals.deadlineLabel': '期限：{date}',
+  'admin.approvals.registeredBy': '{name} が登録',
+  'admin.approvals.escalatedNote': '{importance}のため最上位管理者の承認が必要です',
+  'admin.approvals.approverLabel': '承認担当：{name}',
+  'admin.approvals.similarWarning': '似たタスクが既にあるかもしれません',
+  'admin.approvals.approve': '承認する',
+  'admin.approvals.reject': '承認しない',
+  'admin.approvals.approvedToast': '「{name}」を承認しました',
+  'admin.approvals.rejectedToast': '「{name}」を承認しませんでした',
+  'admin.approvals.onlyApproverCanApprove': '{name}のみ承認できます',
+  'admin.approvals.rejectModal.title': 'このタスクを承認しませんか？',
+  'admin.approvals.rejectModal.desc': '「{name}」は削除され、登録者に理由とともにメールで通知されます。',
+  'admin.approvals.rejectModal.reasonPlaceholder': '却下の理由（任意）',
 } satisfies Record<string, string>

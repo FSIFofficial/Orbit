@@ -1174,4 +1174,21 @@ export const en = {
   'admin.quiz.empty': 'No certifications yet',
   'admin.quiz.meta': 'Pass line {passRate}% / {count} questions',
   'admin.quiz.editTitle': 'Edit certification',
+
+  // ---- admin approvals ------------------------------------------------
+  'admin.approvals.subtitle': "Tasks registered from INPUT aren't shown in the workspace until approved.",
+  'admin.approvals.empty': 'No tasks awaiting approval',
+  'admin.approvals.deadlineLabel': 'Deadline: {date}',
+  'admin.approvals.registeredBy': 'Registered by {name}',
+  'admin.approvals.escalatedNote': 'Requires approval from the top-level admin because it is {importance}',
+  'admin.approvals.approverLabel': 'Approver: {name}',
+  'admin.approvals.similarWarning': 'A similar task may already exist',
+  'admin.approvals.approve': 'Approve',
+  'admin.approvals.reject': 'Reject',
+  'admin.approvals.approvedToast': 'Approved "{name}"',
+  'admin.approvals.rejectedToast': 'Rejected "{name}"',
+  'admin.approvals.onlyApproverCanApprove': 'Only {name} can approve this',
+  'admin.approvals.rejectModal.title': 'Reject this task?',
+  'admin.approvals.rejectModal.desc': '"{name}" will be deleted and the submitter will be emailed with the reason.',
+  'admin.approvals.rejectModal.reasonPlaceholder': 'Rejection reason (optional)',
 } satisfies Record<keyof typeof ja, string>
