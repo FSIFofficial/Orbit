@@ -308,6 +308,11 @@ export const ja = {
   'gantt.noDeadline.desc': '期限を設定するとガントチャートが表示されます。',
   'gantt.taskColumnHeader': 'タスク',
   'gantt.monthLabel': '{year}年{month}月',
+  'dependency.emptyState': '表示できるタスクがありません',
+  'dependency.hint': 'まだ前提タスクが設定されていません。カードをドラッグ、または長押ししてから別のカードにつなげると前提タスクとして設定できます。',
+  'dependency.alreadyPrereqToast': '「{source}」は既に「{target}」の前提タスクです',
+  'dependency.cycleToast': '循環する依存関係になるため設定できません',
+  'dependency.setPrereqToast': '「{source}」を「{target}」の前提タスクに設定しました',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

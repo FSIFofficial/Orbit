@@ -308,6 +308,11 @@ export const en = {
   'gantt.noDeadline.desc': 'Setting a deadline will show the Gantt chart.',
   'gantt.taskColumnHeader': 'Task',
   'gantt.monthLabel': '{month}/{year}',
+  'dependency.emptyState': 'No tasks to show',
+  'dependency.hint': 'No prerequisite tasks are set yet. Drag a card, or press and hold then connect it to another card, to set it as a prerequisite.',
+  'dependency.alreadyPrereqToast': '"{source}" is already a prerequisite of "{target}"',
+  'dependency.cycleToast': "Can't set this — it would create a circular dependency",
+  'dependency.setPrereqToast': 'Set "{source}" as a prerequisite of "{target}"',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',

@@ -17,7 +17,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
 import type { Task } from '@/lib/orbit/types'
-import { STATUS_COLOR, STATUS_LABEL } from '@/lib/orbit/types'
+import { STATUS_COLOR } from '@/lib/orbit/types'
+import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
 import { Avatar, DifficultyBadge } from '../primitives'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
@@ -63,6 +64,7 @@ export function DependencyView({
 }) {
   const { updateDependsOn, getMember, getProject, currentUser } = useOrbit()
   const toast = useToast()
+  const { t: tr } = useI18n()
   const cardH = cardHeightFor(fields)
   const showProject = fields.has('project')
   const showAssignee = fields.has('assignee')
@@ -188,15 +190,15 @@ export function DependencyView({
     if (!source || !target) return
     const existing = target.dependsOnIds ?? []
     if (existing.includes(taskId)) {
-      toast(`「${source.name}」は既に「${target.name}」の前提タスクです`)
+      toast(tr('dependency.alreadyPrereqToast', { source: source.name, target: target.name }))
       return
     }
     if (dependsOnTransitively(taskId, targetId)) {
-      toast('循環する依存関係になるため設定できません')
+      toast(tr('dependency.cycleToast'))
       return
     }
     updateDependsOn(targetId, [...existing, taskId])
-    toast(`「${source.name}」を「${target.name}」の前提タスクに設定しました`)
+    toast(tr('dependency.setPrereqToast', { source: source.name, target: target.name }))
   }
 
   const clearPress = () => {
@@ -265,7 +267,7 @@ export function DependencyView({
   if (tasks.length === 0) {
     return (
       <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-        表示できるタスクがありません
+        {tr('dependency.emptyState')}
       </div>
     )
   }
@@ -277,7 +279,7 @@ export function DependencyView({
       {!hasAnyDependency && (
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
           <GitBranch className="size-3.5 shrink-0" />
-          まだ前提タスクが設定されていません。カードをドラッグ、または長押ししてから別のカードにつなげると前提タスクとして設定できます。
+          {tr('dependency.hint')}
         </div>
       )}
       <div className="relative overflow-auto orbit-scroll rounded-xl border border-border bg-secondary/30 p-6">
@@ -389,7 +391,7 @@ export function DependencyView({
                     <span className="truncate text-sm font-medium">{t.name}</span>
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {STATUS_LABEL[t.status]}
+                    {tr(STATUS_KEY[t.status])}
                   </span>
                 </div>
                 {showProject && (
@@ -408,11 +410,11 @@ export function DependencyView({
                             ))}
                           </div>
                           <span className="truncate text-[11px] text-muted-foreground">
-                            {assignees.map((m) => m.displayName || m.name).join('、')}
+                            {assignees.map((m) => m.displayName || m.name).join(tr('kanban.listSeparator'))}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-muted-foreground">未アサイン</span>
+                        <span className="text-[11px] text-muted-foreground">{tr('output.list.unassigned')}</span>
                       )
                     ) : (
                       <span />
