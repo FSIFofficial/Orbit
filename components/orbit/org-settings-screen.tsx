@@ -7,6 +7,7 @@ import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { Building2, ImageUp, Loader2, Mail, MessageSquare, X, Plus } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,6 +42,7 @@ export function OrgSettingsScreen() {
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
 
   const [orgNameDraft, setOrgNameDraft] = useState(orgName)
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
@@ -55,41 +57,40 @@ export function OrgSettingsScreen() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-center gap-2.5">
         <Building2 className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold">団体設定</h1>
+        <h1 className="text-xl font-semibold">{t('orgSettings.title')}</h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        団体名・ロゴや通知先（メール・Discord・Slack）など、組織全体の設定を管理します。
+        {t('orgSettings.subtitle')}
       </p>
 
       <div className="flex flex-col gap-5">
-        {/* 団体名・ロゴ */}
         <Section>
-          <SectionLabel>団体名・ロゴ</SectionLabel>
+          <SectionLabel>{t('orgSettings.nameLogo.label')}</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            ヘッダーに表示する団体名とロゴ画像を設定します。
+            {t('orgSettings.nameLogo.desc')}
           </p>
 
           <div className="mt-4">
-            <label className="block text-xs font-medium text-muted-foreground">団体名</label>
+            <label className="block text-xs font-medium text-muted-foreground">{t('orgSettings.nameLogo.nameLabel')}</label>
             <div className="mt-1.5 flex gap-2">
               <input
                 value={orgNameDraft}
                 onChange={(e) => setOrgNameDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                  if (e.key === 'Enter') { setOrgName(orgNameDraft.trim()); toast('団体名を保存しました') }
+                  if (e.key === 'Enter') { setOrgName(orgNameDraft.trim()); toast(t('orgSettings.nameLogo.savedToast')) }
                 }}
-                placeholder="例: ○○大学 △△サークル"
+                placeholder={t('orgSettings.nameLogo.namePlaceholder')}
                 className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
               />
-              <Button size="sm" onClick={() => { setOrgName(orgNameDraft.trim()); toast('団体名を保存しました') }}>
-                保存
+              <Button size="sm" onClick={() => { setOrgName(orgNameDraft.trim()); toast(t('orgSettings.nameLogo.savedToast')) }}>
+                {t('orgSettings.nameLogo.save')}
               </Button>
             </div>
           </div>
 
           <div className="mt-4">
-            <label className="block text-xs font-medium text-muted-foreground">ロゴ画像</label>
+            <label className="block text-xs font-medium text-muted-foreground">{t('orgSettings.nameLogo.logoLabel')}</label>
             <input
               ref={logoFileRef}
               type="file"
@@ -98,13 +99,13 @@ export function OrgSettingsScreen() {
               onChange={async (e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
-                if (!driveEnabled) { toast('Google Driveが未設定のためアップロードできません'); return }
+                if (!driveEnabled) { toast(t('orgSettings.nameLogo.driveNotConfiguredToast')); return }
                 setUploadingLogo(true)
                 try {
                   await uploadOrgLogo(await fileToDataUrl(file), 'org-logo.jpg')
-                  toast('ロゴをアップロードしました')
+                  toast(t('orgSettings.nameLogo.uploadedToast'))
                 } catch {
-                  toast('アップロードに失敗しました')
+                  toast(t('orgSettings.nameLogo.uploadFailedToast'))
                 } finally {
                   setUploadingLogo(false)
                   e.target.value = ''
@@ -114,52 +115,50 @@ export function OrgSettingsScreen() {
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {orgLogoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={orgLogoUrl} alt="団体ロゴ" className="h-10 w-10 rounded-md border border-border object-contain" />
+                <img src={orgLogoUrl} alt={t('orgSettings.nameLogo.altText')} className="h-10 w-10 rounded-md border border-border object-contain" />
               )}
               <input
                 value={orgLogoUrl}
                 onChange={(e) => setOrgLogoUrl(e.target.value)}
-                placeholder="画像URLを直接入力（またはアップロードして公開URLを貼付け）"
+                placeholder={t('orgSettings.nameLogo.urlPlaceholder')}
                 className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-primary"
               />
               {driveEnabled && (
                 <Button size="sm" variant="outline" disabled={uploadingLogo} onClick={() => logoFileRef.current?.click()} className="gap-1.5">
                   {uploadingLogo ? <Loader2 className="size-3.5 animate-spin" /> : <ImageUp className="size-3.5" />}
-                  アップロード
+                  {t('orgSettings.nameLogo.upload')}
                 </Button>
               )}
               {orgLogoUrl && (
                 <button type="button" onClick={() => setOrgLogoUrl('')} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
-                  <X className="size-3.5" />削除
+                  <X className="size-3.5" />{t('orgSettings.nameLogo.remove')}
                 </button>
               )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              推奨: 正方形PNG（256×256px以上）。Drive共有リンクを直接URLに貼ることもできます。
+              {t('orgSettings.nameLogo.hint')}
             </p>
           </div>
         </Section>
 
-        {/* 団体メール */}
         {isFullAdmin && (
           <Section>
             <div className="flex items-center gap-1.5">
               <Mail className="size-4 text-muted-foreground" />
-              <SectionLabel>団体メール通知先</SectionLabel>
+              <SectionLabel>{t('orgSettings.email.label')}</SectionLabel>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              承認依頼・確認待ちなどの管理者向け通知が、個々のメンバーの設定に関わらず常にここにも届きます。
-              団体で共有しているメーリングリストやグループアドレスの登録を想定しています。
+              {t('orgSettings.email.desc')}
             </p>
             {!remoteOk && (
-              <p className="mt-1 text-xs text-warning">スプレッドシート連携が未設定のため、保存しても反映されません。</p>
+              <p className="mt-1 text-xs text-warning">{t('orgSettings.remoteWarning')}</p>
             )}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {orgNotificationEmails.map((email) => (
                 <Tag key={email} onRemove={() => removeOrgNotificationEmail(email)}>{email}</Tag>
               ))}
               {orgNotificationEmails.length === 0 && (
-                <p className="text-sm text-muted-foreground">まだ登録されていません。</p>
+                <p className="text-sm text-muted-foreground">{t('orgSettings.email.empty')}</p>
               )}
             </div>
             <div className="mt-3 flex items-center gap-2">
@@ -171,27 +170,25 @@ export function OrgSettingsScreen() {
                 className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
               />
               <Button className="h-9 shrink-0" disabled={!orgEmailDraft.trim()} onClick={() => { addOrgNotificationEmail(orgEmailDraft.trim()); setOrgEmailDraft('') }}>
-                <Plus className="size-4" />追加
+                <Plus className="size-4" />{t('orgSettings.email.add')}
               </Button>
             </div>
           </Section>
         )}
 
-        {/* Discord */}
         <Section>
           <div className="flex items-center gap-1.5">
             <MessageSquare className="size-4 text-muted-foreground" />
-            <SectionLabel>Discord Webhook 連携</SectionLabel>
+            <SectionLabel>{t('orgSettings.discord.label')}</SectionLabel>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            タスクが確認待ちになったとき・期限超過タスクの日次サマリーが指定したDiscordチャンネルに通知されます。
-            チャンネル設定 → 連携サービス → ウェブフックで発行したURLを貼り付けてください。
+            {t('orgSettings.discord.desc')}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            URLは書き込み専用（保存後は画面に表示されません）。Apps Script側のみに保管されます。
+            {t('orgSettings.discord.urlNote')}
           </p>
           {!remoteOk && (
-            <p className="mt-1 text-xs text-warning">スプレッドシート連携が未設定のため、保存しても反映されません。</p>
+            <p className="mt-1 text-xs text-warning">{t('orgSettings.remoteWarning')}</p>
           )}
           <div className="mt-3 flex items-center gap-2">
             <input
@@ -200,24 +197,22 @@ export function OrgSettingsScreen() {
               placeholder="https://discord.com/api/webhooks/..."
               className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             />
-            <Button className="h-9 shrink-0" disabled={!discordDraft.trim() || !remoteOk} onClick={() => { setDiscordWebhookUrl(discordDraft.trim()); setDiscordDraft(''); toast('Discord Webhook URLを保存しました') }}>
-              保存
+            <Button className="h-9 shrink-0" disabled={!discordDraft.trim() || !remoteOk} onClick={() => { setDiscordWebhookUrl(discordDraft.trim()); setDiscordDraft(''); toast(t('orgSettings.discord.savedToast')) }}>
+              {t('orgSettings.nameLogo.save')}
             </Button>
           </div>
         </Section>
 
-        {/* Slack */}
         <Section>
           <div className="flex items-center gap-1.5">
             <MessageSquare className="size-4 text-muted-foreground" />
-            <SectionLabel>Slack Incoming Webhook 連携</SectionLabel>
+            <SectionLabel>{t('orgSettings.slack.label')}</SectionLabel>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            タスクが確認待ちになったとき・期限超過タスクの日次サマリーが指定したSlackチャンネルに通知されます。
-            SlackのAppからIncoming Webhookを発行してURLを貼り付けてください。
+            {t('orgSettings.slack.desc')}
           </p>
           {!remoteOk && (
-            <p className="mt-1 text-xs text-warning">スプレッドシート連携が未設定のため、保存しても反映されません。</p>
+            <p className="mt-1 text-xs text-warning">{t('orgSettings.remoteWarning')}</p>
           )}
           <div className="mt-3 flex items-center gap-2">
             <input
@@ -226,8 +221,8 @@ export function OrgSettingsScreen() {
               placeholder="https://hooks.slack.com/services/..."
               className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             />
-            <Button className="h-9 shrink-0" disabled={!slackDraft.trim() || !remoteOk} onClick={() => { setSlackWebhookUrl(slackDraft.trim()); setSlackDraft(''); toast('Slack Webhook URLを保存しました') }}>
-              保存
+            <Button className="h-9 shrink-0" disabled={!slackDraft.trim() || !remoteOk} onClick={() => { setSlackWebhookUrl(slackDraft.trim()); setSlackDraft(''); toast(t('orgSettings.slack.savedToast')) }}>
+              {t('orgSettings.nameLogo.save')}
             </Button>
           </div>
         </Section>
