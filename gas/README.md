@@ -72,8 +72,13 @@ Google スプレッドシート（データの保存場所）
 | development_plan_json | 育成計画（目標・達成目安日・状態の配列、JSON文字列） |
 | one_on_ones_json | 1on1記録の配列（JSON文字列、日付・相手ID・メモ） |
 | department_path | 組織階層パス（`>` 区切り、例: `事業本部A>事業部1>グループX`、任意）。Admin → 組織図で使われます |
-| skill_points | スキルごとの累計ポイント（JSON文字列、例: `{"デザイン":120}`）。自動で更新されます |
+| permission_overrides_json | 個別権限オーバーライド定義（JSON文字列、任意）。代表のみが設定できます |
+| skill_points_json | スキルごとの累計ポイント（JSON文字列、例: `{"デザイン":120}`）。自動で更新されます |
 | notify_settings | 通知頻度の個別設定（JSON文字列、任意）。個人ページの「アカウント設定」から設定できます |
+| inactive | `TRUE` なら休止中メンバー（一覧から非表示）。Admin → Members から設定できます |
+| absent_dates | 不在日リスト（カンマ区切り、`YYYY-MM-DD`）。個人ページから本人が編集できます |
+| last_login | 最終ログイン日時（ISO datetime）。ログイン時に自動更新されます |
+| last_inactive_notified | 未アクセス通知を最後に送った日（`YYYY-MM-DD`）。重複通知防止に使われます |
 
 > Admin → Membersの「メンバーを登録」フォームから新規メンバーを直接追加できます。
 > スプレッドシートに直接行を追加することもできます。
@@ -134,12 +139,13 @@ Google スプレッドシート（データの保存場所）
 | schedule_json | 日程調整の候補日時・招待メンバー・回答（JSON文字列） |
 | form_json | 汎用フォームの質問項目・招待メンバー・回答（JSON文字列） |
 | importance | `一般` / `重要` / `対外公開`（空欄は一般扱い） |
-| approval_steps_json | 多段階承認のステップ定義（JSON文字列、任意） |
-| approval_records_json | 承認/却下の記録（JSON文字列、任意） |
-| current_step_index | 多段階承認の現在ステップ（数値、任意） |
+| awarded_points_json | 完了時に付与するスキルポイント（JSON文字列、例: `{"デザイン":30}`、任意） |
 
 > `accept_at` / `deliverable_url` / `feedback_comment` は現状のUIからは未使用ですが、
 > 列として残しておいて構いません。
+>
+> 経費申請・カスタムフォームの多段階承認で使われる `approval_steps_json`・`approval_records_json`・`current_step_index` は、
+> `setupOrbit()` では自動追加されないため、使用する場合は手動で列を追加してください。
 
 ---
 
@@ -343,7 +349,7 @@ INPUT画面からタスクが登録されると `approval_status` が「承認�
 
 ### タスク確認フロー
 
-担当者は「確認待ち」にするだけで「完了」にはできません（管理者のみ）。
+担当者は「確認待ち」にするだけで「完了」にはできません。「完了」への変更は、タスクに設定された確認者（`reviewer_ids`）または全権管理者のみが行えます。
 確認待ちになると通知先にメールが届き、Admin → Dashboard の「確認待ちパネル」にも表示されます。
 
 ### 確認待ちの複数承認
@@ -398,8 +404,8 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 
 | アクション | 必要な権限 |
 |---|---|
-| updateRole, removeMember, removeProject, updateDiscordWebhookUrl, updateSetting, addMember, updateJoinedAt, updateReportsTo, updateMentor, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies, notifyTrainingDecision | 最上位ロール（代表）のみ |
-| approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm 等 | 任意の管理者ロール（代表 または 班長以上） |
+| updateRole, removeMember, removeProject, updateDiscordWebhookUrl, updateSlackWebhookUrl, updateSetting, uploadOrgLogo, addMember, updateEmail, updateJoinedAt, updateReportsTo, updateMentor, notifyTrainingDecision, updatePermissionOverrides, updateMemberProjects | 最上位ロール（代表）のみ |
+| approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies 等 | 任意の管理者ロール（代表 または 班長以上） |
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
 | updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates | 本人のみ |
 | createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables 等 | ログイン済みなら誰でも |
