@@ -5,6 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import type { ApprovalStep, CustomFormDef, CustomFormField, CustomFormFieldType } from '@/lib/orbit/types'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
 import { Modal } from '@/components/orbit/modal'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 // 承認ステップエディタは admin-expenses.tsx と同じロジックで inline 定義
 function ApprovalStepEditor({
@@ -18,6 +19,7 @@ function ApprovalStepEditor({
   members: { id: string; name: string; displayName?: string }[]
   roleLevels: string[]
 }) {
+  const { t } = useI18n()
   const addStep = () =>
     onChange([...steps, { id: crypto.randomUUID(), type: 'member', memberId: members[0]?.id ?? '' }])
   const removeStep = (id: string) => onChange(steps.filter((s) => s.id !== id))
@@ -35,8 +37,8 @@ function ApprovalStepEditor({
               onChange={(e) => updateStep(step.id, { type: e.target.value as 'member' | 'role', memberId: undefined, role: undefined })}
               className="rounded border border-border bg-background px-2 py-1 text-xs"
             >
-              <option value="member">特定の個人</option>
-              <option value="role">役職（誰でも）</option>
+              <option value="member">{t('admin.expenses.approvalStep.person')}</option>
+              <option value="role">{t('admin.expenses.approvalStep.role')}</option>
             </select>
             {step.type === 'member' ? (
               <select
@@ -59,7 +61,7 @@ function ApprovalStepEditor({
                 </select>
                 <input
                   type="text"
-                  placeholder="部署名（任意）"
+                  placeholder={t('admin.expenses.approvalStep.departmentPlaceholder')}
                   value={step.department ?? ''}
                   onChange={(e) => updateStep(step.id, { department: e.target.value || undefined })}
                   className="w-28 rounded border border-border bg-background px-2 py-1 text-xs"
@@ -73,7 +75,7 @@ function ApprovalStepEditor({
         </div>
       ))}
       <button onClick={addStep} className="flex items-center gap-1 text-xs text-primary hover:underline">
-        <Plus className="size-3" /> ステップを追加
+        <Plus className="size-3" /> {t('admin.expenses.approvalStep.add')}
       </button>
     </div>
   )
@@ -81,11 +83,11 @@ function ApprovalStepEditor({
 
 // ---- フィールドエディタ ----
 
-const FIELD_TYPE_LABELS: Record<CustomFormFieldType, string> = {
-  text: 'テキスト',
-  number: '数値',
-  select: '選択肢',
-  date: '日付',
+const FIELD_TYPE_KEY: Record<CustomFormFieldType, TranslationKey> = {
+  text: 'admin.formBuilder.fieldType.text',
+  number: 'admin.formBuilder.fieldType.number',
+  select: 'admin.formBuilder.fieldType.select',
+  date: 'admin.formBuilder.fieldType.date',
 }
 
 function FieldEditor({
@@ -97,6 +99,7 @@ function FieldEditor({
   onChange: (f: CustomFormField) => void
   onRemove: () => void
 }) {
+  const { t } = useI18n()
   const [optionInput, setOptionInput] = useState('')
 
   const addOption = () => {
@@ -115,7 +118,7 @@ function FieldEditor({
               type="text"
               value={field.label}
               onChange={(e) => onChange({ ...field, label: e.target.value })}
-              placeholder="フィールド名"
+              placeholder={t('admin.formBuilder.field.labelPlaceholder')}
               className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
             />
             <select
@@ -123,8 +126,8 @@ function FieldEditor({
               onChange={(e) => onChange({ ...field, type: e.target.value as CustomFormFieldType, options: [] })}
               className="rounded border border-border bg-background px-2 py-1 text-sm"
             >
-              {(Object.keys(FIELD_TYPE_LABELS) as CustomFormFieldType[]).map((t) => (
-                <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+              {(Object.keys(FIELD_TYPE_KEY) as CustomFormFieldType[]).map((ft) => (
+                <option key={ft} value={ft}>{t(FIELD_TYPE_KEY[ft])}</option>
               ))}
             </select>
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -133,7 +136,7 @@ function FieldEditor({
                 checked={field.required}
                 onChange={(e) => onChange({ ...field, required: e.target.checked })}
               />
-              必須
+              {t('admin.formBuilder.field.required')}
             </label>
           </div>
           {field.type === 'select' && (
@@ -155,10 +158,10 @@ function FieldEditor({
                   value={optionInput}
                   onChange={(e) => setOptionInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
-                  placeholder="選択肢を追加 (Enter)"
+                  placeholder={t('admin.formBuilder.field.addOptionPlaceholder')}
                   className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
                 />
-                <button onClick={addOption} className="rounded border border-border px-2 py-1 text-xs hover:bg-accent">追加</button>
+                <button onClick={addOption} className="rounded border border-border px-2 py-1 text-xs hover:bg-accent">{t('admin.formBuilder.field.addOption')}</button>
               </div>
             </div>
           )}
@@ -186,6 +189,7 @@ function FormEditor({
   members: { id: string; name: string; displayName?: string }[]
   roleLevels: string[]
 }) {
+  const { t } = useI18n()
   const [title, setTitle] = useState(initial?.title ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [fields, setFields] = useState<CustomFormField[]>(initial?.fields ?? [])
@@ -213,21 +217,21 @@ function FormEditor({
   return (
     <Modal open={true} onClose={onClose}>
       <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto space-y-4 p-4 sm:min-w-[500px]">
-        <h3 className="font-semibold">{initial ? 'フォーム編集' : 'フォーム作成'}</h3>
+        <h3 className="font-semibold">{initial ? t('admin.formBuilder.editTitle') : t('admin.formBuilder.addTitle')}</h3>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">タイトル</label>
+          <label className="text-xs text-muted-foreground">{t('admin.formBuilder.titleLabel')}</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-            placeholder="フォームのタイトル"
+            placeholder={t('admin.formBuilder.titlePlaceholder')}
           />
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">説明（任意）</label>
+          <label className="text-xs text-muted-foreground">{t('admin.formBuilder.descLabel')}</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -237,7 +241,7 @@ function FormEditor({
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-semibold text-muted-foreground">フィールド</div>
+          <div className="text-xs font-semibold text-muted-foreground">{t('admin.formBuilder.fieldsLabel')}</div>
           {fields.map((f) => (
             <FieldEditor
               key={f.id}
@@ -247,25 +251,25 @@ function FormEditor({
             />
           ))}
           <button onClick={addField} className="flex items-center gap-1 text-xs text-primary hover:underline">
-            <Plus className="size-3" /> フィールドを追加
+            <Plus className="size-3" /> {t('admin.formBuilder.addField')}
           </button>
         </div>
 
         <div className="space-y-1">
-          <div className="text-xs font-semibold text-muted-foreground">承認ステップ</div>
+          <div className="text-xs font-semibold text-muted-foreground">{t('admin.formBuilder.approvalStepsLabel')}</div>
           <ApprovalStepEditor steps={steps} onChange={setSteps} members={members} roleLevels={roleLevels} />
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm">
-            キャンセル
+            {t('admin.expenses.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={!title.trim()}
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
           >
-            保存
+            {t('admin.expenses.save')}
           </button>
         </div>
       </div>
@@ -287,6 +291,7 @@ export function AdminFormBuilder() {
     getMember,
   } = useOrbit()
 
+  const { t } = useI18n()
   const [tab, setTab] = useState<'submissions' | 'forms'>('submissions')
   const [editingForm, setEditingForm] = useState<CustomFormDef | null | 'new'>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)
@@ -311,15 +316,15 @@ export function AdminFormBuilder() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">申請フォームビルダー</h2>
+        <h2 className="text-xl font-semibold">{t('admin.formBuilder.title')}</h2>
         <div className="flex rounded-md border border-border bg-card">
-          {(['submissions', 'forms'] as const).map((t) => (
+          {(['submissions', 'forms'] as const).map((tabKey) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-sm transition-colors ${tab === t ? 'bg-accent font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
+              className={`px-3 py-1.5 text-sm transition-colors ${tab === tabKey ? 'bg-accent font-medium' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              {t === 'submissions' ? '申請一覧' : 'フォーム管理'}
+              {tabKey === 'submissions' ? t('admin.expenses.tab.applications') : t('admin.formBuilder.tab.forms')}
             </button>
           ))}
         </div>
@@ -331,11 +336,11 @@ export function AdminFormBuilder() {
             onClick={() => setEditingForm('new')}
             className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
           >
-            <Plus className="size-4" /> フォームを作成
+            <Plus className="size-4" /> {t('admin.formBuilder.createForm')}
           </button>
           {customFormDefs.length === 0 && (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              フォームがまだありません。作成してください。
+              {t('admin.formBuilder.noForms')}
             </div>
           )}
           {customFormDefs.map((form) => (
@@ -347,7 +352,7 @@ export function AdminFormBuilder() {
                     <div className="mt-0.5 text-xs text-muted-foreground">{form.description}</div>
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
-                    フィールド: {form.fields.length} · 承認ステップ: {form.approvalSteps.length}段階
+                    {t('admin.formBuilder.fieldsAndSteps', { fields: form.fields.length, steps: form.approvalSteps.length })}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -355,13 +360,13 @@ export function AdminFormBuilder() {
                     onClick={() => setEditingForm(form)}
                     className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
                   >
-                    編集
+                    {t('admin.expenses.edit')}
                   </button>
                   <button
                     onClick={() => handleDeleteForm(form.id)}
                     className="rounded-md border border-border px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
                   >
-                    削除
+                    {t('admin.expenses.delete')}
                   </button>
                 </div>
               </div>
@@ -374,7 +379,7 @@ export function AdminFormBuilder() {
         <div className="space-y-4">
           {pendingSubs.length > 0 && (
             <div>
-              <div className="mb-2 text-sm font-semibold text-yellow-600">承認待ち ({pendingSubs.length})</div>
+              <div className="mb-2 text-sm font-semibold text-yellow-600">{t('admin.expenses.pendingTitle', { count: pendingSubs.length })}</div>
               <div className="space-y-2">
                 {pendingSubs.map((sub) => {
                   const form = customFormDefs.find((f) => f.id === sub.formId)
@@ -405,13 +410,13 @@ export function AdminFormBuilder() {
                               onClick={() => approveFormStep(sub.id, currentStep.id)}
                               className="rounded-md bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700"
                             >
-                              承認
+                              {t('admin.expenses.approve')}
                             </button>
                             <button
                               onClick={() => setRejectTarget(sub.id)}
                               className="rounded-md border border-destructive px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
                             >
-                              却下
+                              {t('admin.expenses.reject')}
                             </button>
                           </div>
                         )}
@@ -424,12 +429,12 @@ export function AdminFormBuilder() {
           )}
           {otherSubs.length > 0 && (
             <div>
-              <div className="mb-2 text-sm font-semibold text-muted-foreground">過去の申請</div>
+              <div className="mb-2 text-sm font-semibold text-muted-foreground">{t('admin.expenses.pastTitle')}</div>
               <div className="space-y-2">
                 {otherSubs.map((sub) => {
                   const form = customFormDefs.find((f) => f.id === sub.formId)
                   const submitter = getMember(sub.submitterId)
-                  const statusLabel = sub.status === 'approved' ? '承認済み' : '却下'
+                  const statusLabel = sub.status === 'approved' ? t('admin.expenses.status.approved') : t('admin.expenses.status.rejected')
                   const statusColor = sub.status === 'approved' ? 'text-green-600' : 'text-destructive'
                   return (
                     <div key={sub.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
@@ -445,7 +450,7 @@ export function AdminFormBuilder() {
             </div>
           )}
           {customFormSubmissions.length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">申請はまだありません</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">{t('admin.expenses.noApplications')}</div>
           )}
         </div>
       )}
@@ -463,17 +468,17 @@ export function AdminFormBuilder() {
       {rejectTarget && (
         <Modal open={true} onClose={() => setRejectTarget(null)}>
           <div className="space-y-3 p-4">
-            <h3 className="font-semibold">却下理由</h3>
+            <h3 className="font-semibold">{t('admin.expenses.rejectModal.title')}</h3>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
               rows={3}
-              placeholder="却下理由を入力してください"
+              placeholder={t('admin.expenses.rejectModal.placeholder')}
             />
             <div className="flex justify-end gap-2">
               <button onClick={() => setRejectTarget(null)} className="rounded-md border border-border px-3 py-1.5 text-sm">
-                キャンセル
+                {t('admin.expenses.cancel')}
               </button>
               <button
                 disabled={!rejectReason.trim()}
@@ -484,7 +489,7 @@ export function AdminFormBuilder() {
                 }}
                 className="rounded-md bg-destructive px-3 py-1.5 text-sm text-white disabled:opacity-50"
               >
-                却下する
+                {t('admin.expenses.rejectModal.submit')}
               </button>
             </div>
           </div>
