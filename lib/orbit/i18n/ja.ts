@@ -357,6 +357,15 @@ export const ja = {
   'app.syncFailed': 'スプレッドシートとの同期に失敗しました',
   'app.syncFailedBanner': 'スプレッドシートとの同期に失敗しました。表示中のデータが最新でない可能性があります。',
   'app.skillCertifiedToast': '{name} さんのスキルに「{skill}」が認定されました',
+  'project.detail.notFound': 'プロジェクトが見つかりません。',
+  'project.detail.ownerLabel': '責任者:',
+  'project.detail.completionRate': '完了率',
+  'project.detail.metric.totalTasks': 'タスク総数',
+  'project.detail.metric.done': '完了',
+  'project.detail.membersHeading': 'メンバー',
+  'project.detail.taskCount': '{count}件',
+  'primitives.removeAria': '削除',
+  'primitives.priorityLabel': '優先度: {priority}',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

@@ -357,6 +357,15 @@ export const en = {
   'app.syncFailed': 'Failed to sync with the spreadsheet',
   'app.syncFailedBanner': 'Failed to sync with the spreadsheet. The data shown may not be up to date.',
   'app.skillCertifiedToast': '{name} was certified in "{skill}"',
+  'project.detail.notFound': 'Project not found.',
+  'project.detail.ownerLabel': 'Owner:',
+  'project.detail.completionRate': 'Completion rate',
+  'project.detail.metric.totalTasks': 'Total tasks',
+  'project.detail.metric.done': 'Done',
+  'project.detail.membersHeading': 'Members',
+  'project.detail.taskCount': '{count}',
+  'primitives.removeAria': 'Remove',
+  'primitives.priorityLabel': 'Priority: {priority}',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',
