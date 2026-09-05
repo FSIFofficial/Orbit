@@ -24,6 +24,7 @@ import type {
 import { ParsedTaskCard } from './parsed-task-card'
 import { ExcelColumnMapping } from './excel-column-mapping'
 import { Avatar, OrbitMark, SectionLabel, StatusBadge } from '../primitives'
+import { useI18n } from '@/lib/orbit/i18n'
 import { formatDateTime, findSimilarTasks } from '@/lib/orbit/utils'
 import { buildParsedTasks, detectColumns, readExcelFile } from '@/lib/orbit/import-excel'
 import type {
@@ -85,6 +86,7 @@ export function InputScreen() {
   } = useOrbit()
   const { go } = useNav()
   const toast = useToast()
+  const { t } = useI18n()
 
   const [text, setText] = useState(() => loadDraft(currentUser?.id))
   const [phase, setPhase] = useState<Phase>('input')
@@ -255,10 +257,10 @@ export function InputScreen() {
               INPUT
             </div>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px] text-balance">
-              今日、何を進めますか？
+              {t('input.hero.title')}
             </h1>
             <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground text-pretty">
-              やることをそのまま書いてください。Orbitがタスクとして整理します。
+              {t('input.hero.subtitle')}
             </p>
           </div>
 
@@ -272,13 +274,13 @@ export function InputScreen() {
               }}
               rows={7}
               disabled={phase === 'parsing'}
-              placeholder="来週金曜日までにイベント用のポスターを作成する。Canvaを使える人にお願いしたい。"
+              placeholder={t('input.textarea.placeholder')}
               className="min-h-[168px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground disabled:opacity-60"
-              aria-label="やること"
+              aria-label={t('input.textarea.aria')}
             />
             <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-1">
               <span className="text-xs text-muted-foreground">
-                複数のタスクをまとめて入力できます。
+                {t('input.textarea.hint')}
               </span>
               <div className="flex items-center gap-2">
                 {!!text && phase !== 'parsing' && (
@@ -292,7 +294,7 @@ export function InputScreen() {
                     className="h-9 px-3 text-muted-foreground"
                   >
                     <Trash2 className="size-4" />
-                    クリア
+                    {t('input.clear')}
                   </Button>
                 )}
                 <Button
@@ -303,12 +305,12 @@ export function InputScreen() {
                   {phase === 'parsing' ? (
                     <>
                       <OrbitMark size={15} />
-                      整理中…
+                      {t('input.parsing')}
                     </>
                   ) : (
                     <>
                       <Wand2 className="size-4" />
-                      タスクを整理する
+                      {t('input.parseButton')}
                     </>
                   )}
                 </Button>
@@ -319,19 +321,19 @@ export function InputScreen() {
           {emptyError && (
             <p className="mt-2.5 flex items-center gap-1.5 text-sm text-destructive">
               <TriangleAlert className="size-4" />
-              タスク内容を入力してください
+              {t('input.error.empty')}
             </p>
           )}
           {projects.length === 0 && (
             <p className="mt-2.5 flex items-center gap-1.5 text-sm text-destructive">
               <TriangleAlert className="size-4" />
-              プロジェクトが1件も登録されていません。先にAdmin → Projectsから登録してください。
+              {t('input.error.noProjects')}
             </p>
           )}
           {parseFailed && (
             <p className="mt-2.5 flex items-center gap-1.5 text-sm text-destructive">
               <TriangleAlert className="size-4" />
-              分類できませんでした。内容を確認して手動で編集してください。
+              {t('input.error.parseFailed')}
             </p>
           )}
           {importError && (
@@ -362,7 +364,7 @@ export function InputScreen() {
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
                 <FileSpreadsheet className="size-3.5" />
-                Excelファイルから読み込む
+                {t('input.excelImport')}
               </button>
             </div>
           )}
@@ -370,7 +372,7 @@ export function InputScreen() {
           {/* demo helper */}
           {phase === 'input' && !text && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">例文を使う:</span>
+              <span className="text-xs text-muted-foreground">{t('input.demoHint')}</span>
               <button
                 type="button"
                 onClick={() => setText(DEMO_INPUT)}

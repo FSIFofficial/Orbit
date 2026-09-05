@@ -180,6 +180,28 @@ export const en = {
   'taskDrawer.row.creator': 'Created by',
   'taskDrawer.unknown': 'Unknown',
 
+  // ---- person-detail tabs ----------------------------------------------
+  'person.tab.overview': 'Overview',
+  'person.tab.tasks': 'Tasks',
+  'person.tab.growth': 'Development',
+  'person.tab.career': 'Career',
+  'person.tab.calendar': 'Calendar',
+
+  // ---- input-screen (main headings/buttons only) ------------------------------
+  'input.hero.title': 'What are you working on today?',
+  'input.hero.subtitle': 'Just write down what needs doing. Orbit will organize it into tasks.',
+  'input.textarea.placeholder': 'Make an event poster by next Friday. Would like someone who can use Canva.',
+  'input.textarea.aria': 'What needs doing',
+  'input.textarea.hint': 'You can enter multiple tasks at once.',
+  'input.clear': 'Clear',
+  'input.parsing': 'Organizing…',
+  'input.parseButton': 'Organize into tasks',
+  'input.error.empty': 'Please enter what needs to be done',
+  'input.error.noProjects': 'No projects are registered yet. Add one from Admin → Projects first.',
+  'input.error.parseFailed': 'Could not classify this. Please review and edit manually.',
+  'input.excelImport': 'Import from Excel file',
+  'input.demoHint': 'Use example:',
+
   // ---- department (fixed 8 values in DEPARTMENTS) -------------------------
   'department.運営': 'Operations',
   'department.広報': 'PR',

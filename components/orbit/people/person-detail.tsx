@@ -627,11 +627,11 @@ export function PersonDetail({ id }: { id: string }) {
       <div className="mt-5 flex items-center gap-1 border-b border-border">
         {(
           [
-            ['overview', 'Overview'],
-            ['tasks', 'タスク'],
-            ...(isSelf || isAdmin ? [['growth', '人材育成']] : []),
-            ...(isSelf || isAdmin ? [['career', '経歴・キャリア']] : []),
-            ['calendar', 'Calendar'],
+            ['overview', t('person.tab.overview')],
+            ['tasks', t('person.tab.tasks')],
+            ...(isSelf || isAdmin ? [['growth', t('person.tab.growth')]] : []),
+            ...(isSelf || isAdmin ? [['career', t('person.tab.career')]] : []),
+            ['calendar', t('person.tab.calendar')],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button

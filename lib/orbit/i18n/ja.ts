@@ -180,6 +180,28 @@ export const ja = {
   'taskDrawer.row.creator': '登録者',
   'taskDrawer.unknown': '不明',
 
+  // ---- person-detail タブ ----------------------------------------------
+  'person.tab.overview': 'Overview',
+  'person.tab.tasks': 'タスク',
+  'person.tab.growth': '人材育成',
+  'person.tab.career': '経歴・キャリア',
+  'person.tab.calendar': 'Calendar',
+
+  // ---- input-screen（主要な見出し・ボタンのみ）------------------------------
+  'input.hero.title': '今日、何を進めますか？',
+  'input.hero.subtitle': 'やることをそのまま書いてください。Orbitがタスクとして整理します。',
+  'input.textarea.placeholder': '来週金曜日までにイベント用のポスターを作成する。Canvaを使える人にお願いしたい。',
+  'input.textarea.aria': 'やること',
+  'input.textarea.hint': '複数のタスクをまとめて入力できます。',
+  'input.clear': 'クリア',
+  'input.parsing': '整理中…',
+  'input.parseButton': 'タスクを整理する',
+  'input.error.empty': 'タスク内容を入力してください',
+  'input.error.noProjects': 'プロジェクトが1件も登録されていません。先にAdmin → Projectsから登録してください。',
+  'input.error.parseFailed': '分類できませんでした。内容を確認して手動で編集してください。',
+  'input.excelImport': 'Excelファイルから読み込む',
+  'input.demoHint': '例文を使う:',
+
   // ---- 部門（DEPARTMENTS、types.tsで固定8種）--------------------------------
   // 組織が追加できる自由ロール名とは違い、この8種は決め打ちの定数なので
   // 安全に辞書化できる。GAS/シートには引き続きこの日本語のまま保存される。
