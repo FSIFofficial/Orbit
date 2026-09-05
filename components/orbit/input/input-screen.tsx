@@ -24,7 +24,8 @@ import type {
 import { ParsedTaskCard } from './parsed-task-card'
 import { ExcelColumnMapping } from './excel-column-mapping'
 import { Avatar, OrbitMark, SectionLabel, StatusBadge } from '../primitives'
-import { useI18n } from '@/lib/orbit/i18n'
+import { useI18n, DEPARTMENT_KEY, DIFFICULTY_KEY, PRIORITY_KEY } from '@/lib/orbit/i18n'
+import type { TranslationKey } from '@/lib/orbit/i18n'
 import { formatDateTime, findSimilarTasks } from '@/lib/orbit/utils'
 import { buildParsedTasks, detectColumns, readExcelFile } from '@/lib/orbit/import-excel'
 import type {
@@ -142,7 +143,7 @@ export function InputScreen() {
       setPhase('result')
       const dupCount = result.filter((p) => findSimilarTasks(p, tasks).length > 0).length
       if (dupCount > 0) {
-        toast(`${dupCount}件のタスクに似た既存タスクがあります。内容をご確認ください`)
+        toast(t('input.toast.duplicatesFound', { count: dupCount }))
       }
     }, 1600)
   }
@@ -161,7 +162,7 @@ export function InputScreen() {
       setValueMaps({})
       setPhase('mapping')
     } catch {
-      setImportError('ファイルを読み込めませんでした。Excel(.xlsx)形式か確認してください')
+      setImportError(t('input.excelImport.readError'))
     }
   }
 
@@ -188,18 +189,18 @@ export function InputScreen() {
       members,
     )
     if (result.length === 0) {
-      setImportError('タスクとして読み込める行が見つかりませんでした')
+      setImportError(t('input.excelImport.noRowsError'))
       setPhase('input')
       return
     }
-    setImportSource(`Excelインポート: ${sheetData.fileName}`)
+    setImportSource(t('input.excelImport.sourceLabel', { fileName: sheetData.fileName }))
     setParsed(result)
     setSelectedIds(new Set())
     setPhase('result')
     toast(
       skippedRows > 0
-        ? `${result.length}件を読み込みました（タスク名が空の${skippedRows}行はスキップ）`
-        : `${result.length}件を読み込みました`,
+        ? t('input.excelImport.toastSkipped', { count: result.length, skipped: skippedRows })
+        : t('input.excelImport.toast', { count: result.length }),
     )
   }
 
@@ -234,7 +235,7 @@ export function InputScreen() {
     const approved = parsed.filter((p) => p.approved)
     if (approved.length === 0) return
     addTasksFromInput(importSource ?? text, approved)
-    toast(`${approved.length}件のタスクを登録しました`)
+    toast(t('input.toast.registered', { count: approved.length }))
     setPhase('input')
     setText('')
     setParsed([])
@@ -378,7 +379,7 @@ export function InputScreen() {
                 onClick={() => setText(DEMO_INPUT)}
                 className="rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-secondary"
               >
-                イベント準備の4タスクを入力
+                {t('input.demo.buttonLabel')}
               </button>
             </div>
           )}
@@ -386,7 +387,7 @@ export function InputScreen() {
           {registered && phase === 'input' && (
             <div className="mt-6 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <span className="text-sm font-medium text-emerald-800">
-                タスクを登録しました。OUTPUTで確認できます。
+                {t('input.registeredBanner.text')}
               </span>
               <Button
                 variant="outline"
@@ -396,7 +397,7 @@ export function InputScreen() {
                   go({ name: 'output' })
                 }}
               >
-                OUTPUTを見る
+                {t('input.registeredBanner.viewOutput')}
                 <ArrowRight className="size-4" />
               </Button>
             </div>
@@ -409,7 +410,7 @@ export function InputScreen() {
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
                   <span className="relative inline-flex size-4 rounded-full bg-primary" />
                 </span>
-                Orbitがタスクを整理しています…
+                {t('input.parsingStatus')}
               </div>
               <div className="w-full max-w-sm space-y-2">
                 {[0, 1, 2].map((i) => (
@@ -427,7 +428,7 @@ export function InputScreen() {
             <div className="mt-10">
               <div className="mb-2 flex items-center gap-1.5">
                 <LayoutTemplate className="size-3.5 text-muted-foreground" />
-                <SectionLabel>クイック追加</SectionLabel>
+                <SectionLabel>{t('input.quickAdd.title')}</SectionLabel>
               </div>
               <div className="flex flex-col gap-2">
                 {isFullAdmin && taskSetTemplates.length > 0 && (
@@ -447,7 +448,7 @@ export function InputScreen() {
             <div className="mt-10">
               <div className="mb-2 flex items-center gap-1.5">
                 <History className="size-3.5 text-muted-foreground" />
-                <SectionLabel>入力履歴</SectionLabel>
+                <SectionLabel>{t('input.history.title')}</SectionLabel>
               </div>
               <div className="flex flex-col gap-2">
                 {myInputs.map((i) => (
@@ -459,7 +460,10 @@ export function InputScreen() {
                   >
                     <p className="min-w-0 flex-1 truncate text-sm text-foreground">{i.text}</p>
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      {i.generatedTaskIds.length}件・{formatDateTime(i.createdAt)}
+                      {t('input.history.itemMeta', {
+                        count: i.generatedTaskIds.length,
+                        date: formatDateTime(i.createdAt),
+                      })}
                     </span>
                   </button>
                 ))}
@@ -497,13 +501,13 @@ export function InputScreen() {
               ) : (
                 <Sparkles className="size-3.5 text-primary" />
               )}
-              {importSource ? 'Excelインポート結果' : '解析結果'}
+              {importSource ? t('input.result.badgeExcel') : t('input.result.badgeParsed')}
             </div>
             <h2 className="text-xl font-semibold tracking-tight">
-              {parsed.length}件のタスクを見つけました
+              {t('input.result.title', { count: parsed.length })}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              内容を確認し、必要であれば修正してください。承認したタスクだけ登録されます。
+              {t('input.result.subtitle')}
             </p>
           </div>
 
@@ -511,17 +515,22 @@ export function InputScreen() {
             <div className="mb-4 rounded-xl border border-warning/30 bg-warning-muted px-4 py-3">
               <div className="flex items-center gap-1.5 text-sm font-medium text-warning">
                 <TriangleAlert className="size-4 shrink-0" />
-                {duplicateFlags.length}件のタスクに似た既存タスクがあります
+                {t('input.result.duplicateWarning.title', { count: duplicateFlags.length })}
               </div>
               <ul className="mt-1.5 flex flex-col gap-1">
                 {duplicateFlags.map(({ task, similar }) => (
                   <li key={task.id} className="text-xs text-muted-foreground">
-                    「{task.name}」→ {similar.map(({ task: s }) => s.name).join('、')}
+                    {t('input.result.duplicateItem', {
+                      name: task.name,
+                      similar: similar
+                        .map(({ task: s }) => s.name)
+                        .join(t('input.listSeparator')),
+                    })}
                   </li>
                 ))}
               </ul>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                各カードの詳細も合わせてご確認ください。
+                {t('input.result.duplicateWarning.hint')}
               </p>
             </div>
           )}
@@ -535,11 +544,13 @@ export function InputScreen() {
                   onChange={toggleSelectAll}
                   className="size-3.5 cursor-pointer accent-primary"
                 />
-                すべて選択{selectedIds.size > 0 && `（${selectedIds.size}件）`}
+                {t('input.result.selectAllLabel')}
+                {selectedIds.size > 0 &&
+                  t('input.result.selectedCountSuffix', { count: selectedIds.size })}
               </label>
               {selectedIds.size > 0 && (
                 <>
-                  <span className="text-xs text-muted-foreground">一括変更:</span>
+                  <span className="text-xs text-muted-foreground">{t('input.result.bulkChange')}</span>
                   <select
                     defaultValue=""
                     onChange={(e) => {
@@ -548,7 +559,7 @@ export function InputScreen() {
                     }}
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
-                    <option value="">プロジェクト</option>
+                    <option value="">{t('input.result.bulkProjectPlaceholder')}</option>
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
@@ -563,10 +574,10 @@ export function InputScreen() {
                     }}
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
-                    <option value="">部門</option>
+                    <option value="">{t('input.result.bulkDepartmentPlaceholder')}</option>
                     {DEPARTMENTS.map((d) => (
                       <option key={d} value={d}>
-                        {d}
+                        {t(DEPARTMENT_KEY[d])}
                       </option>
                     ))}
                   </select>
@@ -578,7 +589,7 @@ export function InputScreen() {
                     }}
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
-                    <option value="">カテゴリ</option>
+                    <option value="">{t('input.result.bulkCategoryPlaceholder')}</option>
                     {categoryOptions.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -593,10 +604,10 @@ export function InputScreen() {
                     }}
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
-                    <option value="">難易度</option>
+                    <option value="">{t('input.result.bulkDifficultyPlaceholder')}</option>
                     {DIFFICULTY_LABEL.map((d) => (
                       <option key={d} value={d}>
-                        {d}
+                        {t(DIFFICULTY_KEY[d])}
                       </option>
                     ))}
                   </select>
@@ -608,10 +619,10 @@ export function InputScreen() {
                     }}
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
-                    <option value="">優先度</option>
+                    <option value="">{t('input.result.bulkPriorityPlaceholder')}</option>
                     {PRIORITIES.map((p) => (
                       <option key={p} value={p}>
-                        優先度{p}
+                        {t('input.result.priorityOption', { priority: t(PRIORITY_KEY[p]) })}
                       </option>
                     ))}
                   </select>
@@ -649,7 +660,7 @@ export function InputScreen() {
             ))}
             {parsed.length === 0 && (
               <div className="rounded-xl border border-dashed border-border bg-card py-10 text-center text-sm text-muted-foreground">
-                すべてのタスクを削除しました。
+                {t('input.result.emptyState')}
               </div>
             )}
           </div>
@@ -657,7 +668,7 @@ export function InputScreen() {
           <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
             <span className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{approvedCount}</span>
-              /{parsed.length} 件を承認中
+              {t('input.result.ofTotalApproving', { total: parsed.length })}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -673,14 +684,14 @@ export function InputScreen() {
                   setValueMaps({})
                 }}
               >
-                やり直す
+                {t('input.result.retryButton')}
               </Button>
               <Button
                 className="h-9 px-4"
                 disabled={approvedCount === 0}
                 onClick={handleRegister}
               >
-                選択したタスクを登録
+                {t('input.result.registerButton')}
                 <ArrowRight className="size-4" />
               </Button>
             </div>
@@ -697,9 +708,9 @@ export function InputScreen() {
           <>
             <div className="mb-3 flex items-center justify-between">
               <h2 id="history-input-title" className="text-base font-semibold">
-                入力内容
+                {t('input.history.modalTitle')}
               </h2>
-              <button onClick={() => setHistoryInput(null)} aria-label="閉じる">
+              <button onClick={() => setHistoryInput(null)} aria-label={t('input.close')}>
                 <X className="size-4 text-muted-foreground" />
               </button>
             </div>
@@ -710,7 +721,7 @@ export function InputScreen() {
               {formatDateTime(historyInput.createdAt)}
             </p>
             <div className="mt-4">
-              <SectionLabel>生成されたタスク</SectionLabel>
+              <SectionLabel>{t('input.history.generatedTasksLabel')}</SectionLabel>
               <ul className="mt-2 flex flex-col gap-1.5">
                 {historyInput.generatedTaskIds.map((tid) => {
                   const t = tasks.find((x) => x.id === tid)
@@ -748,16 +759,23 @@ function TemplateQuickAdd({
   onApply: (templateId: string, projectId: string) => void
 }) {
   const toast = useToast()
+  const { t: tr } = useI18n()
   const [open, setOpen] = useState(false)
   const [projectId, setProjectId] = useState('')
   const [templateId, setTemplateId] = useState('')
 
   const submit = () => {
     if (!projectId || !templateId) return
-    const template = templates.find((t) => t.id === templateId)
+    const template = templates.find((tpl) => tpl.id === templateId)
     const project = projects.find((p) => p.id === projectId)
     onApply(templateId, projectId)
-    toast(`「${template?.name}」を「${project?.name}」に適用し、${template?.items.length ?? 0}件のタスクを追加しました`)
+    toast(
+      tr('input.templateQuickAdd.toast', {
+        template: template?.name ?? '',
+        project: project?.name ?? '',
+        count: template?.items.length ?? 0,
+      }),
+    )
     setOpen(false)
     setProjectId('')
     setTemplateId('')
@@ -771,7 +789,7 @@ function TemplateQuickAdd({
         className="flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary"
       >
         <LayoutTemplate className="size-4 shrink-0" />
-        業務テンプレートからタスクを追加
+        {tr('input.templateQuickAdd.buttonLabel')}
       </button>
     )
   }
@@ -781,9 +799,9 @@ function TemplateQuickAdd({
       <div className="mb-3 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-medium">
           <LayoutTemplate className="size-4" />
-          業務テンプレートからタスクを追加
+          {tr('input.templateQuickAdd.buttonLabel')}
         </span>
-        <button onClick={() => setOpen(false)} aria-label="閉じる">
+        <button onClick={() => setOpen(false)} aria-label={tr('input.close')}>
           <X className="size-4 text-muted-foreground" />
         </button>
       </div>
@@ -793,7 +811,7 @@ function TemplateQuickAdd({
           onChange={(e) => setProjectId(e.target.value)}
           className="h-9 min-w-[140px] flex-1 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
         >
-          <option value="">プロジェクトを選択</option>
+          <option value="">{tr('input.projectPlaceholder')}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -805,16 +823,16 @@ function TemplateQuickAdd({
           onChange={(e) => setTemplateId(e.target.value)}
           className="h-9 min-w-[140px] flex-1 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
         >
-          <option value="">テンプレートを選択</option>
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}（{t.items.length}件）
+          <option value="">{tr('input.templateQuickAdd.templatePlaceholder')}</option>
+          {templates.map((tpl) => (
+            <option key={tpl.id} value={tpl.id}>
+              {tr('input.templateQuickAdd.templateOption', { name: tpl.name, count: tpl.items.length })}
             </option>
           ))}
         </select>
         <Button className="h-9 shrink-0" disabled={!projectId || !templateId} onClick={submit}>
           <Plus className="size-4" />
-          追加
+          {tr('input.add')}
         </Button>
       </div>
     </div>
@@ -839,6 +857,7 @@ function ScheduleQuickAdd({
   ) => void
 }) {
   const toast = useToast()
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
@@ -849,7 +868,8 @@ function ScheduleQuickAdd({
   const addCandidate = () => {
     if (!dateTimeInput) return
     const d = new Date(dateTimeInput)
-    const label = `${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]}) ${String(
+    const weekdayChars = t('input.schedule.weekdayChars').split(',')
+    const label = `${d.getMonth() + 1}/${d.getDate()}(${weekdayChars[d.getDay()]}) ${String(
       d.getHours(),
     ).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     setCandidates((prev) => [
@@ -870,7 +890,7 @@ function ScheduleQuickAdd({
   const submit = () => {
     if (!projectId || !name.trim() || candidates.length === 0 || invitedIds.length === 0) return
     onCreate(projectId, name.trim(), candidates, invitedIds)
-    toast(`「${name.trim()}」を作成しました。招待した${invitedIds.length}人が全員回答すると自動的に完了します`)
+    toast(t('input.inviteToast', { name: name.trim(), count: invitedIds.length }))
     setOpen(false)
     reset()
   }
@@ -883,7 +903,7 @@ function ScheduleQuickAdd({
         className="flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary"
       >
         <CalendarClock className="size-4 shrink-0" />
-        日程調整タスクを作成
+        {t('input.scheduleQuickAdd.buttonLabel')}
       </button>
     )
   }
@@ -893,14 +913,14 @@ function ScheduleQuickAdd({
       <div className="mb-3 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-medium">
           <CalendarClock className="size-4" />
-          日程調整タスクを作成
+          {t('input.scheduleQuickAdd.buttonLabel')}
         </span>
         <button
           onClick={() => {
             setOpen(false)
             reset()
           }}
-          aria-label="閉じる"
+          aria-label={t('input.close')}
         >
           <X className="size-4 text-muted-foreground" />
         </button>
@@ -913,7 +933,7 @@ function ScheduleQuickAdd({
             onChange={(e) => setProjectId(e.target.value)}
             className="h-9 min-w-[140px] flex-1 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
           >
-            <option value="">プロジェクトを選択</option>
+            <option value="">{t('input.projectPlaceholder')}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -923,13 +943,13 @@ function ScheduleQuickAdd({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="タスク名（例：定例MTGの日程調整）"
+            placeholder={t('input.scheduleQuickAdd.taskNamePlaceholder')}
             className="h-9 min-w-[180px] flex-[2] rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
           />
         </div>
 
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">候補日時</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{t('input.scheduleQuickAdd.candidatesLabel')}</p>
           {candidates.length > 0 && (
             <ul className="mb-1.5 flex flex-col gap-1">
               {candidates.map((c) => (
@@ -941,7 +961,7 @@ function ScheduleQuickAdd({
                   <button
                     onClick={() => setCandidates((prev) => prev.filter((x) => x.id !== c.id))}
                     className="text-muted-foreground hover:text-destructive"
-                    aria-label="削除"
+                    aria-label={t('input.delete')}
                   >
                     <X className="size-3.5" />
                   </button>
@@ -962,13 +982,13 @@ function ScheduleQuickAdd({
               className="flex h-9 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border-strong px-2.5 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              追加
+              {t('input.add')}
             </button>
           </div>
         </div>
 
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">招待するメンバー</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{t('input.scheduleQuickAdd.inviteesLabel')}</p>
           <div className="flex max-h-32 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border p-1 orbit-scroll">
             {members.map((m) => {
               const checked = invitedIds.includes(m.id)
@@ -1001,19 +1021,19 @@ function ScheduleQuickAdd({
           onClick={submit}
         >
           <Plus className="size-4" />
-          作成
+          {t('input.create')}
         </Button>
       </div>
     </div>
   )
 }
 
-const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
-  text: '一行テキスト',
-  textarea: '複数行テキスト',
-  select: '単一選択',
-  image: '画像アップロード',
-  checkbox: '複数選択',
+const FORM_FIELD_TYPE_KEY: Record<FormFieldType, TranslationKey> = {
+  text: 'input.formQuickAdd.fieldType.text',
+  textarea: 'input.formQuickAdd.fieldType.textarea',
+  select: 'input.formQuickAdd.fieldType.select',
+  image: 'input.formQuickAdd.fieldType.image',
+  checkbox: 'input.formQuickAdd.fieldType.checkbox',
 }
 
 // 汎用フォームタスクの作成 — 自由に質問項目を組み立て、回答してもらう
@@ -1029,6 +1049,7 @@ function FormQuickAdd({
   onCreate: (projectId: string, name: string, fields: FormFieldDef[], invitedIds: string[]) => void
 }) {
   const toast = useToast()
+  const { t: tr } = useI18n()
   const [open, setOpen] = useState(false)
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
@@ -1077,7 +1098,7 @@ function FormQuickAdd({
   const submit = () => {
     if (!projectId || !name.trim() || fields.length === 0 || invitedIds.length === 0) return
     onCreate(projectId, name.trim(), fields, invitedIds)
-    toast(`「${name.trim()}」を作成しました。招待した${invitedIds.length}人が全員回答すると自動的に完了します`)
+    toast(tr('input.inviteToast', { name: name.trim(), count: invitedIds.length }))
     setOpen(false)
     reset()
   }
@@ -1090,7 +1111,7 @@ function FormQuickAdd({
         className="flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary"
       >
         <FileText className="size-4 shrink-0" />
-        フォームタスクを作成
+        {tr('input.formQuickAdd.buttonLabel')}
       </button>
     )
   }
@@ -1100,14 +1121,14 @@ function FormQuickAdd({
       <div className="mb-3 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-medium">
           <FileText className="size-4" />
-          フォームタスクを作成
+          {tr('input.formQuickAdd.buttonLabel')}
         </span>
         <button
           onClick={() => {
             setOpen(false)
             reset()
           }}
-          aria-label="閉じる"
+          aria-label={tr('input.close')}
         >
           <X className="size-4 text-muted-foreground" />
         </button>
@@ -1120,7 +1141,7 @@ function FormQuickAdd({
             onChange={(e) => setProjectId(e.target.value)}
             className="h-9 min-w-[140px] flex-1 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
           >
-            <option value="">プロジェクトを選択</option>
+            <option value="">{tr('input.projectPlaceholder')}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -1130,13 +1151,13 @@ function FormQuickAdd({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="タスク名（例：イベント参加アンケート）"
+            placeholder={tr('input.formQuickAdd.taskNamePlaceholder')}
             className="h-9 min-w-[180px] flex-[2] rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
           />
         </div>
 
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">質問項目</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{tr('input.formQuickAdd.questionsLabel')}</p>
           {fields.length > 0 && (
             <ul className="mb-1.5 flex flex-col gap-1">
               {fields.map((f) => (
@@ -1147,14 +1168,16 @@ function FormQuickAdd({
                   <span>
                     {f.label}
                     <span className="ml-1.5 text-xs text-muted-foreground">
-                      （{FORM_FIELD_TYPE_LABEL[f.type]}
-                      {f.required ? '・必須' : ''}）
+                      {tr('input.formQuickAdd.fieldMeta', {
+                        type: tr(FORM_FIELD_TYPE_KEY[f.type]),
+                        required: f.required ? tr('input.formQuickAdd.requiredSuffix') : '',
+                      })}
                     </span>
                   </span>
                   <button
                     onClick={() => setFields((prev) => prev.filter((x) => x.id !== f.id))}
                     className="text-muted-foreground hover:text-destructive"
-                    aria-label="削除"
+                    aria-label={tr('input.delete')}
                   >
                     <X className="size-3.5" />
                   </button>
@@ -1166,7 +1189,7 @@ function FormQuickAdd({
             <input
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="質問文（例：参加できますか？）"
+              placeholder={tr('input.formQuickAdd.questionPlaceholder')}
               className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
             />
             <div className="flex items-center gap-1.5">
@@ -1175,9 +1198,9 @@ function FormQuickAdd({
                 onChange={(e) => setNewType(e.target.value as FormFieldType)}
                 className="h-9 flex-1 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
               >
-                {(Object.keys(FORM_FIELD_TYPE_LABEL) as FormFieldType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {FORM_FIELD_TYPE_LABEL[t]}
+                {(Object.keys(FORM_FIELD_TYPE_KEY) as FormFieldType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {tr(FORM_FIELD_TYPE_KEY[type])}
                   </option>
                 ))}
               </select>
@@ -1188,14 +1211,14 @@ function FormQuickAdd({
                   onChange={(e) => setNewRequired(e.target.checked)}
                   className="size-3.5 cursor-pointer accent-primary"
                 />
-                必須
+                {tr('input.formQuickAdd.required')}
               </label>
             </div>
             {(newType === 'select' || newType === 'checkbox') && (
               <input
                 value={newOptions}
                 onChange={(e) => setNewOptions(e.target.value)}
-                placeholder="選択肢をカンマ区切りで（例：〇,△,×）"
+                placeholder={tr('input.formQuickAdd.optionsPlaceholder')}
                 className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
               />
             )}
@@ -1205,13 +1228,13 @@ function FormQuickAdd({
               className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-dashed border-border-strong px-2.5 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              質問を追加
+              {tr('input.formQuickAdd.addQuestionButton')}
             </button>
           </div>
         </div>
 
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">回答してもらうメンバー</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{tr('input.formQuickAdd.respondersLabel')}</p>
           <div className="flex max-h-32 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border p-1 orbit-scroll">
             {members.map((m) => {
               const checked = invitedIds.includes(m.id)
@@ -1244,7 +1267,7 @@ function FormQuickAdd({
           onClick={submit}
         >
           <Plus className="size-4" />
-          作成
+          {tr('input.create')}
         </Button>
       </div>
     </div>
