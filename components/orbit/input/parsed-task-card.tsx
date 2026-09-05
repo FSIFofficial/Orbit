@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { ParsedTask } from '@/lib/orbit/types'
 import { DIFFICULTY_LABEL, TASK_IMPORTANCE } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
+import { useI18n, DIFFICULTY_KEY } from '@/lib/orbit/i18n'
 import { Card, DifficultyBadge, Tag, Avatar } from '../primitives'
 import { cn } from '@/lib/utils'
 import { findSimilarTasks, rankCandidates } from '@/lib/orbit/utils'
@@ -33,6 +34,7 @@ export function ParsedTaskCard({
     addSkillOption,
     addCategoryOption,
   } = useOrbit()
+  const { t } = useI18n()
   const [skillDraft, setSkillDraft] = useState('')
   const [addingCategory, setAddingCategory] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -118,13 +120,13 @@ export function ParsedTaskCard({
           checked={selected}
           onChange={onToggleSelect}
           className="mt-1.5 size-3.5 shrink-0 cursor-pointer accent-primary"
-          aria-label="一括操作の対象に含める"
+          aria-label={t('input.parsedTask.selectAria')}
         />
         <input
           value={task.name}
           onChange={(e) => set('name', e.target.value)}
           className="min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:text-muted-foreground focus:underline focus:decoration-border-strong focus:underline-offset-4"
-          aria-label="タスク名"
+          aria-label={t('input.parsedTask.nameAria')}
         />
         <button
           type="button"
@@ -135,7 +137,7 @@ export function ParsedTaskCard({
               ? 'border-primary bg-primary text-primary-foreground'
               : 'border-border-strong bg-card text-transparent hover:border-primary',
           )}
-          aria-label={task.approved ? '非承認にする' : '承認する'}
+          aria-label={task.approved ? t('input.parsedTask.unapproveAria') : t('input.parsedTask.approveAria')}
           aria-pressed={task.approved}
         >
           <Check className="size-4" strokeWidth={3} />
@@ -144,8 +146,8 @@ export function ParsedTaskCard({
           type="button"
           onClick={onDelete}
           className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          aria-label="このタスクを削除"
-          title="このタスクを削除"
+          aria-label={t('input.parsedTask.deleteAria')}
+          title={t('input.parsedTask.deleteAria')}
         >
           <Trash2 className="size-4" />
         </button>
@@ -155,7 +157,7 @@ export function ParsedTaskCard({
         <div className="mx-4 mt-3 rounded-md border border-warning/30 bg-warning-muted px-2.5 py-2">
           <div className="flex items-center gap-1.5 text-xs font-medium text-warning">
             <TriangleAlert className="size-3.5 shrink-0" />
-            似たタスクが既にあるかもしれません
+            {t('input.parsedTask.similarWarning')}
           </div>
           <ul className="mt-1 flex flex-col gap-1">
             {similar.map(({ task: s }) => (
@@ -173,7 +175,7 @@ export function ParsedTaskCard({
       )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3.5 sm:grid-cols-4">
-        <Field label="プロジェクト">
+        <Field label={t('taskDrawer.row.project')}>
           <input
             list="project-suggestions"
             value={projects.find((p) => p.id === task.projectId)?.name ?? ''}
@@ -181,7 +183,7 @@ export function ParsedTaskCard({
               const matched = projects.find((p) => p.name === e.target.value)
               if (matched) set('projectId', matched.id)
             }}
-            placeholder="プロジェクト名を入力…"
+            placeholder={t('input.parsedTask.projectPlaceholder')}
             className="w-full rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
           />
           <datalist id="project-suggestions">
@@ -191,7 +193,7 @@ export function ParsedTaskCard({
           </datalist>
         </Field>
 
-        <Field label="開始日">
+        <Field label={t('taskDrawer.row.startDate')}>
           <input
             type="date"
             value={task.startDate ?? ''}
@@ -200,7 +202,7 @@ export function ParsedTaskCard({
           />
         </Field>
 
-        <Field label="期限">
+        <Field label={t('taskDrawer.row.deadline')}>
           <div className="flex items-center gap-1">
             <input
               type="date"
@@ -213,13 +215,13 @@ export function ParsedTaskCard({
               value={task.dueTime ?? ''}
               onChange={(e) => set('dueTime', e.target.value || null)}
               disabled={!task.deadline}
-              title="時刻（任意）"
+              title={t('input.parsedTask.timeOptionalTitle')}
               className="w-[92px] shrink-0 rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong disabled:opacity-40"
             />
           </div>
         </Field>
 
-        <Field label="カテゴリ">
+        <Field label={t('taskDrawer.row.category')}>
           {addingCategory ? (
             <div className="flex items-center gap-1">
               <input
@@ -238,7 +240,7 @@ export function ParsedTaskCard({
                   }
                 }}
                 onBlur={commitNewCategory}
-                placeholder="新しいカテゴリ名"
+                placeholder={t('input.parsedTask.newCategoryPlaceholder')}
                 className="w-full rounded-md border border-primary bg-card px-1.5 py-0.5 text-sm outline-none"
               />
             </div>
@@ -262,7 +264,7 @@ export function ParsedTaskCard({
                   {c}
                 </option>
               ))}
-              <option value="__new__">＋ 新しいカテゴリを追加</option>
+              <option value="__new__">{t('input.parsedTask.newCategoryOption')}</option>
             </select>
           )}
           {!addingCategory && suggestedCategories.length > 0 && (
@@ -282,7 +284,7 @@ export function ParsedTaskCard({
           )}
         </Field>
 
-        <Field label="難易度">
+        <Field label={t('taskDrawer.row.difficulty')}>
           <select
             value={task.difficulty}
             onChange={(e) => set('difficulty', e.target.value as ParsedTask['difficulty'])}
@@ -290,13 +292,13 @@ export function ParsedTaskCard({
           >
             {DIFFICULTY_LABEL.map((d) => (
               <option key={d} value={d}>
-                {d}
+                {t(DIFFICULTY_KEY[d])}
               </option>
             ))}
           </select>
         </Field>
 
-        <Field label="想定時間">
+        <Field label={t('taskDrawer.row.estimatedHours')}>
           <div className="flex items-center gap-1.5">
             <input
               type="number"
@@ -306,7 +308,7 @@ export function ParsedTaskCard({
               onChange={(e) =>
                 set('estimatedHours', e.target.value ? Number(e.target.value) : undefined)
               }
-              placeholder="時間"
+              placeholder={t('input.parsedTask.estimatedHoursPlaceholder')}
               className="w-16 rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
             />
             {suggestedHours != null && task.estimatedHours == null && (
@@ -322,18 +324,18 @@ export function ParsedTaskCard({
           </div>
         </Field>
 
-        <Field label="公開範囲">
+        <Field label={t('taskDrawer.edit.visibilityLabel')}>
           <select
             value={task.visibility ?? 'all'}
             onChange={(e) => set('visibility', e.target.value as ParsedTask['visibility'])}
             className="w-full cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
           >
-            <option value="all">全員</option>
-            <option value="幹部">幹部限定</option>
+            <option value="all">{t('common.everyone')}</option>
+            <option value="幹部">{t('taskDrawer.execOnly')}</option>
           </select>
         </Field>
 
-        <Field label="重要度">
+        <Field label={t('taskDrawer.edit.importanceLabel')}>
           <select
             value={task.importance ?? '一般'}
             onChange={(e) => set('importance', e.target.value as ParsedTask['importance'])}
@@ -347,7 +349,7 @@ export function ParsedTaskCard({
           </select>
         </Field>
 
-        <Field label="要求スキル" className="col-span-2 sm:col-span-4">
+        <Field label={t('taskDrawer.row.skills')} className="col-span-2 sm:col-span-4">
           <div className="flex flex-wrap items-center gap-1.5">
             {task.skills.map((s) => (
               <Tag
@@ -366,7 +368,7 @@ export function ParsedTaskCard({
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Sparkles className="size-3 shrink-0 text-primary" />
-                  おすすめ:
+                  {t('input.parsedTask.recommended')}
                 </span>
                 {availableSkills.slice(0, 6).map((s) => (
                   <button
@@ -392,15 +394,15 @@ export function ParsedTaskCard({
                     addSkill()
                   }
                 }}
-                placeholder="追加"
+                placeholder={t('input.parsedTask.addSkillPlaceholder')}
                 className="w-14 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground"
-                aria-label="スキルを追加"
+                aria-label={t('input.parsedTask.addSkillAria')}
               />
               <button
                 type="button"
                 onClick={addSkill}
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="スキルを追加"
+                aria-label={t('input.parsedTask.addSkillAria')}
               >
                 <Plus className="size-3" />
               </button>
@@ -408,7 +410,7 @@ export function ParsedTaskCard({
           </div>
         </Field>
 
-        <Field label="担当者" className="col-span-2 sm:col-span-4">
+        <Field label={t('taskDrawer.row.assignee')} className="col-span-2 sm:col-span-4">
           <div className="flex flex-wrap items-center gap-1.5">
             {assignees.map((m) => (
               <Tag key={m.id} onRemove={() => removeAssignee(m.id)}>
@@ -423,9 +425,9 @@ export function ParsedTaskCard({
                   if (e.target.value) addAssignee(e.target.value)
                 }}
                 className="cursor-pointer rounded-md border border-dashed border-border-strong bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground outline-none hover:border-border"
-                aria-label="担当者を選択して追加"
+                aria-label={t('input.parsedTask.selectAssigneeAria')}
               >
-                <option value="">選択して追加</option>
+                <option value="">{t('input.parsedTask.selectAssigneeOption')}</option>
                 {assignableMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.displayName || m.name}
@@ -439,20 +441,20 @@ export function ParsedTaskCard({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Sparkles className="size-3.5 shrink-0 text-primary" />
-                おすすめ:
+                {t('input.parsedTask.recommended')}
               </span>
               {candidates.map(({ member, matches }) => (
                 <button
                   key={member.id}
                   type="button"
-                  title={`一致: ${matches.join('、')}`}
+                  title={t('input.parsedTask.matchTitle', { matches: matches.join(t('input.listSeparator')) })}
                   onClick={() => addAssignee(member.id)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-1.5 py-0.5 text-xs font-medium text-foreground hover:bg-primary/10"
                 >
                   <Avatar member={member} size={18} />
                   {member.displayName || member.name}
                   <span className="text-[10px] font-normal text-muted-foreground">
-                    {matches.length}件一致
+                    {t('input.parsedTask.matchCount', { count: matches.length })}
                   </span>
                   <Plus className="size-3 text-primary" />
                 </button>

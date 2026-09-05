@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { MessageSquare, Send, CheckCircle2, ImagePlus, X } from 'lucide-react'
-import { useI18n } from '@/lib/orbit/i18n'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 const FORM_URL =
   'https://docs.google.com/forms/u/0/d/e/1FAIpQLSdiyZI93Tvf-lFOxy49H48mMh2MOgQCsxbZvkoQk07x_P-3sA/formResponse'
@@ -45,6 +45,46 @@ const FEATURE_OPTIONS = [
   'Admin – 人材DB',
   'その他',
 ]
+
+const CONTACT_TYPE_KEY: Record<string, TranslationKey> = {
+  '不具合の報告': 'feedback.contactType.bugReport',
+  '機能の改善要望': 'feedback.contactType.improvement',
+  '新機能の提案': 'feedback.contactType.newFeature',
+  '使い方が分からない': 'feedback.contactType.howTo',
+  'その他': 'feedback.contactType.other',
+}
+
+const SEVERITY_KEY: Record<string, TranslationKey> = {
+  '今困っていて業務が止まっている': 'feedback.severity.blocking',
+  'できれば近いうちに直してほしい': 'feedback.severity.wantSoon',
+  '急ぎではないが伝えておきたい': 'feedback.severity.notUrgent',
+}
+
+const REPLY_OPTION_KEY: Record<string, TranslationKey> = {
+  '返信してほしい': 'feedback.reply.want',
+  '返信は不要': 'feedback.reply.notNeeded',
+}
+
+const SCREEN_OPTION_KEY: Record<string, TranslationKey> = {
+  'INPUT（タスク登録）': 'feedback.feature.input',
+  'OUTPUT（カンバン/カレンダー/リスト）': 'feedback.feature.output',
+  '個人ページ': 'feedback.feature.personalPage',
+  'プロジェクトページ': 'feedback.feature.projectPage',
+  'Admin – ダッシュボード': 'feedback.feature.adminDashboard',
+  'Admin – 承認': 'feedback.feature.adminApproval',
+  'Admin – アサイン': 'feedback.feature.adminAssign',
+  'Admin – プロジェクト': 'feedback.feature.adminProject',
+  'Admin – メンバー': 'feedback.feature.adminMembers',
+  'Admin – 分析': 'feedback.feature.adminAnalytics',
+  'Admin – タグ設定': 'feedback.feature.adminTags',
+  'Admin – 組織図': 'feedback.feature.adminOrgChart',
+  'Admin – 検定': 'feedback.feature.adminExam',
+  'Admin – レーダー': 'feedback.feature.adminRadar',
+  'Admin – 経費申請': 'feedback.feature.adminExpense',
+  'Admin – フォーム': 'feedback.feature.adminForm',
+  'Admin – 人材DB': 'feedback.feature.adminTalentDb',
+  'その他': 'feedback.feature.other',
+}
 
 const ORG_NAME_KEY = 'orbit_feedback_org_name'
 
@@ -190,18 +230,18 @@ export function FeedbackScreen() {
         {/* ご連絡の種類 */}
         <Field label={t('feedback.field.contactType')} required>
           <div className="flex flex-wrap gap-2">
-            {CONTACT_TYPES.map((t) => (
+            {CONTACT_TYPES.map((ct) => (
               <button
-                key={t}
+                key={ct}
                 type="button"
-                onClick={() => setContactType(t)}
+                onClick={() => setContactType(ct)}
                 className={`rounded-full border px-3 py-1 text-sm transition-colors ${
-                  contactType === t
+                  contactType === ct
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-background text-foreground hover:bg-secondary'
                 }`}
               >
-                {t}
+                {t(CONTACT_TYPE_KEY[ct])}
               </button>
             ))}
           </div>
@@ -230,7 +270,7 @@ export function FeedbackScreen() {
                     : 'border-border bg-background text-foreground hover:bg-secondary'
                 }`}
               >
-                {f}
+                {t(SCREEN_OPTION_KEY[f])}
               </button>
             ))}
           </div>
@@ -282,7 +322,7 @@ export function FeedbackScreen() {
                     type="button"
                     onClick={() => removeScreenshot(i)}
                     className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-white shadow"
-                    aria-label="削除"
+                    aria-label={t('common.delete')}
                   >
                     <X className="size-3" />
                   </button>
@@ -321,7 +361,7 @@ export function FeedbackScreen() {
                       onChange={() => setSeverity(s)}
                       className="size-4 accent-primary"
                     />
-                    <span className="text-sm">{s}</span>
+                    <span className="text-sm">{t(SEVERITY_KEY[s])}</span>
                   </label>
                 ))}
               </div>
@@ -348,7 +388,7 @@ export function FeedbackScreen() {
                   }}
                   className="size-4 accent-primary"
                 />
-                <span className="text-sm">{r}</span>
+                <span className="text-sm">{t(REPLY_OPTION_KEY[r])}</span>
               </label>
             ))}
           </div>

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { formatDeadlineFull, formatTenure, memberSkillFieldProgress } from '@/lib/orbit/utils'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
-import { useI18n, SUPPORTED_LOCALES } from '@/lib/orbit/i18n'
+import { useI18n, SUPPORTED_LOCALES, type TranslationKey } from '@/lib/orbit/i18n'
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import {
@@ -53,7 +53,7 @@ type TaskView = 'list' | 'board' | 'calendar'
 // Downscales/crops an uploaded image to a square JPEG data URL so avatar
 // uploads stay small and consistent, regardless of the source photo's size.
 const AVATAR_UPLOAD_SIZE = 256
-function resizeImageToDataUrl(file: File, size = AVATAR_UPLOAD_SIZE): Promise<string> {
+function resizeImageToDataUrl(file: File, t: (key: TranslationKey) => string, size = AVATAR_UPLOAD_SIZE): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
@@ -70,7 +70,7 @@ function resizeImageToDataUrl(file: File, size = AVATAR_UPLOAD_SIZE): Promise<st
       resolve(canvas.toDataURL('image/jpeg', 0.85))
       URL.revokeObjectURL(img.src)
     }
-    img.onerror = () => reject(new Error('画像を読み込めませんでした'))
+    img.onerror = () => reject(new Error(t('person.avatar.loadError')))
     img.src = URL.createObjectURL(file)
   })
 }
@@ -149,24 +149,24 @@ export function PersonDetail({ id }: { id: string }) {
   if (!member) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <p className="text-sm text-muted-foreground">メンバーが見つかりません。</p>
+        <p className="text-sm text-muted-foreground">{t('person.notFound')}</p>
       </div>
     )
   }
 
   const handleAvatarFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      toast('画像ファイルを選択してください')
+      toast(t('person.avatar.selectImage'))
       return
     }
     setUploadingAvatar(true)
     try {
-      const dataUrl = await resizeImageToDataUrl(file)
+      const dataUrl = await resizeImageToDataUrl(file, t)
       await uploadAvatarImage(member.id, dataUrl, `avatar-${member.id}.jpg`)
-      toast('プロフィール画像を更新しました')
+      toast(t('person.avatar.updated'))
       setAvatarOpen(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : '画像のアップロードに失敗しました')
+      toast(err instanceof Error ? err.message : t('person.avatar.uploadFailed'))
     } finally {
       setUploadingAvatar(false)
     }
@@ -198,7 +198,7 @@ export function PersonDetail({ id }: { id: string }) {
   const handleSheetConnect = async () => {
     const id = extractSpreadsheetId(sheetInput.trim())
     if (!id) {
-      setSheetError('有効なスプレッドシートのURLまたはIDを入力してください')
+      setSheetError(t('person.sheet.invalidUrl'))
       return
     }
     setSheetStatus('verifying')
@@ -207,7 +207,7 @@ export function PersonDetail({ id }: { id: string }) {
       const token = await requestSheetsToken()
       const result = await verifySheetAccess(id, token)
       if (!result.ok) {
-        setSheetError(result.error ?? 'アクセスできませんでした')
+        setSheetError(result.error ?? t('person.sheet.accessFailed'))
         setSheetStatus('idle')
         return
       }
@@ -215,9 +215,9 @@ export function PersonDetail({ id }: { id: string }) {
       setPersonalSheetId(id)
       setSheetTitle(result.title ?? null)
       setSheetStatus('idle')
-      toast('スプレッドシートを連携しました')
+      toast(t('person.sheet.connected'))
     } catch (e) {
-      setSheetError(e instanceof Error ? e.message : '認証に失敗しました')
+      setSheetError(e instanceof Error ? e.message : t('person.sheet.authFailed'))
       setSheetStatus('idle')
     }
   }
@@ -245,9 +245,9 @@ export function PersonDetail({ id }: { id: string }) {
       }))
       await syncTasksToSheet(personalSheetId, token, rows)
       setSheetSyncedAt(new Date())
-      toast('スプレッドシートに同期しました')
+      toast(t('person.sheet.synced'))
     } catch (e) {
-      setSheetError(e instanceof Error ? e.message : '同期に失敗しました')
+      setSheetError(e instanceof Error ? e.message : t('person.sheet.syncFailed'))
     } finally {
       setSheetStatus('idle')
     }
@@ -354,7 +354,7 @@ export function PersonDetail({ id }: { id: string }) {
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
-        ワークスペースへ戻る
+        {t('person.backToWorkspace')}
       </button>
 
       {/* Header */}
@@ -368,7 +368,7 @@ export function PersonDetail({ id }: { id: string }) {
                 setAvatarOpen(true)
               }}
               className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground"
-              aria-label="アイコンを変更"
+              aria-label={t('person.avatar.changeIcon')}
             >
               <Pencil className="size-2.5" />
             </button>
@@ -398,7 +398,7 @@ export function PersonDetail({ id }: { id: string }) {
                   setEditingName(false)
                 }}
                 className="rounded-md p-1 text-primary hover:bg-secondary"
-                aria-label="保存"
+                aria-label={t('common.save')}
               >
                 <Check className="size-4" />
               </button>
@@ -416,7 +416,7 @@ export function PersonDetail({ id }: { id: string }) {
                     setEditingName(true)
                   }}
                   className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  aria-label="表示名を編集"
+                  aria-label={t('person.avatar.editName')}
                 >
                   <Pencil className="size-3.5" />
                 </button>
@@ -439,7 +439,7 @@ export function PersonDetail({ id }: { id: string }) {
                 if (e.key === 'Enter') { updateMemberDepartmentPath(member.id, e.currentTarget.value.trim()); setEditingDeptPath(false) }
                 if (e.key === 'Escape') setEditingDeptPath(false)
               }}
-              placeholder="例: 開発部 > フロントエンド班"
+              placeholder={t('person.deptPath.placeholder')}
               className="mt-0.5 h-6 w-64 rounded-md border border-primary bg-card px-1.5 text-xs outline-none"
             />
           ) : (
@@ -447,13 +447,13 @@ export function PersonDetail({ id }: { id: string }) {
               <p className="text-xs text-muted-foreground">
                 {member.departmentPath
                   ? member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')
-                  : isAdmin ? <span className="italic">組織パス未設定</span> : null}
+                  : isAdmin ? <span className="italic">{t('person.deptPath.unset')}</span> : null}
               </p>
               {isAdmin && (
                 <button
                   onClick={() => setEditingDeptPath(true)}
                   className="rounded-md p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  aria-label="組織パスを編集"
+                  aria-label={t('person.avatar.editDeptPath')}
                 >
                   <Pencil className="size-3" />
                 </button>
@@ -475,15 +475,15 @@ export function PersonDetail({ id }: { id: string }) {
             ) : (
               <p className="text-xs text-muted-foreground">
                 {member.joinedAt
-                  ? `所属歴：${formatTenure(member.joinedAt)}（${member.joinedAt.slice(0, 7)}〜）`
-                  : '所属開始日が未設定です'}
+                  ? t('person.tenure.label', { tenure: formatTenure(member.joinedAt), month: member.joinedAt.slice(0, 7) })
+                  : t('person.tenure.unset')}
               </p>
             )}
             {(isSelf || isAdmin) && !editingJoinedAt && (
               <button
                 onClick={() => setEditingJoinedAt(true)}
                 className="rounded-md p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                aria-label="所属開始日を編集"
+                aria-label={t('person.avatar.editJoinedAt')}
               >
                 <Pencil className="size-3" />
               </button>
@@ -492,16 +492,16 @@ export function PersonDetail({ id }: { id: string }) {
         </div>
         <div className="text-right">
           <p className="text-2xl font-semibold tabular-nums">{active}</p>
-          <p className="text-xs text-muted-foreground">進行中のタスク</p>
+          <p className="text-xs text-muted-foreground">{t('person.activeTasks')}</p>
         </div>
       </div>
 
       {/* Account settings — self only, edits the person's own sheet row */}
       {isSelf && (
         <div className="mt-4 rounded-xl border border-border bg-card p-4">
-          <SectionLabel>アカウント設定</SectionLabel>
+          <SectionLabel>{t('person.account.title')}</SectionLabel>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            通知の送信先メールアドレスです。複数登録すると全てに届きます。
+            {t('person.account.emailDesc')}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Mail className="size-4 shrink-0 text-muted-foreground" />
@@ -514,7 +514,7 @@ export function PersonDetail({ id }: { id: string }) {
                 <button
                   onClick={() => removeEmail(e)}
                   className="opacity-60 hover:opacity-100"
-                  aria-label={`${e} を削除`}
+                  aria-label={t('person.account.removeEmail', { email: e })}
                 >
                   <X className="size-3" />
                 </button>
@@ -533,7 +533,7 @@ export function PersonDetail({ id }: { id: string }) {
               onBlur={() => {
                 if (newEmail.trim()) addEmail()
               }}
-              placeholder="メールアドレスを追加"
+              placeholder={t('person.account.emailPlaceholder')}
               type="email"
               className="h-7 w-48 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
             />
@@ -586,10 +586,10 @@ export function PersonDetail({ id }: { id: string }) {
         <div className="mt-4 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2">
             <Link2 className="size-4 text-muted-foreground" />
-            <SectionLabel>個人スプレッドシート連携</SectionLabel>
+            <SectionLabel>{t('person.sheet.title')}</SectionLabel>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            自分のGoogle スプレッドシートにタスク一覧を同期します。シートIDは自分だけのブラウザに保存され、他の人には公開されません。
+            {t('person.sheet.description')}
           </p>
 
           {personalSheetId ? (
@@ -610,7 +610,7 @@ export function PersonDetail({ id }: { id: string }) {
                 ) : (
                   <RefreshCw className="size-3.5" />
                 )}
-                {sheetStatus === 'syncing' ? '同期中…' : '今すぐ同期'}
+                {sheetStatus === 'syncing' ? t('person.sheet.syncing') : t('person.sheet.syncNow')}
               </Button>
               <button
                 type="button"
@@ -618,7 +618,7 @@ export function PersonDetail({ id }: { id: string }) {
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
               >
                 <X className="size-3.5" />
-                連携解除
+                {t('person.sheet.disconnect')}
               </button>
             </div>
           ) : (
@@ -630,7 +630,7 @@ export function PersonDetail({ id }: { id: string }) {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return
                   if (e.key === 'Enter') { e.preventDefault(); handleSheetConnect() }
                 }}
-                placeholder="スプレッドシートのURLまたはID"
+                placeholder={t('person.sheet.placeholder')}
                 className="h-8 min-w-0 flex-1 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
               />
               <Button
@@ -644,7 +644,7 @@ export function PersonDetail({ id }: { id: string }) {
                 ) : (
                   <Link2 className="size-3.5" />
                 )}
-                {sheetStatus === 'verifying' ? '確認中…' : '連携する'}
+                {sheetStatus === 'verifying' ? t('person.sheet.verifying') : t('person.sheet.connect')}
               </Button>
             </div>
           )}
@@ -654,7 +654,7 @@ export function PersonDetail({ id }: { id: string }) {
           )}
           {sheetSyncedAt && !sheetError && (
             <p className="mt-2 text-xs text-muted-foreground">
-              最終同期：{sheetSyncedAt.toLocaleTimeString('ja-JP')}
+              {t('person.sheet.lastSynced', { time: sheetSyncedAt.toLocaleTimeString('ja-JP') })}
             </p>
           )}
         </div>
@@ -691,15 +691,14 @@ export function PersonDetail({ id }: { id: string }) {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-primary" />
-              <SectionLabel>足りないスキル</SectionLabel>
+              <SectionLabel>{t('person.growth.missingSkills.title')}</SectionLabel>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              今、進行中・未着手のタスクが求めているスキルのうち、あなたがまだ持っていないものです。
-              身につけると担当できるタスクが増えます。
+              {t('person.growth.missingSkills.desc')}
             </p>
             {missingSkills.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">
-                今のところ、不足しているスキルはありません。
+                {t('person.growth.missingSkills.empty')}
               </p>
             ) : (
               <ul className="mt-3 flex flex-col gap-3">
@@ -712,21 +711,21 @@ export function PersonDetail({ id }: { id: string }) {
                           {skill}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {unlocked.length}件のタスクで求められています
+                          {t('person.growth.missingSkills.demandCount', { count: unlocked.length })}
                         </span>
                       </div>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        身につけるとできるようになるタスク：
+                        {t('person.growth.missingSkills.unlocksLabel')}
                         {unlocked
                           .slice(0, 3)
-                          .map((t) => t.name)
+                          .map((task) => task.name)
                           .join('、')}
-                        {unlocked.length > 3 && ` 他${unlocked.length - 3}件`}
+                        {unlocked.length > 3 && t('person.growth.missingSkills.andMore', { count: unlocked.length - 3 })}
                       </p>
                       {mentors.length > 0 && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">
-                            すでにできる人：
+                            {t('person.growth.missingSkills.mentorsLabel')}
                           </span>
                           {mentors.slice(0, 5).map((m) => (
                             <button
@@ -749,9 +748,9 @@ export function PersonDetail({ id }: { id: string }) {
 
           {/* メンター/サポート担当 (item 14) */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <SectionLabel>メンター / サポート担当</SectionLabel>
+            <SectionLabel>{t('person.growth.mentor.title')}</SectionLabel>
             <p className="mt-1 text-xs text-muted-foreground">
-              成長をサポートする担当者です。
+              {t('person.growth.mentor.desc')}
             </p>
             <div className="mt-3 flex items-center gap-2">
               {mentor ? (
@@ -763,7 +762,7 @@ export function PersonDetail({ id }: { id: string }) {
                   {mentor.displayName || mentor.name}
                 </button>
               ) : (
-                <span className="text-sm text-muted-foreground">未設定</span>
+                <span className="text-sm text-muted-foreground">{t('common.notSet')}</span>
               )}
               {isAdmin && (
                 <select
@@ -771,7 +770,7 @@ export function PersonDetail({ id }: { id: string }) {
                   onChange={(e) => updateMentor(member.id, e.target.value || null)}
                   className="h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
                 >
-                  <option value="">（未設定）</option>
+                  <option value="">{t('person.growth.mentor.unsetOption')}</option>
                   {members
                     .filter((m) => m.id !== member.id)
                     .map((m) => (
@@ -787,9 +786,9 @@ export function PersonDetail({ id }: { id: string }) {
           {/* バディ候補 (item 15) */}
           {buddyCandidates.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4">
-              <SectionLabel>バディ候補</SectionLabel>
+              <SectionLabel>{t('person.growth.buddy.title')}</SectionLabel>
               <p className="mt-1 text-xs text-muted-foreground">
-                足りないスキルを補い合える組み合わせです。2人でチームを組むとカバーできる領域が広がります。
+                {t('person.growth.buddy.desc')}
               </p>
               <ul className="mt-3 flex flex-col gap-2">
                 {buddyCandidates.map(({ member: m, covers }) => (
@@ -805,7 +804,7 @@ export function PersonDetail({ id }: { id: string }) {
                       {m.displayName || m.name}
                     </button>
                     <span className="text-xs text-muted-foreground">
-                      カバーできるスキル：{covers.join('、')}
+                      {t('person.growth.buddy.covers', { skills: covers.join('、') })}
                     </span>
                   </li>
                 ))}
@@ -816,11 +815,9 @@ export function PersonDetail({ id }: { id: string }) {
           {/* 要求分野 — derived from the 要求スキル held, not assigned directly */}
           {skillFieldProgress.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4">
-              <SectionLabel>取得分野</SectionLabel>
+              <SectionLabel>{t('person.growth.fields.title')}</SectionLabel>
               <p className="mt-1 text-xs text-muted-foreground">
-                分野は直接割り当てられるものではなく、その分野の要求スキルを
-                {Math.round(skillFieldThreshold * 100)}
-                %以上保有すると自動的に取得したものとみなされます。
+                {t('person.growth.fields.desc', { percent: Math.round(skillFieldThreshold * 100) })}
               </p>
               <ul className="mt-3 flex flex-col gap-2">
                 {skillFieldProgress.map(({ field, held, total, acquired }) => (
@@ -841,7 +838,7 @@ export function PersonDetail({ id }: { id: string }) {
                       )}
                     >
                       {held.length}/{total.length}
-                      {acquired ? '（取得済み）' : ''}
+                      {acquired ? t('person.growth.fields.acquired') : ''}
                     </span>
                   </li>
                 ))}
@@ -852,9 +849,9 @@ export function PersonDetail({ id }: { id: string }) {
           {/* ポジション要件 (item 17) */}
           {positionRequirements.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4">
-              <SectionLabel>ポジション要件（{member.role}）</SectionLabel>
+              <SectionLabel>{t('person.growth.position.title', { role: member.role })}</SectionLabel>
               <p className="mt-1 text-xs text-muted-foreground">
-                この役職に求められるスキルと、現在の保有状況の比較です。
+                {t('person.growth.position.desc')}
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {positionHas.map((s) => (
@@ -877,7 +874,7 @@ export function PersonDetail({ id }: { id: string }) {
               </div>
               {positionMissing.length > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  点線は未取得のスキルです（{positionMissing.length}件）。
+                  {t('person.growth.position.missingNote', { count: positionMissing.length })}
                 </p>
               )}
             </div>
@@ -886,9 +883,9 @@ export function PersonDetail({ id }: { id: string }) {
           {/* 学習ロードマップ (item 16) */}
           {skillRoadmap.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4">
-              <SectionLabel>学習ロードマップ</SectionLabel>
+              <SectionLabel>{t('person.growth.roadmap.title')}</SectionLabel>
               <p className="mt-1 text-xs text-muted-foreground">
-                求められている難易度が低いものから順に並べています。ここから着手するのがおすすめです。
+                {t('person.growth.roadmap.desc')}
               </p>
               <ol className="mt-3 flex flex-col gap-2">
                 {skillRoadmap.map(({ skill, unlocked }, i) => (
@@ -898,7 +895,7 @@ export function PersonDetail({ id }: { id: string }) {
                     </span>
                     <span className="font-medium">{skill}</span>
                     <span className="text-xs text-muted-foreground">
-                      （目安：{DIFFICULTY_LABEL[Math.round(unlocked.reduce((s, t) => s + DIFFICULTY_LABEL.indexOf(t.difficulty), 0) / unlocked.length)]}）
+                      {t('person.growth.roadmap.estimate', { difficulty: DIFFICULTY_LABEL[Math.round(unlocked.reduce((s, task) => s + DIFFICULTY_LABEL.indexOf(task.difficulty), 0) / unlocked.length)] })}
                     </span>
                   </li>
                 ))}
@@ -925,7 +922,7 @@ export function PersonDetail({ id }: { id: string }) {
                     : 'bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground',
                 )}
               >
-                {v === 'list' ? 'リスト' : v === 'board' ? 'ボード' : 'カレンダー'}
+                {v === 'list' ? t('person.tasks.view.list') : v === 'board' ? t('person.tasks.view.board') : t('person.tasks.view.calendar')}
               </button>
             ))}
           </div>
@@ -936,35 +933,35 @@ export function PersonDetail({ id }: { id: string }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/50 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2.5 font-medium">タスク</th>
-                    <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-                    <th className="px-4 py-2.5 font-medium">難易度</th>
-                    <th className="px-4 py-2.5 font-medium">ステータス</th>
-                    <th className="px-4 py-2.5 font-medium">期限</th>
-                    <th className="px-4 py-2.5 font-medium">依存</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.task')}</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.project')}</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.difficulty')}</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.status')}</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.deadline')}</th>
+                    <th className="px-4 py-2.5 font-medium">{t('person.tasks.table.depends')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((t) => (
+                  {history.map((task) => (
                     <tr
-                      key={t.id}
-                      onClick={() => setOpenTaskId(t.id)}
+                      key={task.id}
+                      onClick={() => setOpenTaskId(task.id)}
                       className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-secondary/50"
                     >
-                      <td className="px-4 py-3 font-medium text-foreground">{t.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{getProject(t.projectId)?.name}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{task.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{getProject(task.projectId)?.name}</td>
                       <td className="px-4 py-3">
-                        <DifficultyBadge difficulty={t.difficulty} />
+                        <DifficultyBadge difficulty={task.difficulty} />
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={t.status} />
+                        <StatusBadge status={task.status} />
                       </td>
                       <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                        {t.deadline ? formatDeadlineFull(t.deadline) : '—'}
+                        {task.deadline ? formatDeadlineFull(task.deadline) : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {(t.dependsOnIds ?? []).length > 0
-                          ? `${(t.dependsOnIds ?? []).length}件`
+                        {(task.dependsOnIds ?? []).length > 0
+                          ? t('person.tasks.table.dependsCount', { count: (task.dependsOnIds ?? []).length })
                           : '—'}
                       </td>
                     </tr>
@@ -972,7 +969,7 @@ export function PersonDetail({ id }: { id: string }) {
                   {history.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                        担当タスクがありません。
+                        {t('person.tasks.empty')}
                       </td>
                     </tr>
                   )}
@@ -986,12 +983,12 @@ export function PersonDetail({ id }: { id: string }) {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {(['todo', 'in_progress', 'in_review', 'done'] as const).map((status) => {
                 const label: Record<string, string> = {
-                  todo: '未着手',
-                  in_progress: '進行中',
-                  in_review: '確認待ち',
-                  done: '完了',
+                  todo: t('person.tasks.board.todo'),
+                  in_progress: t('person.tasks.board.inProgress'),
+                  in_review: t('person.tasks.board.inReview'),
+                  done: t('person.tasks.board.done'),
                 }
-                const col = mine.filter((t) => t.status === status)
+                const col = mine.filter((task) => task.status === status)
                 return (
                   <div key={status} className="flex flex-col gap-2">
                     <div className="flex items-center justify-between rounded-t-lg border border-b-0 border-border bg-secondary/50 px-3 py-2">
@@ -999,28 +996,28 @@ export function PersonDetail({ id }: { id: string }) {
                       <span className="text-xs text-muted-foreground">{col.length}</span>
                     </div>
                     <div className="flex flex-col gap-1.5 rounded-b-lg border border-t-0 border-border bg-card p-2 min-h-[80px]">
-                      {col.map((t) => (
+                      {col.map((task) => (
                         <button
-                          key={t.id}
-                          onClick={() => setOpenTaskId(t.id)}
+                          key={task.id}
+                          onClick={() => setOpenTaskId(task.id)}
                           className="w-full rounded-md border border-border/60 bg-secondary/30 p-2 text-left text-xs hover:bg-secondary/70"
                         >
-                          <p className="font-medium text-foreground line-clamp-2">{t.name}</p>
+                          <p className="font-medium text-foreground line-clamp-2">{task.name}</p>
                           <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <DifficultyBadge difficulty={t.difficulty} />
-                            {t.deadline && (
-                              <span className="text-muted-foreground">{t.deadline}</span>
+                            <DifficultyBadge difficulty={task.difficulty} />
+                            {task.deadline && (
+                              <span className="text-muted-foreground">{task.deadline}</span>
                             )}
                           </div>
-                          {(t.dependsOnIds ?? []).length > 0 && (
+                          {(task.dependsOnIds ?? []).length > 0 && (
                             <p className="mt-0.5 text-muted-foreground">
-                              依存: {(t.dependsOnIds ?? []).length}件
+                              {t('person.tasks.board.depends', { count: (task.dependsOnIds ?? []).length })}
                             </p>
                           )}
                         </button>
                       ))}
                       {col.length === 0 && (
-                        <p className="px-1 py-2 text-xs text-muted-foreground">なし</p>
+                        <p className="px-1 py-2 text-xs text-muted-foreground">{t('common.none')}</p>
                       )}
                     </div>
                   </div>
@@ -1074,10 +1071,10 @@ export function PersonDetail({ id }: { id: string }) {
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2">
                 <CalendarOff className="size-4 text-muted-foreground" />
-                <SectionLabel>稼働できない日</SectionLabel>
+                <SectionLabel>{t('person.calendar.unavailable.title')}</SectionLabel>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                指定した日はアサイン検討時の参考として表示されます。
+                {t('person.calendar.unavailable.desc')}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 {(member.unavailableDates ?? [])
@@ -1092,7 +1089,7 @@ export function PersonDetail({ id }: { id: string }) {
                       <button
                         onClick={() => toggleUnavailableDate(member.id, d)}
                         className="opacity-60 hover:opacity-100"
-                        aria-label={`${d} を削除`}
+                        aria-label={t('person.calendar.unavailable.remove', { date: d })}
                       >
                         <X className="size-3" />
                       </button>
@@ -1124,19 +1121,19 @@ export function PersonDetail({ id }: { id: string }) {
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-2xl font-semibold tabular-nums">{active}</p>
-              <p className="text-xs text-muted-foreground">進行中のタスク</p>
+              <p className="text-xs text-muted-foreground">{t('person.activeTasks')}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-2xl font-semibold tabular-nums">{pendingApprovTasks.length}</p>
-              <p className="text-xs text-muted-foreground">承認待ちタスク</p>
+              <p className="text-xs text-muted-foreground">{t('person.overview.pendingApproval')}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-2xl font-semibold tabular-nums">{notifications.length}</p>
-              <p className="text-xs text-muted-foreground">未読通知</p>
+              <p className="text-xs text-muted-foreground">{t('person.overview.unreadNotifications')}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-2xl font-semibold tabular-nums">{approvalNotifs.length}</p>
-              <p className="text-xs text-muted-foreground">承認待ち通知</p>
+              <p className="text-xs text-muted-foreground">{t('person.overview.pendingApprovalNotifications')}</p>
             </div>
           </div>
         )
@@ -1147,14 +1144,14 @@ export function PersonDetail({ id }: { id: string }) {
         <TalentCard
           icon={<Target className="size-4 text-primary" />}
           title="Will"
-          subtitle="本人がやりたいこと"
+          subtitle={t('person.overview.will.subtitle')}
         >
           <EditableTags
             tags={member.will}
             editable={isSelf}
             onChange={(next) => updateWill(member.id, next)}
-            emptyText="まだ登録されていません"
-            placeholder="やりたいことを追加"
+            emptyText={t('person.overview.talent.empty')}
+            placeholder={t('person.overview.will.placeholder')}
             options={skillOptions}
             onNewOption={addSkillOption}
           />
@@ -1163,14 +1160,14 @@ export function PersonDetail({ id }: { id: string }) {
         <TalentCard
           icon={<Sparkles className="size-4 text-primary" />}
           title="Judgment"
-          subtitle="管理者による認識"
+          subtitle={t('person.overview.judgment.subtitle')}
         >
           <EditableTags
             tags={member.judgment}
             editable={isAdmin}
             onChange={(next) => updateJudgment(member.id, next)}
-            emptyText="まだ登録されていません"
-            placeholder="評価を追加"
+            emptyText={t('person.overview.talent.empty')}
+            placeholder={t('person.overview.judgment.placeholder')}
             variant="judgment"
             options={skillOptions}
             onNewOption={addSkillOption}
@@ -1180,19 +1177,19 @@ export function PersonDetail({ id }: { id: string }) {
         <TalentCard
           icon={<Activity className="size-4 text-primary" />}
           title="Fact"
-          subtitle="活動実績"
+          subtitle={t('person.overview.fact.subtitle')}
         >
           {member.facts.length ? (
             <ul className="flex flex-col gap-2">
               {member.facts.map((f) => (
                 <li key={f.label} className="flex items-center justify-between text-sm">
                   <span className="text-foreground">{f.label}</span>
-                  <span className="text-muted-foreground">{f.count}件</span>
+                  <span className="text-muted-foreground">{t('person.overview.count', { count: f.count })}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">まだ実績がありません</p>
+            <p className="text-sm text-muted-foreground">{t('person.overview.noAchievements')}</p>
           )}
         </TalentCard>
       </div>
@@ -1201,10 +1198,10 @@ export function PersonDetail({ id }: { id: string }) {
       <div className="mt-6">
         <div className="flex items-center gap-2">
           <FolderKanban className="size-4 text-primary" />
-          <SectionLabel>所属プロジェクト</SectionLabel>
+          <SectionLabel>{t('person.overview.projects.title')}</SectionLabel>
         </div>
         {memberProjects.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">所属しているプロジェクトはありません。</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('person.overview.projects.empty')}</p>
         ) : (
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {memberProjects.map((p) => (
@@ -1219,7 +1216,7 @@ export function PersonDetail({ id }: { id: string }) {
                 </div>
                 {p.ownerId === member.id && (
                   <span className="shrink-0 rounded-md bg-primary-muted px-1.5 py-0.5 text-[10px] font-semibold text-accent-foreground">
-                    責任者
+                    {t('person.overview.projects.owner')}
                   </span>
                 )}
               </button>
@@ -1230,18 +1227,18 @@ export function PersonDetail({ id }: { id: string }) {
 
       {/* Achievements */}
       <div className="mt-6">
-        <SectionLabel>実績</SectionLabel>
+        <SectionLabel>{t('person.overview.achievements.title')}</SectionLabel>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-border bg-card p-3">
             <p className="text-2xl font-semibold tabular-nums">{completed.length}</p>
-            <p className="text-xs text-muted-foreground">完了タスク数</p>
+            <p className="text-xs text-muted-foreground">{t('person.overview.achievements.completedTasks')}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-3">
             <p className="text-2xl font-semibold tabular-nums">{member.judgment.length}</p>
-            <p className="text-xs text-muted-foreground">認定スキル数</p>
+            <p className="text-xs text-muted-foreground">{t('person.overview.achievements.certifiedSkills')}</p>
           </div>
           <div className="col-span-2 rounded-xl border border-border bg-card p-3">
-            <p className="text-xs text-muted-foreground">得意カテゴリ</p>
+            <p className="text-xs text-muted-foreground">{t('person.overview.achievements.topCategory')}</p>
             {topCategories.length > 0 ? (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {topCategories.map(([cat, count]) => (
@@ -1250,12 +1247,12 @@ export function PersonDetail({ id }: { id: string }) {
                     className="inline-flex items-center gap-1 rounded-md bg-primary-muted px-1.5 py-0.5 text-xs font-medium text-accent-foreground"
                   >
                     {cat}
-                    <span className="text-[10px] opacity-70">{count}件</span>
+                    <span className="text-[10px] opacity-70">{t('person.overview.count', { count })}</span>
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="mt-1 text-sm text-muted-foreground">まだ実績がありません</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('person.overview.noAchievements')}</p>
             )}
           </div>
         </div>
@@ -1264,14 +1261,14 @@ export function PersonDetail({ id }: { id: string }) {
       {/* タスク詳細はタブ2「タスク」で確認できます */}
       <div className="mt-4 rounded-xl border border-dashed border-border bg-card/50 px-4 py-3">
         <p className="text-xs text-muted-foreground">
-          タスク一覧・ボード・カレンダー表示は
+          {t('person.overview.taskLinkPrefix')}
           <button
             onClick={() => setTab('tasks')}
             className="mx-1 font-medium text-primary hover:underline"
           >
-            タスクタブ
+            {t('person.overview.taskLinkButton')}
           </button>
-          から確認できます。
+          {t('person.overview.taskLinkSuffix')}
         </p>
       </div>
         </>
@@ -1281,8 +1278,8 @@ export function PersonDetail({ id }: { id: string }) {
 
       <Modal open={avatarOpen} onClose={() => setAvatarOpen(false)}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">アイコンを変更</h2>
-          <button onClick={() => setAvatarOpen(false)} aria-label="閉じる">
+          <h2 className="text-base font-semibold">{t('person.avatar.changeIcon')}</h2>
+          <button onClick={() => setAvatarOpen(false)} aria-label={t('common.close')}>
             <X className="size-4 text-muted-foreground" />
           </button>
         </div>
@@ -1297,7 +1294,7 @@ export function PersonDetail({ id }: { id: string }) {
             maxLength={2}
             placeholder={member.initials}
             className="h-9 w-20 rounded-md border border-border bg-card px-2 text-center text-sm uppercase outline-none focus:border-primary"
-            aria-label="イニシャル（2文字まで）"
+            aria-label={t('person.avatar.initialsLabel')}
           />
         </div>
 
@@ -1326,7 +1323,7 @@ export function PersonDetail({ id }: { id: string }) {
                 ) : (
                   <ImageUp className="size-4" />
                 )}
-                {uploadingAvatar ? 'アップロード中…' : '画像をアップロード'}
+                {uploadingAvatar ? t('person.avatar.uploading') : t('person.avatar.uploadImage')}
               </button>
               {member.avatarUrl && (
                 <button
@@ -1335,19 +1332,18 @@ export function PersonDetail({ id }: { id: string }) {
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="size-3.5" />
-                  画像を削除
+                  {t('person.avatar.deleteImage')}
                 </button>
               )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              画像アップロードは未設定です（管理者がGoogleドライブ連携を設定すると使えます）。
-              それまでは下の色とイニシャルが使われます。
+              {t('person.avatar.driveDisabled')}
             </p>
           )}
         </div>
 
-        <p className="mb-1.5 mt-4 text-xs font-medium text-muted-foreground">カラー</p>
+        <p className="mb-1.5 mt-4 text-xs font-medium text-muted-foreground">{t('person.avatar.colorLabel')}</p>
         <div className="flex flex-wrap gap-2">
           {AVATAR_PALETTE.map((color) => (
             <button
@@ -1361,13 +1357,13 @@ export function PersonDetail({ id }: { id: string }) {
                 member.avatarColor === color ? 'ring-primary' : 'ring-transparent',
               )}
               style={{ backgroundColor: color }}
-              aria-label={`色を選択 ${color}`}
+              aria-label={t('person.avatar.selectColor', { color })}
             />
           ))}
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setAvatarOpen(false)}>
-            キャンセル
+            {t('common.cancel')}
           </Button>
           <Button
             className="h-9"
@@ -1376,7 +1372,7 @@ export function PersonDetail({ id }: { id: string }) {
               setAvatarOpen(false)
             }}
           >
-            保存
+            {t('common.save')}
           </Button>
         </div>
       </Modal>
@@ -1384,20 +1380,20 @@ export function PersonDetail({ id }: { id: string }) {
   )
 }
 
-const NOTIFY_KINDS: { kind: NotifyKind; label: string }[] = [
-  { kind: 'new_task', label: '新規タスク' },
-  { kind: 'review', label: 'レビュー依頼' },
-  { kind: 'mention', label: 'メンション' },
-  { kind: 'rejected', label: '差し戻し' },
-  { kind: 'deadline', label: '締切リマインド' },
+const NOTIFY_KINDS: { kind: NotifyKind; labelKey: TranslationKey }[] = [
+  { kind: 'new_task', labelKey: 'person.settings.notify.newTask' },
+  { kind: 'review', labelKey: 'person.settings.notify.review' },
+  { kind: 'mention', labelKey: 'person.settings.notify.mention' },
+  { kind: 'rejected', labelKey: 'person.settings.notify.rejected' },
+  { kind: 'deadline', labelKey: 'person.settings.notify.deadline' },
 ]
 
-const NOTIFY_FREQS: { value: NotifyFrequency; label: string }[] = [
-  { value: 'immediate', label: 'その都度' },
-  { value: '3h', label: '3時間' },
-  { value: '6h', label: '6時間' },
-  { value: '1d', label: '1日' },
-  { value: 'none', label: 'なし' },
+const NOTIFY_FREQS: { value: NotifyFrequency; labelKey: TranslationKey }[] = [
+  { value: 'immediate', labelKey: 'person.settings.freq.immediate' },
+  { value: '3h', labelKey: 'person.settings.freq.3h' },
+  { value: '6h', labelKey: 'person.settings.freq.6h' },
+  { value: '1d', labelKey: 'person.settings.freq.1d' },
+  { value: 'none', labelKey: 'common.none' },
 ]
 
 function NotifySettingsTable({
@@ -1407,6 +1403,7 @@ function NotifySettingsTable({
   member: Member
   onUpdate: (settings: Partial<Record<NotifyKind, NotifyFrequency>>) => void
 }) {
+  const { t } = useI18n()
   const settings = member.notifySettings ?? {}
 
   const toggle = (kind: NotifyKind, freq: NotifyFrequency) => {
@@ -1419,20 +1416,20 @@ function NotifySettingsTable({
       <table className="w-full min-w-[420px] text-xs">
         <thead>
           <tr>
-            <th className="pb-1.5 pr-3 text-left font-medium text-muted-foreground">通知種別</th>
+            <th className="pb-1.5 pr-3 text-left font-medium text-muted-foreground">{t('person.settings.notify.kindHeader')}</th>
             {NOTIFY_FREQS.map((f) => (
               <th key={f.value} className="pb-1.5 px-1 text-center font-medium text-muted-foreground whitespace-nowrap">
-                {f.label}
+                {t(f.labelKey)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {NOTIFY_KINDS.map(({ kind, label }) => {
+          {NOTIFY_KINDS.map(({ kind, labelKey }) => {
             const current = settings[kind] ?? 'none'
             return (
               <tr key={kind} className="border-t border-border/50">
-                <td className="py-1.5 pr-3 text-left font-medium">{label}</td>
+                <td className="py-1.5 pr-3 text-left font-medium">{t(labelKey)}</td>
                 {NOTIFY_FREQS.map((f) => (
                   <td key={f.value} className="py-1.5 px-1 text-center">
                     <button
@@ -1445,7 +1442,7 @@ function NotifySettingsTable({
                           : 'bg-secondary text-muted-foreground hover:bg-secondary/80',
                       )}
                     >
-                      {f.label}
+                      {t(f.labelKey)}
                     </button>
                   </td>
                 ))}

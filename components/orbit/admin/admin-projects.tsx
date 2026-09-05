@@ -39,6 +39,17 @@ import { useI18n, PRIORITY_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY } from '@/lib/orb
 // 暫定値、要調整: プロジェクトの「人材不足」閾値（未完了タスク数÷担当人数）
 const UNDERSTAFFED_RATIO_THRESHOLD = 3
 
+// 曜日名（日曜始まり）の翻訳キー一覧
+const DAY_KEYS = [
+  'admin.projects.recurring.day.sun',
+  'admin.projects.recurring.day.mon',
+  'admin.projects.recurring.day.tue',
+  'admin.projects.recurring.day.wed',
+  'admin.projects.recurring.day.thu',
+  'admin.projects.recurring.day.fri',
+  'admin.projects.recurring.day.sat',
+] as const
+
 // 未完了タスク数 ÷ アサイン済みメンバー数（重複除く）の比率を計算する。
 // メンバーがいない場合は Infinity を返す（タスクがあっても0人なら常に不足）。
 function calcStaffingRatio(projectId: string, tasks: Task[], members: Member[]): number {
@@ -105,8 +116,8 @@ export function AdminProjects() {
     const templateCount = type ? (projectTemplates[type]?.length ?? 0) : 0
     toast(
       templateCount > 0
-        ? `「${trimmed}」を作成し、テンプレートの${templateCount}件のタスクを追加しました`
-        : `「${trimmed}」を作成しました`,
+        ? t('admin.projects.createToastWithTemplate', { name: trimmed, count: templateCount })
+        : t('admin.projects.createToast', { name: trimmed }),
     )
     setName('')
     setDescription('')
@@ -132,8 +143,8 @@ export function AdminProjects() {
       <h1 className="text-xl font-semibold tracking-tight">{t('admin.projects.title')}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {isFullAdmin
-          ? '新しいプロジェクトを追加します。種類を選ぶと、その種類のテンプレートタスクが自動で作成されます。'
-          : '担当プロジェクトの一覧です。新規追加やテンプレート管理は代表など上位の管理者のみ行えます。'}
+          ? t('admin.projects.subtitleFull')
+          : t('admin.projects.subtitleLimited')}
       </p>
 
       {isFullAdmin && (
@@ -141,48 +152,48 @@ export function AdminProjects() {
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr]">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                プロジェクト名
+                {t('admin.projects.form.nameLabel')}
               </label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="例：新歓イベント2027"
+                placeholder={t('admin.projects.form.namePlaceholder')}
                 className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">概要</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.descLabel')}</label>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="任意"
+                placeholder={t('feedback.optional')}
                 className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">種類</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.typeLabel')}</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
                 className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
               >
-                <option value="">未設定</option>
-                {projectTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                <option value="">{t('common.notSet')}</option>
+                {projectTypes.map((pt) => (
+                  <option key={pt} value={pt}>
+                    {pt}
                   </option>
                 ))}
               </select>
             </div>
           </div>
           <div className="mt-2">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">上位プロジェクト（任意）</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.parentLabel')}</label>
             <select
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
               className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary sm:w-80"
             >
-              <option value="">なし（最上位）</option>
+              <option value="">{t('admin.projects.form.parentNone')}</option>
               {activeList.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -190,7 +201,7 @@ export function AdminProjects() {
           </div>
           <Button className="mt-3 h-9" disabled={!name.trim()} onClick={handleCreate}>
             <Plus className="size-4" />
-            プロジェクトを追加
+            {t('admin.projects.form.submit')}
           </Button>
         </div>
       )}
@@ -200,14 +211,14 @@ export function AdminProjects() {
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
               {isFullAdmin && <th className="w-8 px-2 py-2.5" />}
-              <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-              <th className="px-4 py-2.5 font-medium">上位</th>
-              <th className="px-4 py-2.5 font-medium">種類</th>
-              <th className="px-4 py-2.5 font-medium">概要</th>
-              <th className="px-4 py-2.5 font-medium">担当者</th>
-              <th className="px-4 py-2.5 font-medium">責任者</th>
-              <th className="px-4 py-2.5 font-medium">タスク数</th>
-              <th className="px-4 py-2.5 font-medium" title="未完了タスク数÷担当人数の比率（暫定閾値）">{t('admin.projects.colStaffing')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.colProject')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.colParent')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.form.typeLabel')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.form.descLabel')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.colAssignee')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.colOwner')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('admin.projects.colTaskCount')}</th>
+              <th className="px-4 py-2.5 font-medium" title={t('admin.projects.staffingTooltip')}>{t('admin.projects.colStaffing')}</th>
               {isFullAdmin && <th className="px-4 py-2.5 font-medium" />}
             </tr>
           </thead>
@@ -249,7 +260,7 @@ export function AdminProjects() {
                           <button
                             onClick={() => updateProjectParent(p.id, null)}
                             className="text-muted-foreground hover:text-foreground"
-                            title="上位プロジェクトを解除"
+                            title={t('admin.projects.unlinkParentTitle')}
                           >
                             ×
                           </button>
@@ -261,7 +272,7 @@ export function AdminProjects() {
                         onChange={(e) => e.target.value && updateProjectParent(p.id, e.target.value)}
                         className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
                       >
-                        <option value="">設定</option>
+                        <option value="">{t('admin.projects.parentSetOption')}</option>
                         {activeList.filter((pp) => pp.id !== p.id).map((pp) => (
                           <option key={pp.id} value={pp.id}>{pp.name}</option>
                         ))}
@@ -280,8 +291,8 @@ export function AdminProjects() {
                           setEditingDetailsOf(p)
                         }}
                         className="shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="概要・種類を編集"
-                        title="概要・種類を編集"
+                        aria-label={t('admin.projects.editDetailsAria')}
+                        title={t('admin.projects.editDetailsAria')}
                       >
                         <Pencil className="size-3.5" />
                       </button>
@@ -303,7 +314,7 @@ export function AdminProjects() {
                       <button
                         onClick={() => setManagingMembersOf(p)}
                         className="text-muted-foreground hover:text-foreground"
-                        aria-label="担当者を管理"
+                        aria-label={t('admin.projects.manageMembersAria')}
                       >
                         <UserPlus className="size-3.5" />
                       </button>
@@ -322,7 +333,7 @@ export function AdminProjects() {
                       <button
                         onClick={() => setManagingOwnerOf(p)}
                         className="text-muted-foreground hover:text-foreground"
-                        aria-label="責任者を編集"
+                        aria-label={t('admin.projects.editOwnerAria')}
                       >
                         <UserCog className="size-3.5" />
                       </button>
@@ -333,7 +344,10 @@ export function AdminProjects() {
                     {isUnderstaffed ? (
                       <span
                         className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                        title={`未完了タスク/担当者比率: ${staffingRatio === Infinity ? '∞' : staffingRatio.toFixed(1)}（閾値 ${UNDERSTAFFED_RATIO_THRESHOLD}、暫定値・要調整）`}
+                        title={t('admin.projects.staffingRatioTitle', {
+                          ratio: staffingRatio === Infinity ? '∞' : staffingRatio.toFixed(1),
+                          threshold: UNDERSTAFFED_RATIO_THRESHOLD,
+                        })}
                       >
                         <AlertTriangle className="size-3" />
                         {t('admin.projects.staffingShort')}
@@ -351,25 +365,25 @@ export function AdminProjects() {
                             className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
                           >
                             <LayoutTemplate className="size-3.5" />
-                            テンプレート適用
+                            {t('admin.projects.applyTemplateButton')}
                           </button>
                         )}
                         <button
                           onClick={() => {
                             setProjectArchived(p.id, true)
-                            toast(`「${p.name}」をアーカイブしました`)
+                            toast(t('admin.projects.archiveToast', { name: p.name }))
                           }}
                           className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
                         >
                           <Archive className="size-3.5" />
-                          アーカイブ
+                          {t('admin.projects.archiveButton')}
                         </button>
                         <button
                           onClick={() => setRemoving(p)}
                           className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
                         >
                           <Trash2 className="size-3.5" />
-                          削除
+                          {t('common.delete')}
                         </button>
                       </div>
                     </td>
@@ -384,7 +398,7 @@ export function AdminProjects() {
       {isFullAdmin && archivedList.length > 0 && (
         <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">
           <div className="border-b border-border px-4 py-2.5 text-sm font-medium text-muted-foreground">
-            アーカイブ済みプロジェクト（{archivedList.length}）
+            {t('admin.projects.archivedHeading', { count: archivedList.length })}
           </div>
           <ul className="divide-y divide-border">
             {archivedList.map((p) => (
@@ -394,19 +408,19 @@ export function AdminProjects() {
                   <button
                     onClick={() => {
                       setProjectArchived(p.id, false)
-                      toast(`「${p.name}」のアーカイブを解除しました`)
+                      toast(t('admin.projects.unarchiveToast', { name: p.name }))
                     }}
                     className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
                   >
                     <ArchiveRestore className="size-3.5" />
-                    アーカイブ解除
+                    {t('admin.projects.unarchiveButton')}
                   </button>
                   <button
                     onClick={() => setRemoving(p)}
                     className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
                   >
                     <Trash2 className="size-3.5" />
-                    削除
+                    {t('common.delete')}
                   </button>
                 </div>
               </li>
@@ -418,9 +432,9 @@ export function AdminProjects() {
       {/* Project-type templates */}
       {isFullAdmin && (
       <div className="mt-10">
-        <h2 className="text-base font-semibold">プロジェクトの種類 / テンプレートタスク</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.types.heading')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          種類ごとに、新規プロジェクト作成時に自動で追加するタスクを定義できます。
+          {t('admin.projects.types.desc')}
         </p>
 
         <div className="mt-3 flex items-center gap-1.5">
@@ -434,7 +448,7 @@ export function AdminProjects() {
                 setNewType('')
               }
             }}
-            placeholder="新しい種類名（例：コンテンツ開発）"
+            placeholder={t('admin.projects.types.newTypePlaceholder')}
             className="h-9 w-64 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
           />
           <Button
@@ -447,22 +461,22 @@ export function AdminProjects() {
             }}
           >
             <Plus className="size-4" />
-            種類を追加
+            {t('admin.projects.types.addButton')}
           </Button>
         </div>
 
         <div className="mt-4 flex flex-col gap-4">
-          {projectTypes.map((t) => (
+          {projectTypes.map((pt) => (
             <TemplateTypeCard
-              key={t}
-              type={t}
-              tasks={projectTemplates[t] ?? []}
-              onChange={(tasks) => setProjectTemplateTasks(t, tasks)}
-              onRemoveType={() => removeProjectType(t)}
+              key={pt}
+              type={pt}
+              tasks={projectTemplates[pt] ?? []}
+              onChange={(tasks) => setProjectTemplateTasks(pt, tasks)}
+              onRemoveType={() => removeProjectType(pt)}
             />
           ))}
           {projectTypes.length === 0 && (
-            <p className="text-sm text-muted-foreground">まだ種類が登録されていません。</p>
+            <p className="text-sm text-muted-foreground">{t('admin.projects.types.empty')}</p>
           )}
         </div>
       </div>
@@ -472,23 +486,22 @@ export function AdminProjects() {
           on demand to any existing project, with dependency structure */}
       {isFullAdmin && (
       <div className="mt-10">
-        <h2 className="text-base font-semibold">業務テンプレート</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.taskSets.heading')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          よくある業務（イベント開催・記事制作など）をタスクセットとして保存し、既存プロジェクトに
-          一括で適用できます。前提タスクの構造も一緒に保存されます。
+          {t('admin.projects.taskSets.desc')}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <input
             value={newTemplateName}
             onChange={(e) => setNewTemplateName(e.target.value)}
-            placeholder="テンプレート名（例：イベント開催）"
+            placeholder={t('admin.projects.taskSets.namePlaceholder')}
             className="h-9 w-56 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
           />
           <input
             value={newTemplateDesc}
             onChange={(e) => setNewTemplateDesc(e.target.value)}
-            placeholder="説明（任意）"
+            placeholder={t('admin.projects.taskSets.descPlaceholder')}
             className="h-9 w-56 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
           />
           <Button
@@ -502,21 +515,21 @@ export function AdminProjects() {
             }}
           >
             <Plus className="size-4" />
-            テンプレートを追加
+            {t('admin.projects.taskSets.addButton')}
           </Button>
         </div>
 
         <div className="mt-4 flex flex-col gap-4">
-          {taskSetTemplates.map((t) => (
+          {taskSetTemplates.map((tst) => (
             <TaskSetTemplateCard
-              key={t.id}
-              template={t}
-              onChangeItems={(items) => updateTaskSetTemplateItems(t.id, items)}
-              onRemove={() => removeTaskSetTemplate(t.id)}
+              key={tst.id}
+              template={tst}
+              onChangeItems={(items) => updateTaskSetTemplateItems(tst.id, items)}
+              onRemove={() => removeTaskSetTemplate(tst.id)}
             />
           ))}
           {taskSetTemplates.length === 0 && (
-            <p className="text-sm text-muted-foreground">まだ業務テンプレートがありません。</p>
+            <p className="text-sm text-muted-foreground">{t('admin.projects.taskSets.empty')}</p>
           )}
         </div>
       </div>
@@ -525,10 +538,9 @@ export function AdminProjects() {
       {/* 定期タスク (item 2) */}
       {isFullAdmin && (
       <div className="mt-10">
-        <h2 className="text-base font-semibold">定期タスク</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.recurring.heading')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          毎週・毎月発生する業務を自動生成します。サーバー側の定期実行はないため、該当日に誰かが
-          Orbitを開いたタイミングで1回だけ生成されます。
+          {t('admin.projects.recurring.desc')}
         </p>
         <RecurringRuleForm
           projects={projects}
@@ -556,49 +568,49 @@ export function AdminProjects() {
             />
           ))}
           {recurringRules.length === 0 && (
-            <li className="text-sm text-muted-foreground">まだ定期タスクがありません。</li>
+            <li className="text-sm text-muted-foreground">{t('admin.projects.recurring.empty')}</li>
           )}
         </ul>
       </div>
       )}
 
       <Modal open={!!applyingTo} onClose={() => setApplyingTo(null)}>
-        <h2 className="text-base font-semibold">「{applyingTo?.name}」にテンプレートを適用</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.applyModal.title', { name: applyingTo?.name ?? '' })}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          選んだテンプレートのタスクが、前提タスク構造ごとこのプロジェクトに追加されます。
+          {t('admin.projects.applyModal.desc')}
         </p>
         <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
-          {taskSetTemplates.map((t) => (
+          {taskSetTemplates.map((tst) => (
             <button
-              key={t.id}
+              key={tst.id}
               onClick={() => {
                 if (!applyingTo) return
-                applyTaskSetTemplate(t.id, applyingTo.id)
-                toast(`「${t.name}」を「${applyingTo.name}」に適用し、${t.items.length}件のタスクを追加しました`)
+                applyTaskSetTemplate(tst.id, applyingTo.id)
+                toast(t('admin.projects.applyModal.toast', { template: tst.name, project: applyingTo.name, count: tst.items.length }))
                 setApplyingTo(null)
               }}
-              disabled={t.items.length === 0}
+              disabled={tst.items.length === 0}
               className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
             >
               <div>
-                <div className="font-medium">{t.name}</div>
-                {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+                <div className="font-medium">{tst.name}</div>
+                {tst.description && <div className="text-xs text-muted-foreground">{tst.description}</div>}
               </div>
-              <span className="shrink-0 text-xs text-muted-foreground">{t.items.length}件</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{t('admin.projects.itemsCount', { count: tst.items.length })}</span>
             </button>
           ))}
         </div>
         <div className="mt-5 flex justify-end">
           <Button variant="ghost" className="h-9" onClick={() => setApplyingTo(null)}>
-            閉じる
+            {t('common.close')}
           </Button>
         </div>
       </Modal>
 
       <Modal open={!!managingMembersOf} onClose={() => setManagingMembersOf(null)}>
-        <h2 className="text-base font-semibold">「{managingMembersOf?.name}」の担当者</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.membersModal.title', { name: managingMembersOf?.name ?? '' })}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          このプロジェクトのタスクに誰かをアサインすると自動的にここへ追加されます。
+          {t('admin.projects.membersModal.desc')}
         </p>
         <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
           {members.map((m) => {
@@ -630,13 +642,13 @@ export function AdminProjects() {
         </div>
         <div className="mt-5 flex justify-end">
           <Button className="h-9" onClick={() => setManagingMembersOf(null)}>
-            閉じる
+            {t('common.close')}
           </Button>
         </div>
       </Modal>
 
       <Modal open={!!managingOwnerOf} onClose={() => setManagingOwnerOf(null)}>
-        <h2 className="text-base font-semibold">「{managingOwnerOf?.name}」の責任者</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.ownerModal.title', { name: managingOwnerOf?.name ?? '' })}</h2>
         <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
           <button
             onClick={() => {
@@ -647,7 +659,7 @@ export function AdminProjects() {
             className="flex items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
           >
             <Avatar member={null} size={28} />
-            未設定
+            {t('common.notSet')}
           </button>
           {members.map((m) => {
             const checked = managingOwnerOf?.ownerId === m.id
@@ -677,39 +689,39 @@ export function AdminProjects() {
       </Modal>
 
       <Modal open={!!editingDetailsOf} onClose={() => setEditingDetailsOf(null)}>
-        <h2 className="text-base font-semibold">「{editingDetailsOf?.name}」の概要・種類を編集</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.detailsModal.title', { name: editingDetailsOf?.name ?? '' })}</h2>
         <div className="mt-3 flex flex-col gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">概要</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.descLabel')}</label>
             <input
               value={detailsDraft.description}
               onChange={(e) => setDetailsDraft({ ...detailsDraft, description: e.target.value })}
-              placeholder="任意"
+              placeholder={t('feedback.optional')}
               className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">種類</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.typeLabel')}</label>
             <select
               value={detailsDraft.type}
               onChange={(e) => setDetailsDraft({ ...detailsDraft, type: e.target.value })}
               className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             >
-              <option value="">未設定</option>
-              {projectTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="">{t('common.notSet')}</option>
+              {projectTypes.map((pt) => (
+                <option key={pt} value={pt}>
+                  {pt}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-xs text-muted-foreground">
-              種類を変更しても、既存タスクやこのプロジェクトには影響しません（新規作成時のテンプレート自動追加のみに使われます）。
+              {t('admin.projects.detailsModal.hint')}
             </p>
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setEditingDetailsOf(null)}>
-            キャンセル
+            {t('common.cancel')}
           </Button>
           <Button
             className="h-9"
@@ -720,26 +732,26 @@ export function AdminProjects() {
                   detailsDraft.description.trim(),
                   detailsDraft.type || undefined,
                 )
-                toast('プロジェクトを更新しました')
+                toast(t('admin.projects.detailsModal.updateToast'))
               }
               setEditingDetailsOf(null)
             }}
           >
-            保存
+            {t('common.save')}
           </Button>
         </div>
       </Modal>
 
       <Modal open={!!removing} onClose={() => setRemoving(null)}>
-        <h2 className="text-base font-semibold">「{removing?.name}」を削除しますか？</h2>
+        <h2 className="text-base font-semibold">{t('admin.projects.removeModal.title', { name: removing?.name ?? '' })}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          このプロジェクトに紐づくタスク（
-          {removing ? visibleTasks.filter((t) => t.projectId === removing.id).length : 0}
-          件）もすべて削除されます。この操作は取り消せません。
+          {t('admin.projects.removeModal.desc', {
+            count: removing ? visibleTasks.filter((task) => task.projectId === removing.id).length : 0,
+          })}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setRemoving(null)}>
-            キャンセル
+            {t('common.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -747,12 +759,12 @@ export function AdminProjects() {
             onClick={() => {
               if (removing) {
                 removeProject(removing.id)
-                toast(`「${removing.name}」を削除しました`)
+                toast(t('admin.projects.removeModal.toast', { name: removing.name }))
               }
               setRemoving(null)
             }}
           >
-            削除する
+            {t('admin.projects.removeModal.confirmButton')}
           </Button>
         </div>
       </Modal>
@@ -808,7 +820,7 @@ function TemplateTypeCard({
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
-          種類を削除
+          {tr('admin.projects.types.removeType')}
         </button>
       </div>
 
@@ -827,14 +839,14 @@ function TemplateTypeCard({
             <button
               onClick={() => onChange(tasks.filter((x) => x.id !== t.id))}
               className="shrink-0 text-muted-foreground hover:text-destructive"
-              aria-label="削除"
+              aria-label={tr('common.delete')}
             >
               <Trash2 className="size-3.5" />
             </button>
           </li>
         ))}
         {tasks.length === 0 && (
-          <li className="text-xs text-muted-foreground">まだテンプレートタスクがありません。</li>
+          <li className="text-xs text-muted-foreground">{tr('admin.projects.types.emptyTasks')}</li>
         )}
       </ul>
 
@@ -842,7 +854,7 @@ function TemplateTypeCard({
         <input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="タスク名"
+          placeholder={tr('admin.projects.taskNamePlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary sm:col-span-2"
         />
         <select
@@ -859,7 +871,7 @@ function TemplateTypeCard({
         <input
           value={draft.category}
           onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-          placeholder="カテゴリ"
+          placeholder={tr('admin.projects.categoryPlaceholder')}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <select
@@ -887,7 +899,7 @@ function TemplateTypeCard({
         <input
           value={draft.skills}
           onChange={(e) => setDraft({ ...draft, skills: e.target.value })}
-          placeholder="要求スキル（カンマ区切り）"
+          placeholder={tr('admin.projects.skillsPlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary sm:col-span-3"
         />
         <Button
@@ -897,7 +909,7 @@ function TemplateTypeCard({
           onClick={addTask}
         >
           <Plus className="size-3.5" />
-          テンプレートタスクを追加
+          {tr('admin.projects.types.addTaskButton')}
         </Button>
       </div>
     </div>
@@ -1008,7 +1020,7 @@ function TaskSetTemplateCard({
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
-          テンプレートを削除
+          {tr('admin.projects.taskSets.removeTemplate')}
         </button>
       </div>
 
@@ -1031,7 +1043,7 @@ function TaskSetTemplateCard({
               </span>
               {item.dependsOn && item.dependsOn.length > 0 && (
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  前提：{item.dependsOn.map(itemName).join('、')}
+                  {tr('admin.projects.taskSets.dependsOnPrefix', { list: item.dependsOn.map(itemName).join('、') })}
                 </div>
               )}
             </div>
@@ -1039,14 +1051,14 @@ function TaskSetTemplateCard({
               <button
                 onClick={() => startEdit(item)}
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="編集"
+                aria-label={tr('common.edit')}
               >
                 <Pencil className="size-3.5" />
               </button>
               <button
                 onClick={() => removeItem(item.id)}
                 className="text-muted-foreground hover:text-destructive"
-                aria-label="削除"
+                aria-label={tr('common.delete')}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -1054,7 +1066,7 @@ function TaskSetTemplateCard({
           </li>
         ))}
         {template.items.length === 0 && (
-          <li className="text-xs text-muted-foreground">まだタスクがありません。</li>
+          <li className="text-xs text-muted-foreground">{tr('admin.projects.taskSets.emptyItems')}</li>
         )}
       </ol>
 
@@ -1062,7 +1074,7 @@ function TaskSetTemplateCard({
         <input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="タスク名"
+          placeholder={tr('admin.projects.taskNamePlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary sm:col-span-2"
         />
         <select
@@ -1079,7 +1091,7 @@ function TaskSetTemplateCard({
         <input
           value={draft.category}
           onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-          placeholder="カテゴリ"
+          placeholder={tr('admin.projects.categoryPlaceholder')}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <select
@@ -1107,14 +1119,14 @@ function TaskSetTemplateCard({
         <input
           value={draft.skills}
           onChange={(e) => setDraft({ ...draft, skills: e.target.value })}
-          placeholder="要求スキル（カンマ区切り）"
+          placeholder={tr('admin.projects.skillsPlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary sm:col-span-3"
         />
       </div>
 
       {template.items.filter((item) => item.id !== editingId).length > 0 && (
         <div className="mt-2">
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">前提タスク（任意）</p>
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">{tr('admin.projects.taskSets.dependsOnLabel')}</p>
           <div className="flex flex-wrap gap-1.5">
             {template.items
               .filter((item) => item.id !== editingId)
@@ -1157,18 +1169,18 @@ function TaskSetTemplateCard({
           {editingId ? (
             <>
               <Check className="size-3.5" />
-              変更を保存
+              {tr('admin.projects.saveChangesButton')}
             </>
           ) : (
             <>
               <Plus className="size-3.5" />
-              タスクを追加
+              {tr('admin.projects.taskSets.addTaskButton')}
             </>
           )}
         </Button>
         {editingId && (
           <Button variant="ghost" className="h-8 shrink-0 text-xs" onClick={cancelEdit}>
-            キャンセル
+            {tr('common.cancel')}
           </Button>
         )}
       </div>
@@ -1262,7 +1274,7 @@ function RecurringRuleForm({
         <input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="タスク名（例：週刊宇宙ニュース作成）"
+          placeholder={tr('admin.projects.recurring.taskNamePlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <select
@@ -1290,7 +1302,7 @@ function RecurringRuleForm({
         <input
           value={draft.category}
           onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-          placeholder="カテゴリ"
+          placeholder={tr('admin.projects.categoryPlaceholder')}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
         />
         <select
@@ -1298,8 +1310,8 @@ function RecurringRuleForm({
           onChange={(e) => setDraft({ ...draft, frequency: e.target.value as 'weekly' | 'monthly' })}
           className="h-8 cursor-pointer rounded-md border border-border bg-background px-1 text-xs outline-none"
         >
-          <option value="weekly">毎週</option>
-          <option value="monthly">毎月</option>
+          <option value="weekly">{tr('admin.projects.recurring.weekly')}</option>
+          <option value="monthly">{tr('admin.projects.recurring.monthly')}</option>
         </select>
         {draft.frequency === 'weekly' ? (
           <select
@@ -1307,9 +1319,9 @@ function RecurringRuleForm({
             onChange={(e) => setDraft({ ...draft, dayOfWeek: Number(e.target.value) })}
             className="h-8 cursor-pointer rounded-md border border-border bg-background px-1 text-xs outline-none"
           >
-            {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-              <option key={d} value={i}>
-                毎週{d}曜日
+            {DAY_KEYS.map((dayKey, i) => (
+              <option key={dayKey} value={i}>
+                {tr('admin.projects.recurring.weeklyOption', { day: tr(dayKey) })}
               </option>
             ))}
           </select>
@@ -1321,7 +1333,7 @@ function RecurringRuleForm({
           >
             {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
               <option key={d} value={d}>
-                毎月{d}日
+                {tr('admin.projects.recurring.monthlyOption', { day: d })}
               </option>
             ))}
           </select>
@@ -1334,29 +1346,29 @@ function RecurringRuleForm({
             onChange={(e) => setDraft({ ...draft, dueInDays: Number(e.target.value) })}
             className="h-8 w-16 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
           />
-          <span className="text-xs text-muted-foreground">日後が期限</span>
+          <span className="text-xs text-muted-foreground">{tr('admin.projects.recurring.dueInDaysSuffix')}</span>
         </div>
       </div>
       {/* item 13: 状態起点・例外スキップ日 */}
       <div className="mt-2 grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] text-muted-foreground">状態起点（前タスクがこのステータスになったら次を生成）</span>
+          <span className="text-[10px] text-muted-foreground">{tr('admin.projects.recurring.triggerLabel')}</span>
           <select
             value={draft.triggerOnStatus}
             onChange={(e) => setDraft({ ...draft, triggerOnStatus: e.target.value as '' | import('@/lib/orbit/types').TaskStatus })}
             className="h-8 cursor-pointer rounded-md border border-border bg-background px-1 text-xs outline-none"
           >
-            <option value="">日付起点（従来どおり）</option>
-            <option value="review">確認待ちになったら</option>
-            <option value="done">完了になったら</option>
+            <option value="">{tr('admin.projects.recurring.triggerNone')}</option>
+            <option value="review">{tr('admin.projects.recurring.triggerReview')}</option>
+            <option value="done">{tr('admin.projects.recurring.triggerDone')}</option>
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] text-muted-foreground">例外スキップ日（YYYY-MM-DD、カンマ区切り）</span>
+          <span className="text-[10px] text-muted-foreground">{tr('admin.projects.recurring.skipDatesLabel')}</span>
           <input
             value={draft.skipDatesInput}
             onChange={(e) => setDraft({ ...draft, skipDatesInput: e.target.value })}
-            placeholder="例: 2025-08-11, 2025-12-31"
+            placeholder={tr('admin.projects.recurring.skipDatesPlaceholder')}
             className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
           />
         </div>
@@ -1371,18 +1383,18 @@ function RecurringRuleForm({
           {editingRule ? (
             <>
               <Check className="size-3.5" />
-              変更を保存
+              {tr('admin.projects.saveChangesButton')}
             </>
           ) : (
             <>
               <Plus className="size-3.5" />
-              定期タスクを追加
+              {tr('admin.projects.recurring.addButton')}
             </>
           )}
         </Button>
         {editingRule && (
           <Button variant="ghost" className="h-8 text-xs" onClick={onCancelEdit}>
-            キャンセル
+            {tr('common.cancel')}
           </Button>
         )}
       </div>
@@ -1405,10 +1417,11 @@ function RecurringRuleRow({
   onToggle: () => void
   onRemove: () => void
 }) {
+  const { t: tr } = useI18n()
   const schedule =
     rule.frequency === 'weekly'
-      ? `毎週${['日', '月', '火', '水', '木', '金', '土'][rule.dayOfWeek ?? 0]}曜日`
-      : `毎月${rule.dayOfMonth ?? 1}日`
+      ? tr('admin.projects.recurring.weeklyOption', { day: tr(DAY_KEYS[rule.dayOfWeek ?? 0]) })
+      : tr('admin.projects.recurring.monthlyOption', { day: rule.dayOfMonth ?? 1 })
   return (
     <li
       className={cn(
@@ -1440,14 +1453,14 @@ function RecurringRuleRow({
         <button
           onClick={onEdit}
           className="text-muted-foreground hover:text-foreground"
-          aria-label="編集"
+          aria-label={tr('common.edit')}
         >
           <Pencil className="size-3.5" />
         </button>
         <button
           onClick={onRemove}
           className="text-muted-foreground hover:text-destructive"
-          aria-label="削除"
+          aria-label={tr('common.delete')}
         >
           <Trash2 className="size-3.5" />
         </button>
