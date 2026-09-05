@@ -8,6 +8,7 @@ import { Avatar, DifficultyBadge, DepartmentTag } from '../primitives'
 import { TranslatedText } from '../translated-text'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
+import type { TranslationKey } from '@/lib/orbit/i18n'
 import { cn } from '@/lib/utils'
 import { TriangleAlert } from 'lucide-react'
 
@@ -22,12 +23,21 @@ export const KANBAN_CARD_FIELDS: KanbanCardField[] = [
   'category',
   'difficulty',
 ]
+// STATUS_LABEL 同様、日本語固定のフォールバック（Excel出力等で使う場合に
+// 備えて残す）。UI表示は KANBAN_CARD_FIELD_KEY 経由で t() を使う。
 export const KANBAN_CARD_FIELD_LABEL: Record<KanbanCardField, string> = {
   project: 'プロジェクト',
   assignee: '担当者',
   deadline: '期限',
   category: 'カテゴリ',
   difficulty: '難易度',
+}
+export const KANBAN_CARD_FIELD_KEY: Record<KanbanCardField, TranslationKey> = {
+  project: 'kanban.field.project',
+  assignee: 'kanban.field.assignee',
+  deadline: 'kanban.field.deadline',
+  category: 'kanban.field.category',
+  difficulty: 'kanban.field.difficulty',
 }
 
 export function KanbanCard({

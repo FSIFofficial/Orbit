@@ -164,6 +164,10 @@ export interface Member {
   // 時刻を含む表示のみに使う。日付のみのフィールド（deadline等）はTZに
   // 関係ないカレンダー日として扱うため対象外（lib/orbit/timezone.ts）
   timezone?: string
+  // 本人の表示言語（'ja' | 'en' など、lib/orbit/i18n の Locale）。ブラウザの
+  // localStorageにも保存されるが、それとは別に他デバイス/ブラウザでも
+  // 同じ言語で開けるよう、こちらはサーバー側（スプレッドシート）の値
+  locale?: string
 
   // ---- talent-management fields (タレントマネジメント) --------------------
   // 人材DB／スキル管理／人材検索／育成・キャリア — wired end-to-end (store.tsx

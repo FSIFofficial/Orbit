@@ -5,6 +5,7 @@ import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/orbit/modal'
+import { useI18n } from '@/lib/orbit/i18n'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
 import { cn } from '@/lib/utils'
 import { X, Plus, GraduationCap, CheckCircle2 } from 'lucide-react'
@@ -144,6 +145,7 @@ export function CareerTab({
   submitQuizResult?: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
 }) {
   const rid = () => Math.random().toString(36).slice(2, 9)
+  const { t } = useI18n()
 
   return (
     <div className="mt-5 flex flex-col gap-4">
@@ -158,7 +160,7 @@ export function CareerTab({
       <SkillTimelineSection member={member} />
       <SkillGrowthChart member={member} />
       {radarAxes && radarAxes.length >= 3 && (
-        <Section title="スキルレーダーチャート" description="設定された軸ごとのスキルレベルを可視化します。">
+        <Section title={t('career.radarChart.title')} description={t('career.radarChart.desc')}>
           <div className="flex justify-center pt-2">
             <SkillRadarChart axes={radarAxes} skillLevels={member.skillLevels ?? []} size={220} />
           </div>
@@ -225,10 +227,11 @@ function SearchProfileSection({
   editable: boolean
   onSave: CareerTabProps['updateSearchProfile']
 }) {
+  const { t } = useI18n()
   return (
     <Section
-      title="人材検索プロフィール"
-      description="Admin → Membersの人材検索フィルタで使われます。"
+      title={t('career.searchProfile.title')}
+      description={t('career.searchProfile.desc')}
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
@@ -303,8 +306,9 @@ function CareerGoalsSection({
       careerPlan: member.careerPlan ?? '',
       ...patch,
     })
+  const { t } = useI18n()
   return (
-    <Section title="キャリア目標">
+    <Section title={t('career.goals.title')}>
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">将来やりたいこと</span>
@@ -365,10 +369,11 @@ function SkillLevelsSection({
     setLevel(1)
   }
 
+  const { t } = useI18n()
   return (
     <Section
-      title="スキルレベル"
-      description="各スキルの習熟度（1〜5）です。Lv.1は「何もできない」ではなく「やり始めたばかり」の意味です。タスクを完了するとLv.1で自動登録され、団体外の経験なども自分で追加できます。要求分野の認定は、ここに登録されたスキルの保有率で判定されます。"
+      title={t('career.skillLevels.title')}
+      description={t('career.skillLevels.desc')}
     >
       <EntryList emptyText="まだ記録されていません">
         {levels.map((l) => (
@@ -454,10 +459,11 @@ function QuizSection({
   }
 
   const allAnswered = answers.length > 0 && answers.every((a) => a >= 0)
+  const { t } = useI18n()
 
   return (
     <>
-      <Section title="検定" description="合格するとスキルレベルが自動的に引き上がります。">
+      <Section title={t('career.quiz.title')} description={t('career.quiz.desc')}>
         {!editable ? (
           <p className="text-xs text-muted-foreground">本人のみ受験できます。</p>
         ) : (
@@ -576,8 +582,9 @@ function CompetenciesSection({
     setLevel(3)
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="コンピテンシー" description="役職に関連する評価項目です（管理者が設定）。">
+    <Section title={t('career.competencies.title')} description={t('career.competencies.desc')}>
       <EntryList emptyText="まだ記録されていません">
         {items.map((c, i) => (
           <EntryRow
@@ -652,8 +659,9 @@ function CareerHistorySection({
     setRole('')
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="経歴">
+    <Section title={t('career.history.title')}>
       <EntryList emptyText="まだ記録されていません">
         {items.map((c) => (
           <EntryRow key={c.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== c.id))}>
@@ -714,8 +722,9 @@ function QualificationsSection({
     setIssuer('')
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="資格">
+    <Section title={t('career.qualifications.title')}>
       <EntryList emptyText="まだ記録されていません">
         {items.map((q) => (
           <EntryRow key={q.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== q.id))}>
@@ -802,8 +811,9 @@ function TrainingHistorySection({
     onDecide(member.id, t.name, approved)
   }
 
+  const { t: tr } = useI18n()
   return (
-    <Section title="研修履歴" description={!isAdmin ? '申請すると管理者の承認後に確定します' : undefined}>
+    <Section title={tr('career.training.title')} description={!isAdmin ? tr('career.training.desc') : undefined}>
       <EntryList emptyText="まだ記録されていません">
         {items.map((t) => {
           const status = t.status ?? 'approved'
@@ -899,8 +909,9 @@ function DevelopmentPlanSection({
     onSave(member.id, items.map((x) => (x.id === entry.id ? { ...x, status: next } : x)))
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="育成計画">
+    <Section title={t('career.developmentPlan.title')}>
       <EntryList emptyText="まだ記録されていません">
         {items.map((p) => (
           <EntryRow key={p.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== p.id))}>
@@ -989,8 +1000,9 @@ function OneOnOnesSection({
     setNotes('')
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="1on1記録">
+    <Section title={t('career.oneOnOnes.title')}>
       <EntryList emptyText="まだ記録されていません">
         {items
           .slice()
@@ -1094,8 +1106,9 @@ function EvaluationHistorySection({
     setComment('')
   }
 
+  const { t } = useI18n()
   return (
-    <Section title="評価履歴" description="管理者のみ編集できます。">
+    <Section title={t('career.evaluation.title')} description={t('career.adminOnlyDesc')}>
       <EntryList emptyText="まだ記録されていません">
         {items
           .slice()
@@ -1156,8 +1169,9 @@ function TransferHistorySection({
     setReason('')
   }
 
+  const { t: tr } = useI18n()
   return (
-    <Section title="異動履歴" description="管理者のみ編集できます。">
+    <Section title={tr('career.transfer.title')} description={tr('career.adminOnlyDesc')}>
       <EntryList emptyText="まだ記録されていません">
         {items
           .slice()
@@ -1197,6 +1211,7 @@ type CareerTabProps = Parameters<typeof CareerTab>[0]
 const LEVEL_COLORS = ['', '#94a3b8', '#60a5fa', '#34d399', '#f59e0b', '#f43f5e'] // index 1-5
 
 function SkillTimelineSection({ member }: { member: Member }) {
+  const { t } = useI18n()
   const levels = (member.skillLevels ?? []).filter((l) => l.acquiredAt)
   if (levels.length === 0) return null
   const sorted = [...levels].sort((a, b) => (a.acquiredAt ?? '').localeCompare(b.acquiredAt ?? ''))
@@ -1206,7 +1221,7 @@ function SkillTimelineSection({ member }: { member: Member }) {
   const fmt = (iso: string) => iso.slice(0, 10)
 
   return (
-    <Section title="スキル取得タイムライン" description="acquiredAt が記録されているスキルを時系列で表示します。新規追加分から記録されます。">
+    <Section title={t('career.skillTimeline.title')} description={t('career.skillTimeline.desc')}>
       <div className="relative mt-2 pl-2">
         <div className="absolute left-2 top-0 bottom-0 w-px bg-border" />
         {sorted.map((l) => {
@@ -1232,6 +1247,7 @@ function SkillTimelineSection({ member }: { member: Member }) {
 
 // SVGベースの累積スキル習得数折れ線グラフ。acquiredAt が1件もなければ非表示。
 function SkillGrowthChart({ member }: { member: Member }) {
+  const { t } = useI18n()
   const levels = (member.skillLevels ?? []).filter((l) => l.acquiredAt)
   if (levels.length === 0) return null
 
@@ -1273,7 +1289,7 @@ function SkillGrowthChart({ member }: { member: Member }) {
   const xLabels = points.filter((_, i) => i === 0 || i === points.length - 1 || i % step === 0)
 
   return (
-    <Section title="スキル習得推移" description="累積取得スキル数の折れ線グラフです。">
+    <Section title={t('career.skillGrowth.title')} description={t('career.skillGrowth.desc')}>
       <div className="mt-2 overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-lg" style={{ minWidth: 240 }}>
           {/* Y軸グリッド */}

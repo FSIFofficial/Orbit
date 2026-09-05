@@ -582,6 +582,7 @@ function authorizeAction(acting, action, body) {
     'updateUnavailableDates',// 稼働不可日は本人のみ
     'updateAbsentDates',    // 不在日は本人のみ
     'updateTimezone',       // タイムゾーン設定は本人のみ
+    'updateLocale',         // 表示言語設定は本人のみ
   ]
   if (selfOnly.indexOf(action) >= 0) {
     var selfTargetId = String(body.memberId || '')
@@ -743,6 +744,9 @@ function doPost(e) {
         break
       case 'updateTimezone':
         result = updateMemberFields(body.memberId, { timezone: body.timezone || '' })
+        break
+      case 'updateLocale':
+        result = updateMemberFields(body.memberId, { locale: body.locale || '' })
         break
       case 'updateJudgment':
         result = updateMemberFields(body.memberId, {
@@ -2109,11 +2113,27 @@ function updateRowFields(sheetName, rowId, fields) {
   }
   if (targetRow === -1) throw new Error(sheetName + ' row not found for id ' + rowId)
 
+  var missingKeys = []
+  var matchedCount = 0
   Object.keys(fields).forEach(function (key) {
     var col = headers.indexOf(key) + 1
-    if (col === 0) return // unknown column on this sheet — skip silently
+    if (col === 0) {
+      missingKeys.push(key)
+      return // このシートにまだ無い列 — 個別にはスキップするが、下でまとめて報告する
+    }
     sheet.getRange(targetRow, col).setValue(fields[key])
+    matchedCount++
   })
+  // 更新しようとした列が1つも見つからなかった場合、無音で「成功」を返すと
+  // フロント側は保存できたと誤認する（実際は何も書き込まれていない）。
+  // 新しい列をCode.gs側に追加しただけでは既存のシートには反映されない
+  // （setupOrbit()の再実行が必要）ため、このケースは実運用で起こりうる。
+  if (matchedCount === 0 && missingKeys.length > 0) {
+    throw new Error(
+      sheetName + 'シートに列が見つかりません: ' + missingKeys.join(', ') +
+      '。Apps Scriptエディタで setupOrbit() を実行してヘッダー列を追加してください。',
+    )
+  }
 
   return { id: rowId, updated: Object.keys(fields) }
 }
@@ -2566,6 +2586,7 @@ function setupOrbit() {
     'last_login',              // 最終ログイン日時（ISO datetime）
     'last_inactive_notified',  // 未アクセス通知を最後に送った日（YYYY-MM-DD）
     'timezone',                // 本人のタイムゾーン（IANA名、例: "Asia/Tokyo"）
+    'locale',                  // 本人の表示言語（例: "ja", "en"）
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
