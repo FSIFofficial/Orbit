@@ -319,33 +319,45 @@ export function AdminMembers() {
                       </div>
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={m.role}
-                        onChange={(e) => updateRole(m.id, e.target.value as Role)}
-                        className="h-8 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={m.reportsToId ?? ''}
-                        onChange={(e) => updateReportsTo(m.id, e.target.value || null)}
-                        className="h-8 w-32 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
-                      >
-                        <option value="">（デフォルト）</option>
-                        {members
-                          .filter((cand) => cand.id !== m.id && cand.role !== BASE_ROLE)
-                          .map((cand) => (
-                            <option key={cand.id} value={cand.id}>
-                              {cand.displayName || cand.name}
+                      {isFullAdmin ? (
+                        <select
+                          value={m.role}
+                          onChange={(e) => updateRole(m.id, e.target.value as Role)}
+                          className="h-8 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
                             </option>
                           ))}
-                      </select>
+                        </select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{m.role}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {isFullAdmin ? (
+                        <select
+                          value={m.reportsToId ?? ''}
+                          onChange={(e) => updateReportsTo(m.id, e.target.value || null)}
+                          className="h-8 w-32 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
+                        >
+                          <option value="">（デフォルト）</option>
+                          {members
+                            .filter((cand) => cand.id !== m.id && cand.role !== BASE_ROLE)
+                            .map((cand) => (
+                              <option key={cand.id} value={cand.id}>
+                                {cand.displayName || cand.name}
+                              </option>
+                            ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {members.find((cand) => cand.id === m.reportsToId)?.displayName ??
+                            members.find((cand) => cand.id === m.reportsToId)?.name ??
+                            '（デフォルト）'}
+                        </span>
+                      )}
                     </td>
                     {isFullAdmin && (
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
