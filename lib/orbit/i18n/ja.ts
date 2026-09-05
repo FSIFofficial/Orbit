@@ -202,6 +202,39 @@ export const ja = {
   'input.excelImport': 'Excelファイルから読み込む',
   'input.demoHint': '例文を使う:',
 
+  // ---- feedback-screen（選択肢の値自体はGoogleフォームの送信値と一致させる
+  // 必要があるため翻訳対象外。固定UI文言のみ翻訳する）--------------------------
+  'feedback.title': '改善要望・フィードバック',
+  'feedback.description': '不具合の報告・機能の改善要望・新機能の提案など、お気軽にお知らせください。いただいたフィードバックは開発の参考にさせていただきます。',
+  'feedback.field.orgName': '団体名',
+  'feedback.field.yourName': 'お名前',
+  'feedback.field.contactType': 'ご連絡の種類',
+  'feedback.field.targetFeature': '対象の機能・画面',
+  'feedback.field.detail': '詳しく教えてください',
+  'feedback.field.screenshot': 'スクリーンショット（任意）',
+  'feedback.field.steps': '再現手順',
+  'feedback.field.severity': '困り具合',
+  'feedback.field.wantReply': '返信を希望しますか',
+  'feedback.field.email': '連絡先メールアドレス',
+  'feedback.orgName.placeholder': '例: ○○大学 △△サークル',
+  'feedback.optional': '任意',
+  'feedback.otherDetail.placeholder': 'どのような内容かを教えてください',
+  'feedback.detail.placeholder': 'どんな問題が起きているか、どんな機能が欲しいかを具体的に教えてください',
+  'feedback.addImage': '画像を追加する',
+  'feedback.previewNote': '※ プレビュー表示のみ（フォーム送信には含まれません）',
+  'feedback.steps.placeholder': '例: 1. ○○画面を開く 2. △△ボタンを押す 3. エラーが出る',
+  'feedback.email.placeholder': '返信先のメールアドレス',
+  'feedback.submit': '送信する',
+  'feedback.submitting': '送信中…',
+  'feedback.cancel': 'キャンセル',
+  'feedback.done.title': '送信しました。ありがとうございます！',
+  'feedback.done.body': 'フィードバックは開発チームに届けられます。返信を希望された場合は、できる限り対応いたします。',
+  'feedback.error.contactType': 'ご連絡の種類を選択してください',
+  'feedback.error.detail': '詳細を入力してください',
+  'feedback.error.severity': '困り具合を選択してください',
+  'feedback.error.wantReply': '返信希望を選択してください',
+  'feedback.error.submitFailed': '送信に失敗しました。ネットワーク接続を確認して、もう一度お試しください。',
+
   // ---- 部門（DEPARTMENTS、types.tsで固定8種）--------------------------------
   // 組織が追加できる自由ロール名とは違い、この8種は決め打ちの定数なので
   // 安全に辞書化できる。GAS/シートには引き続きこの日本語のまま保存される。

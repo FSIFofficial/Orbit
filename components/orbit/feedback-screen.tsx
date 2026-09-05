@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { MessageSquare, Send, CheckCircle2, ImagePlus, X } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 const FORM_URL =
   'https://docs.google.com/forms/u/0/d/e/1FAIpQLSdiyZI93Tvf-lFOxy49H48mMh2MOgQCsxbZvkoQk07x_P-3sA/formResponse'
@@ -50,6 +51,7 @@ const ORG_NAME_KEY = 'orbit_feedback_org_name'
 export function FeedbackScreen() {
   const { currentUser } = useOrbit()
   const { goBack } = useNav()
+  const { t } = useI18n()
 
   const [orgName, setOrgName] = useState('')
   const [yourName, setYourName] = useState('') // お名前は任意 — デフォルト空欄
@@ -91,10 +93,10 @@ export function FeedbackScreen() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!contactType) { setError('ご連絡の種類を選択してください'); return }
-    if (!detail.trim()) { setError('詳細を入力してください'); return }
-    if (contactType === '不具合の報告' && !severity) { setError('困り具合を選択してください'); return }
-    if (!wantReply) { setError('返信希望を選択してください'); return }
+    if (!contactType) { setError(t('feedback.error.contactType')); return }
+    if (!detail.trim()) { setError(t('feedback.error.detail')); return }
+    if (contactType === '不具合の報告' && !severity) { setError(t('feedback.error.severity')); return }
+    if (!wantReply) { setError(t('feedback.error.wantReply')); return }
     setError('')
     setSubmitting(true)
 
@@ -128,7 +130,7 @@ export function FeedbackScreen() {
       await fetch(FORM_URL, { method: 'POST', mode: 'no-cors', body })
       setSubmitted(true)
     } catch {
-      setError('送信に失敗しました。ネットワーク接続を確認して、もう一度お試しください。')
+      setError(t('feedback.error.submitFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -139,16 +141,15 @@ export function FeedbackScreen() {
       <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4">
         <div className="flex flex-col items-center gap-4 text-center">
           <CheckCircle2 className="size-12 text-green-500" />
-          <h2 className="text-xl font-semibold">送信しました。ありがとうございます！</h2>
+          <h2 className="text-xl font-semibold">{t('feedback.done.title')}</h2>
           <p className="max-w-sm text-sm text-muted-foreground">
-            フィードバックは開発チームに届けられます。返信を希望された場合は、
-            できる限り対応いたします。
+            {t('feedback.done.body')}
           </p>
           <button
             onClick={goBack}
             className="mt-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            戻る
+            {t('header.back')}
           </button>
         </div>
       </div>
@@ -159,36 +160,35 @@ export function FeedbackScreen() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-center gap-2.5">
         <MessageSquare className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold">改善要望・フィードバック</h1>
+        <h1 className="text-xl font-semibold">{t('feedback.title')}</h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        不具合の報告・機能の改善要望・新機能の提案など、お気軽にお知らせください。
-        いただいたフィードバックは開発の参考にさせていただきます。
+        {t('feedback.description')}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 団体名 */}
-        <Field label="団体名" required>
+        <Field label={t('feedback.field.orgName')} required>
           <input
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
-            placeholder="例: ○○大学 △△サークル"
+            placeholder={t('feedback.orgName.placeholder')}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </Field>
 
         {/* お名前 */}
-        <Field label="お名前">
+        <Field label={t('feedback.field.yourName')}>
           <input
             value={yourName}
             onChange={(e) => setYourName(e.target.value)}
-            placeholder="任意"
+            placeholder={t('feedback.optional')}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </Field>
 
         {/* ご連絡の種類 */}
-        <Field label="ご連絡の種類" required>
+        <Field label={t('feedback.field.contactType')} required>
           <div className="flex flex-wrap gap-2">
             {CONTACT_TYPES.map((t) => (
               <button
@@ -210,14 +210,14 @@ export function FeedbackScreen() {
             <input
               value={otherDetail}
               onChange={(e) => setOtherDetail(e.target.value)}
-              placeholder="どのような内容かを教えてください"
+              placeholder={t('feedback.otherDetail.placeholder')}
               className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
             />
           )}
         </Field>
 
         {/* 対象の機能・画面 */}
-        <Field label="対象の機能・画面">
+        <Field label={t('feedback.field.targetFeature')}>
           <div className="flex flex-wrap gap-2">
             {FEATURE_OPTIONS.map((f) => (
               <button
@@ -237,18 +237,18 @@ export function FeedbackScreen() {
         </Field>
 
         {/* 詳しく教えてください */}
-        <Field label="詳しく教えてください" required>
+        <Field label={t('feedback.field.detail')} required>
           <textarea
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
-            placeholder="どんな問題が起きているか、どんな機能が欲しいかを具体的に教えてください"
+            placeholder={t('feedback.detail.placeholder')}
             rows={5}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </Field>
 
         {/* スクリーンショット */}
-        <Field label="スクリーンショット（任意）">
+        <Field label={t('feedback.field.screenshot')}>
           <input
             ref={fileRef}
             type="file"
@@ -266,7 +266,7 @@ export function FeedbackScreen() {
             className="flex items-center gap-2 rounded-lg border border-dashed border-border-strong bg-secondary/40 px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <ImagePlus className="size-4" />
-            画像を追加する
+            {t('feedback.addImage')}
           </button>
           {screenshots.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-3">
@@ -292,24 +292,24 @@ export function FeedbackScreen() {
             </div>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            ※ プレビュー表示のみ（フォーム送信には含まれません）
+            {t('feedback.previewNote')}
           </p>
         </Field>
 
         {/* 再現手順・困り具合 — 不具合の報告を選んだ方のみ表示 */}
         {contactType === '不具合の報告' && (
           <>
-            <Field label="再現手順">
+            <Field label={t('feedback.field.steps')}>
               <textarea
                 value={steps}
                 onChange={(e) => setSteps(e.target.value)}
-                placeholder="例: 1. ○○画面を開く 2. △△ボタンを押す 3. エラーが出る"
+                placeholder={t('feedback.steps.placeholder')}
                 rows={3}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
               />
             </Field>
 
-            <Field label="困り具合" required>
+            <Field label={t('feedback.field.severity')} required>
               <div className="space-y-2">
                 {SEVERITY_OPTIONS.map((s) => (
                   <label key={s} className="flex cursor-pointer items-center gap-2.5">
@@ -330,7 +330,7 @@ export function FeedbackScreen() {
         )}
 
         {/* 返信希望 */}
-        <Field label="返信を希望しますか" required>
+        <Field label={t('feedback.field.wantReply')} required>
           <div className="flex gap-4">
             {REPLY_OPTIONS.map((r) => (
               <label key={r} className="flex cursor-pointer items-center gap-2">
@@ -356,12 +356,12 @@ export function FeedbackScreen() {
 
         {/* 連絡先メールアドレス — 返信希望の場合のみ表示 */}
         {wantReply === '返信してほしい' && (
-          <Field label="連絡先メールアドレス">
+          <Field label={t('feedback.field.email')}>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="返信先のメールアドレス"
+              placeholder={t('feedback.email.placeholder')}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
             />
           </Field>
@@ -378,14 +378,14 @@ export function FeedbackScreen() {
             className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
             <Send className="size-4" />
-            {submitting ? '送信中…' : '送信する'}
+            {submitting ? t('feedback.submitting') : t('feedback.submit')}
           </button>
           <button
             type="button"
             onClick={goBack}
             className="rounded-lg border border-border px-4 py-2.5 text-sm transition-colors hover:bg-secondary"
           >
-            キャンセル
+            {t('feedback.cancel')}
           </button>
         </div>
       </form>
