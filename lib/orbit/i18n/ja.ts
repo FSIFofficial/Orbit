@@ -325,6 +325,15 @@ export const ja = {
   'admin.radarAxes.preview': 'プレビュー',
   'admin.radarAxes.needThreeAxes': '3軸以上で表示',
   'admin.radarAxes.previewLabel': 'プレビュー: {name}',
+  'customForm.fieldRequiredError': '「{label}」は必須です',
+  'customForm.selectPlaceholder': '選択してください',
+  'customForm.approvalFlowNote': '申請後: {count}段階の承認フローに入ります',
+  'customForm.back': '戻る',
+  'customForm.submit': '申請する',
+  'customForm.submitted.title': '申請が完了しました',
+  'customForm.submitted.desc': '承認フローに進みます。結果はメールでお知らせします。',
+  'customForm.selectFormDesc': '申請するフォームを選択してください',
+  'customForm.fieldsAndSteps': '{fields}項目 · 承認{steps}段階',
 
   // ---- task-detail-drawer（ヘッダー・メタ情報のみ、モーダル詳細は未対応）----
   'taskDrawer.title': 'タスク詳細',

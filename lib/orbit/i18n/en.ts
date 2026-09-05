@@ -325,6 +325,15 @@ export const en = {
   'admin.radarAxes.preview': 'Preview',
   'admin.radarAxes.needThreeAxes': 'Shown with 3+ axes',
   'admin.radarAxes.previewLabel': 'Preview: {name}',
+  'customForm.fieldRequiredError': '"{label}" is required',
+  'customForm.selectPlaceholder': 'Please select',
+  'customForm.approvalFlowNote': 'After submitting: enters a {count}-step approval flow',
+  'customForm.back': 'Back',
+  'customForm.submit': 'Submit',
+  'customForm.submitted.title': 'Submitted',
+  'customForm.submitted.desc': "It will proceed through the approval flow. You'll be notified of the result by email.",
+  'customForm.selectFormDesc': 'Select the form to submit',
+  'customForm.fieldsAndSteps': '{fields} fields · {steps} approval step(s)',
 
   // ---- task-detail-drawer (header/meta only, modal detail not yet covered) --
   'taskDrawer.title': 'Task details',
