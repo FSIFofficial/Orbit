@@ -357,10 +357,6 @@ function authorizeAction(acting, action, body) {
     'updateJoinedAt',          // 所属開始日の編集は代表のみ（人事記録）
     'updateReportsTo',         // 報告先の設定は代表のみ（組織図操作）
     'updateMentor',            // メンター設定は代表のみ（HR操作）
-    'updateEvaluationHistory', // 評価履歴は代表のみ（人事機密）
-    'updateTransferHistory',   // 異動履歴は代表のみ（人事機密）
-    'updateOneOnOnes',              // 1on1記録は管理者のみ（管理者専用タブ）
-    'updateCompetencies',           // コンピテンシー評価は管理者のみ
     'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
     'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
     'updateMemberProjects',         // プロジェクト割り当ては代表のみ（自己昇権の抜け穴防止）
@@ -404,9 +400,13 @@ function authorizeAction(acting, action, body) {
     'rejectExpense',        // 経費却下（管理者操作）
     'approveFormStep',      // フォーム承認（管理者操作）
     'rejectFormSubmission', // フォーム却下（管理者操作）
-    'bulkUpdateSkills',     // スキル一括更新（管理者操作）
-    'updateMemberInactive', // 活動休止/再開（管理者操作）
-    'updateMemberDepartmentPath', // 組織パス設定（管理者操作）
+    'bulkUpdateSkills',          // スキル一括更新（管理者操作）
+    'updateMemberInactive',      // 活動休止/再開（管理者操作）
+    'updateMemberDepartmentPath',// 組織パス設定（管理者操作）
+    'updateEvaluationHistory',   // 評価履歴（班長は担当メンバーのみ）
+    'updateTransferHistory',     // 異動履歴（班長は担当メンバーのみ）
+    'updateOneOnOnes',           // 1on1記録（班長は担当メンバーのみ）
+    'updateCompetencies',        // コンピテンシー評価（班長は担当メンバーのみ）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     if (!isLeader) {
@@ -507,10 +507,13 @@ function authorizeAction(acting, action, body) {
         throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
       }
 
+      // updateSearchProfile は本人であればスコープ制限なしで許可
+      if (action === 'updateSearchProfile' && body.memberId && acting.id === String(body.memberId)) return
+
       // メンバーを対象とするアクションのスコープチェック:
       // acting.project_ids に含まれるプロジェクトの member_ids を Projects シートから取得し、
       // 対象メンバーがそのいずれかに含まれるかで判定する（一般メンバーの project_ids は空欄設計のため）。
-      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath', 'bulkUpdateSkills']
+      var memberScopeActions = ['updateJudgment', 'updateSearchProfile', 'updateMemberInactive', 'updateMemberDepartmentPath', 'bulkUpdateSkills', 'updateEvaluationHistory', 'updateTransferHistory', 'updateOneOnOnes', 'updateCompetencies']
       if (memberScopeActions.indexOf(action) >= 0) {
         // acting.project_ids 配下の Projects を1回読んで所属メンバーIDのセットを作る
         var scopedMemberIdSet = {}
