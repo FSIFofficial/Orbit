@@ -200,6 +200,8 @@ interface OrbitContextValue extends OrbitState {
   orgNotificationEmails: string[]
   addOrgNotificationEmail: (email: string) => void
   removeOrgNotificationEmail: (email: string) => void
+  surveyInvitedIds: string[]
+  updateSurveyInvitedIds: (ids: string[]) => void
   orgName: string
   setOrgName: (name: string) => void
   orgLogoUrl: string
@@ -399,6 +401,8 @@ const SKILL_FIELD_SKILLS_STORAGE_KEY = 'orbit-skill-field-skills'
 const SKILL_FIELD_THRESHOLD_STORAGE_KEY = 'orbit-skill-field-threshold'
 // 団体メール — org_notification_emails のローカルフォールバック
 const ORG_NOTIFICATION_EMAILS_STORAGE_KEY = 'orbit-org-notification-emails'
+// アンケート回答対象者の限定 — survey_invited_ids のローカルフォールバック（空=全員可）
+const SURVEY_INVITED_IDS_STORAGE_KEY = 'orbit-survey-invited-ids'
 // プロジェクトの表示順 — project_order のローカルフォールバック
 const PROJECT_ORDER_STORAGE_KEY = 'orbit-project-order'
 // 制限付きロール — restricted_roles のローカルフォールバック
@@ -548,6 +552,16 @@ function loadOrgNotificationEmails(): string[] {
   }
 }
 
+function loadSurveyInvitedIds(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SURVEY_INVITED_IDS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
 function loadProjectOrder(): string[] {
   if (typeof window === 'undefined') return []
   try {
@@ -619,6 +633,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 配信先。個々のメンバーのnotify_new_task設定に関わらず常に通知される
   // （gas/Code.gsのnotifyAdmins()参照）
   const [orgNotificationEmails, setOrgNotificationEmails] = useState<string[]>([])
+  // アンケート回答対象者の限定。空配列=全員回答可
+  const [surveyInvitedIds, setSurveyInvitedIds] = useState<string[]>([])
   // 団体名・ロゴ — SettingsCSV + localStorageキャッシュで復元
   const [orgName, setOrgNameState] = useState<string>(() => {
     try { return typeof window !== 'undefined' ? (window.localStorage.getItem(ORG_NAME_STORAGE_KEY) ?? '') : '' } catch { return '' }
@@ -716,6 +732,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (savedThreshold !== null) setSkillFieldThresholdState(savedThreshold)
       const savedOrgEmails = loadOrgNotificationEmails()
       if (savedOrgEmails.length) setOrgNotificationEmails(savedOrgEmails)
+      const savedSurveyInvitedIds = loadSurveyInvitedIds()
+      if (savedSurveyInvitedIds.length) setSurveyInvitedIds(savedSurveyInvitedIds)
       const savedProjectOrder = loadProjectOrder()
       if (savedProjectOrder.length) setProjectOrderState(savedProjectOrder)
     }
@@ -766,6 +784,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSkillFieldSkillsState(s.skillFieldSkills)
         setSkillFieldThresholdState(s.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
         setOrgNotificationEmails(s.orgNotificationEmails)
+        setSurveyInvitedIds(s.surveyInvitedIds)
         if (s.orgName) { setOrgNameState(s.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, s.orgName) } catch {} }
         if (s.orgLogoUrl) { setOrgLogoUrlState(s.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, s.orgLogoUrl) } catch {} }
         setProjectOrderState(s.projectOrder)
@@ -828,6 +847,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSkillFieldSkillsState(settings.skillFieldSkills)
           setSkillFieldThresholdState(settings.skillFieldThreshold ?? DEFAULT_SKILL_FIELD_THRESHOLD)
           setOrgNotificationEmails(settings.orgNotificationEmails)
+          setSurveyInvitedIds(settings.surveyInvitedIds)
           if (settings.orgName) { setOrgNameState(settings.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, settings.orgName) } catch {} }
           if (settings.orgLogoUrl) { setOrgLogoUrlState(settings.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, settings.orgLogoUrl) } catch {} }
           setProjectOrderState(settings.projectOrder)
@@ -1058,6 +1078,18 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated || isSettingsConfigured) return
     try {
+      window.localStorage.setItem(
+        SURVEY_INVITED_IDS_STORAGE_KEY,
+        JSON.stringify(surveyInvitedIds),
+      )
+    } catch {
+      /* ignore */
+    }
+  }, [surveyInvitedIds, hydrated])
+
+  useEffect(() => {
+    if (!hydrated || isSettingsConfigured) return
+    try {
       window.localStorage.setItem(PROJECT_ORDER_STORAGE_KEY, JSON.stringify(projectOrder))
     } catch {
       /* ignore */
@@ -1151,6 +1183,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         runRemote(remoteApi.updateSetting('org_notification_emails', next.join(',')))
     },
     [orgNotificationEmails, runRemote],
+  )
+  const updateSurveyInvitedIds = useCallback(
+    (ids: string[]) => {
+      setSurveyInvitedIds(ids)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('survey_invited_ids', ids.join(',')))
+    },
+    [runRemote],
   )
 
   const setOrgName = useCallback(
@@ -3592,6 +3631,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     orgNotificationEmails,
     addOrgNotificationEmail,
     removeOrgNotificationEmail,
+    surveyInvitedIds,
+    updateSurveyInvitedIds,
     orgName,
     setOrgName,
     orgLogoUrl,

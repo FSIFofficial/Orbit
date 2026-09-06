@@ -1080,6 +1080,10 @@ export const ja = {
   'admin.tags.notify.freq.weekly': '週次',
   'admin.tags.notify.freq.off': 'OFF',
   'admin.tags.notify.updatedToast': '「{kind}」通知を{freq}に設定しました',
+  'admin.tags.surveyInvite.title': 'アンケート回答対象者',
+  'admin.tags.surveyInvite.desc': '選択したメンバーのみが経験値アンケートに回答できます。誰も選択しない場合は全員が回答できます。',
+  'admin.tags.surveyInvite.everyone': '全員が回答できます',
+  'admin.tags.surveyInvite.updatedToast': '回答対象者を更新しました',
   'admin.permissionOverrides.access.view': '閲覧',
   'admin.permissionOverrides.access.approve': '承認',
   'admin.permissionOverrides.targetType.task': 'タスク',
@@ -1257,6 +1261,7 @@ export const ja = {
 
   // ---- survey (メンバー体験アンケート) -----------------------------------
   'survey.back': 'ワークスペースへ戻る',
+  'survey.notInvited': 'このアンケートは招待されたメンバーのみ回答できます',
   'survey.title': 'メンバー体験アンケート',
   'survey.tab.form': '回答する',
   'survey.tab.history': '過去の回答',

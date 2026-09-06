@@ -1077,6 +1077,10 @@ export const en = {
   'admin.tags.notify.freq.weekly': 'Weekly',
   'admin.tags.notify.freq.off': 'OFF',
   'admin.tags.notify.updatedToast': 'Set "{kind}" notifications to {freq}',
+  'admin.tags.surveyInvite.title': 'Survey respondents',
+  'admin.tags.surveyInvite.desc': 'Only the selected members can respond to the experience survey. If nobody is selected, everyone can respond.',
+  'admin.tags.surveyInvite.everyone': 'Everyone can respond',
+  'admin.tags.surveyInvite.updatedToast': 'Updated the survey respondents',
   'admin.permissionOverrides.access.view': 'View',
   'admin.permissionOverrides.access.approve': 'Approve',
   'admin.permissionOverrides.targetType.task': 'Task',
@@ -1254,6 +1258,7 @@ export const en = {
 
   // ---- survey (member experience survey) ---------------------------------
   'survey.back': 'Back to workspace',
+  'survey.notInvited': 'Only invited members can respond to this survey',
   'survey.title': 'Member experience survey',
   'survey.tab.form': 'Answer',
   'survey.tab.history': 'Past answers',

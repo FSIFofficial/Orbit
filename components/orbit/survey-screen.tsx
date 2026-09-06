@@ -67,7 +67,7 @@ function loadAllResponses(): SurveyResponse[] {
 }
 
 export function SurveyScreen() {
-  const { currentUser, members } = useOrbit()
+  const { currentUser, members, surveyInvitedIds } = useOrbit()
   const { go } = useNav()
   const { t } = useI18n()
   const DEFAULT_QUESTIONS = buildDefaultQuestions(t)
@@ -78,6 +78,9 @@ export function SurveyScreen() {
   const [allResponses, setAllResponses] = useState<SurveyResponse[]>([])
 
   const isAdmin = !!currentUser && currentUser.role !== '一般'
+  // 招待制アンケート: invitedIdsが空なら全員回答可。管理者は設定のため常にアクセス可
+  const isInvited =
+    surveyInvitedIds.length === 0 || isAdmin || (!!currentUser && surveyInvitedIds.includes(currentUser.id))
 
   useEffect(() => {
     if (!currentUser) return
@@ -107,6 +110,24 @@ export function SurveyScreen() {
   const memberName = (id: string) => {
     const m = members.find((m) => m.id === id)
     return m ? (m.displayName || m.name) : id
+  }
+
+  if (!isInvited) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+        <button
+          onClick={() => go({ name: 'output' })}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          {t('survey.back')}
+        </button>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card py-16 text-center">
+          <ClipboardList className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium text-muted-foreground">{t('survey.notInvited')}</p>
+        </div>
+      </div>
+    )
   }
 
   return (

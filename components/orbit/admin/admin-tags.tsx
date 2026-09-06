@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
-import { Tag, SectionLabel } from '@/components/orbit/primitives'
+import { Tag, SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection } from '@/lib/orbit/types'
@@ -208,6 +208,9 @@ export function AdminTags() {
 
       {/* item 26: 通知種別・頻度設定 */}
       <NotifySettingsEditor />
+
+      {/* アンケート回答対象者の限定 */}
+      <SurveyInviteEditor />
     </div>
   )
 }
@@ -536,6 +539,53 @@ function NotifySettingsEditor() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// アンケートの回答対象者限定（item 3） — 選択したメンバーのみが
+// survey-screen.tsxの経験値アンケートに回答できる。空選択=全員回答可。
+function SurveyInviteEditor() {
+  const { members, surveyInvitedIds, updateSurveyInvitedIds } = useOrbit()
+  const toast = useToast()
+  const { t } = useI18n()
+
+  const toggle = (memberId: string) => {
+    const next = surveyInvitedIds.includes(memberId)
+      ? surveyInvitedIds.filter((id) => id !== memberId)
+      : [...surveyInvitedIds, memberId]
+    updateSurveyInvitedIds(next)
+    toast(t('admin.tags.surveyInvite.updatedToast'))
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>{t('admin.tags.surveyInvite.title')}</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t('admin.tags.surveyInvite.desc')}
+      </p>
+      {surveyInvitedIds.length === 0 && (
+        <p className="mt-2 text-xs font-medium text-primary">
+          {t('admin.tags.surveyInvite.everyone')}
+        </p>
+      )}
+      <div className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
+        {members.filter((m) => !m.inactive).map((m) => {
+          const checked = surveyInvitedIds.includes(m.id)
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => toggle(m.id)}
+              className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${checked ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-secondary/60'}`}
+            >
+              <Avatar member={m} size={22} />
+              <span className="min-w-0 flex-1 truncate">{m.displayName || m.name}</span>
+              {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
