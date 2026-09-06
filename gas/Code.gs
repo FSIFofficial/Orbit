@@ -159,6 +159,8 @@ function checkPermissionOverride(acting, action, body) {
     if (ov.targetType === 'task' && ov.targetId === taskId && taskId) return true
     if (ov.targetType === 'project' && ov.targetId === projectId && projectId) return true
     if (ov.targetType === 'department' && ov.targetId === department && department) return true
+    // recruiting: targetIdでの絞り込みは行わない（'all'固定運用のため、targetType一致とaccess水準のみで判定）
+    if (ov.targetType === 'recruiting') return true
   }
   return false
 }
@@ -360,6 +362,13 @@ function authorizeAction(acting, action, body) {
     'notifyTrainingDecision',       // 研修承認通知は代表のみ（承認権限）
     'updatePermissionOverrides',    // 権限例外の編集は代表のみ（人事機密）
     'updateMemberProjects',         // プロジェクト割り当ては代表のみ（自己昇権の抜け穴防止）
+    // 採用関連は「代表のみ、ただし permission_overrides(targetType: 'recruiting')の
+    // 例外を持つメンバーのみ許可」という個別指定制にしたいため、あえてdaihyoOrLeader
+    // ではなくdaihyoOnlyに置く（班長など他の管理者ロールにもデフォルトでは開放しない）
+    'addCandidate',                 // 候補者登録
+    'updateCandidate',              // 候補者情報の編集
+    'removeCandidate',              // 候補者削除
+    'convertCandidateToMember',     // 候補者→正式メンバーへの登録
   ]
   // 代表は関数冒頭の if (isDaihyo) return でここに到達しないため、
   // このブロックに到達した時点で非代表が確定している。
@@ -578,6 +587,7 @@ function authorizeAction(acting, action, body) {
     'updateQualifications', // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
     'updateTrainingHistory',// 本人が申請、管理者が更新（ステータス変更）
     'notifyTrainingRequest',// 本人が申請するが念のため本人or管理者に制限
+    'updateEducationInfo',  // 大学名・学部・学科・学年は本人・管理者双方が編集可
   ]
   if (selfOrAdmin.indexOf(action) >= 0) {
     var targetId = String(body.memberId || '')
@@ -944,6 +954,26 @@ function doPost(e) {
         break
       case 'addMember':
         result = addMember(body.name, body.email, body.affiliation, body.role)
+        break
+      case 'addCandidate':
+        result = addCandidate(body.candidate || {})
+        break
+      case 'updateCandidate':
+        result = updateCandidate(body.candidateId, body.fields || {})
+        break
+      case 'removeCandidate':
+        result = removeCandidate(body.candidateId)
+        break
+      case 'convertCandidateToMember':
+        result = convertCandidateToMember(body.candidateId, body.role)
+        break
+      case 'updateEducationInfo':
+        result = updateMemberFields(body.memberId, {
+          university: body.university || '',
+          faculty: body.faculty || '',
+          department_name: body.departmentName || '',
+          grade_year: body.gradeYear || '',
+        })
         break
       case 'updateEmail':
         result = updateMemberFields(body.memberId, { email: body.email || '' })
@@ -2603,6 +2633,10 @@ function setupOrbit() {
     'last_inactive_notified',  // 未アクセス通知を最後に送った日（YYYY-MM-DD）
     'timezone',                // 本人のタイムゾーン（IANA名、例: "Asia/Tokyo"）
     'locale',                  // 本人の表示言語（例: "ja", "en"）
+    'university',              // 大学名
+    'faculty',                 // 学部
+    'department_name',         // 学科（department_pathと紛らわしいので department_name とする）
+    'grade_year',              // 学年
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -3076,6 +3110,81 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   }
 
   return { ok: true }
+}
+
+// ---- 採用支援（入会前の履歴書・面談メモ） -----------------------------------
+// 権限はauthorizeAction側でdaihyoOnly + permission_overrides(targetType:'recruiting')
+// の個別指定制。読み書きともにExpenses/FormSubmissionsと同じくシート直書き
+// パターン（CSV配信は行わない。フロント側はローカルstateで管理する）。
+
+var SHEET_CANDIDATES = 'Candidates'
+
+function ensureCandidatesSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getSheetByName(SHEET_CANDIDATES)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_CANDIDATES)
+    sheet.appendRow(['id', 'name', 'email', 'phone', 'resume_text', 'interview_notes', 'status', 'created_at', 'updated_at'])
+  }
+  return sheet
+}
+
+function addCandidate(candidate) {
+  var sheet = ensureCandidatesSheet()
+  var headers = headerRow(sheet)
+  var id = String(nextIntId(sheet, headers))
+  var now = new Date().toISOString()
+  sheet.appendRow([
+    id,
+    candidate.name || '',
+    candidate.email || '',
+    candidate.phone || '',
+    candidate.resumeText || '',
+    candidate.interviewNotes || '',
+    candidate.status || 'candidate',
+    now,
+    now,
+  ])
+  return { id: id }
+}
+
+function updateCandidate(candidateId, fields) {
+  ensureCandidatesSheet()
+  var mapped = {}
+  if (fields.name !== undefined) mapped.name = fields.name
+  if (fields.email !== undefined) mapped.email = fields.email
+  if (fields.phone !== undefined) mapped.phone = fields.phone
+  if (fields.resumeText !== undefined) mapped.resume_text = fields.resumeText
+  if (fields.interviewNotes !== undefined) mapped.interview_notes = fields.interviewNotes
+  if (fields.status !== undefined) mapped.status = fields.status
+  mapped.updated_at = new Date().toISOString()
+  return updateRowFields(SHEET_CANDIDATES, candidateId, mapped)
+}
+
+function removeCandidate(candidateId) {
+  var sheet = ensureCandidatesSheet()
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id') + 1
+  if (idCol === 0) throw new Error('No "id" column on ' + SHEET_CANDIDATES)
+  var lastRow = sheet.getLastRow()
+  var ids = sheet.getRange(2, idCol, Math.max(lastRow - 1, 0), 1).getValues()
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(candidateId)) {
+      sheet.deleteRow(i + 2)
+      break
+    }
+  }
+  return { ok: true }
+}
+
+// 候補者を正式なMemberレコードへ変換する（addMemberを呼ぶだけ）。
+// Candidatesシートの行は自動削除しない — 手動でremoveCandidateするまで残す。
+function convertCandidateToMember(candidateId, role) {
+  var candidate = findRow(SHEET_CANDIDATES, candidateId)
+  if (!candidate) throw new Error('候補者が見つかりません: ' + candidateId)
+  var created = addMember(String(candidate.name || ''), String(candidate.email || ''), '', role || '一般')
+  updateRowFields(SHEET_CANDIDATES, candidateId, { status: 'hired', updated_at: new Date().toISOString() })
+  return { memberId: created.id }
 }
 
 // ---- Phase 6: スキル一括更新 ----

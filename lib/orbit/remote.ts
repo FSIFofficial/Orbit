@@ -239,6 +239,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     lastLogin: r.last_login || undefined,
     timezone: r.timezone || undefined,
     locale: r.locale || undefined,
+    university: r.university || undefined,
+    faculty: r.faculty || undefined,
+    departmentName: r.department_name || undefined,
+    gradeYear: r.grade_year || undefined,
   }
 }
 
@@ -687,6 +691,41 @@ export const remoteApi = {
     postToGas('updateMemberDepartmentPath', { memberId, departmentPath }),
   updateMemberProjects: (memberId: string, projectIds: string[]) =>
     postToGas('updateMemberProjects', { memberId, projectIds }),
+  updateEducationInfo: (
+    memberId: string,
+    info: { university?: string; faculty?: string; departmentName?: string; gradeYear?: string },
+  ) =>
+    postToGas('updateEducationInfo', {
+      memberId,
+      university: info.university,
+      faculty: info.faculty,
+      departmentName: info.departmentName,
+      gradeYear: info.gradeYear,
+    }),
+  // 採用支援（Candidates）— Expenses/FormSubmissionsと同じくシート直書きの
+  // 書き込み専用API。読み取りは行わずフロント側のローカルstateで管理する。
+  addCandidate: (candidate: {
+    name: string
+    email?: string
+    phone?: string
+    resumeText?: string
+    interviewNotes?: string
+    status?: string
+  }) => postToGas('addCandidate', { candidate }),
+  updateCandidate: (
+    candidateId: string,
+    fields: {
+      name?: string
+      email?: string
+      phone?: string
+      resumeText?: string
+      interviewNotes?: string
+      status?: string
+    },
+  ) => postToGas('updateCandidate', { candidateId, fields }),
+  removeCandidate: (candidateId: string) => postToGas('removeCandidate', { candidateId }),
+  convertCandidateToMember: (candidateId: string, role?: string) =>
+    postToGas('convertCandidateToMember', { candidateId, role }),
   updateReviewer: (taskId: string, reviewerId: string | null) =>
     postToGas('updateReviewer', { taskId, reviewerId }),
   updateReviewers: (taskId: string, reviewerIds: string[], requiredApprovals?: number | 'all') =>
