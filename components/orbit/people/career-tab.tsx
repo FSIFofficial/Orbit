@@ -106,6 +106,7 @@ export function CareerTab({
   notifyTrainingDecision,
   updateDevelopmentPlan,
   updateOneOnOnes,
+  updateEducationInfo,
   currentUserId,
   oneOnOneQuestions,
   radarAxes,
@@ -133,6 +134,10 @@ export function CareerTab({
     id: string,
     g: { careerAspiration: string; desiredFutureRole: string; careerPlan: string },
   ) => void
+  updateEducationInfo: (
+    id: string,
+    info: { university: string; faculty: string; departmentName: string; gradeYear: string },
+  ) => void
   updateTrainingHistory: (id: string, entries: TrainingRecord[]) => void
   notifyTrainingRequest: (memberId: string, trainingName: string) => void
   notifyTrainingDecision: (memberId: string, trainingName: string, approved: boolean) => void
@@ -151,6 +156,7 @@ export function CareerTab({
   return (
     <div className="mt-5 flex flex-col gap-4">
       <SearchProfileSection member={member} editable={editable} onSave={updateSearchProfile} />
+      <EducationInfoSection member={member} editable={editable} onSave={updateEducationInfo} />
       <CareerGoalsSection member={member} editable={editable} onSave={updateCareerGoals} />
       <SkillLevelsSection
         member={member}
@@ -286,6 +292,68 @@ function SearchProfileSection({
             placeholder={t('career.searchProfile.addAreaPlaceholder')}
           />
         </div>
+      </div>
+    </Section>
+  )
+}
+
+function EducationInfoSection({
+  member,
+  editable,
+  onSave,
+}: {
+  member: Member
+  editable: boolean
+  onSave: CareerTabProps['updateEducationInfo']
+}) {
+  const save = (patch: Partial<{ university: string; faculty: string; departmentName: string; gradeYear: string }>) =>
+    onSave(member.id, {
+      university: member.university ?? '',
+      faculty: member.faculty ?? '',
+      departmentName: member.departmentName ?? '',
+      gradeYear: member.gradeYear ?? '',
+      ...patch,
+    })
+  const { t } = useI18n()
+  return (
+    <Section title={t('career.education.title')}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">{t('career.education.universityLabel')}</span>
+          <input
+            disabled={!editable}
+            defaultValue={member.university ?? ''}
+            onBlur={(e) => save({ university: e.target.value })}
+            className={cn(fieldClass, 'h-9 disabled:opacity-50')}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">{t('career.education.facultyLabel')}</span>
+          <input
+            disabled={!editable}
+            defaultValue={member.faculty ?? ''}
+            onBlur={(e) => save({ faculty: e.target.value })}
+            className={cn(fieldClass, 'h-9 disabled:opacity-50')}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">{t('career.education.departmentNameLabel')}</span>
+          <input
+            disabled={!editable}
+            defaultValue={member.departmentName ?? ''}
+            onBlur={(e) => save({ departmentName: e.target.value })}
+            className={cn(fieldClass, 'h-9 disabled:opacity-50')}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">{t('career.education.gradeYearLabel')}</span>
+          <input
+            disabled={!editable}
+            defaultValue={member.gradeYear ?? ''}
+            onBlur={(e) => save({ gradeYear: e.target.value })}
+            className={cn(fieldClass, 'h-9 disabled:opacity-50')}
+          />
+        </label>
       </div>
     </Section>
   )

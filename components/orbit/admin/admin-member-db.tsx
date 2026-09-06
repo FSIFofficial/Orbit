@@ -39,6 +39,10 @@ function buildBaseCols(t: TranslationFn): ColDef[] {
     { key: 'desiredFutureRole', label: t('admin.memberDb.col.desiredFutureRole'), getValue: (m) => m.desiredFutureRole ?? '', editable: true, width: 120 },
     // admin-only: hidden from 一般 (see filterColsForViewer)
     { key: 'email', label: t('admin.memberDb.col.email'), getValue: (m) => m.email ?? '', editable: false, width: 180 },
+    { key: 'university', label: t('admin.memberDb.col.university'), getValue: (m) => m.university ?? '', editable: false, width: 140 },
+    { key: 'faculty', label: t('admin.memberDb.col.faculty'), getValue: (m) => m.faculty ?? '', editable: false, width: 120 },
+    { key: 'departmentName', label: t('admin.memberDb.col.departmentName'), getValue: (m) => m.departmentName ?? '', editable: false, width: 120 },
+    { key: 'gradeYear', label: t('admin.memberDb.col.gradeYear'), getValue: (m) => m.gradeYear ?? '', editable: false, width: 80 },
   ]
 }
 
@@ -46,6 +50,10 @@ function buildBaseCols(t: TranslationFn): ColDef[] {
 // Keep this in sync with the server-side GAS restriction list.
 const ADMIN_ONLY_COL_KEYS = new Set([
   'email',
+  'university',
+  'faculty',
+  'departmentName',
+  'gradeYear',
 ])
 
 // Returns the subset of columns a viewer with the given admin status may see.

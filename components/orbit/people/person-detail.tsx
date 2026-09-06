@@ -111,6 +111,7 @@ export function PersonDetail({ id }: { id: string }) {
     updateSkillLevels,
     updateCompetencies,
     updateCareerGoals,
+    updateEducationInfo,
     updateTrainingHistory,
     notifyTrainingRequest,
     notifyTrainingDecision,
@@ -1049,6 +1050,7 @@ export function PersonDetail({ id }: { id: string }) {
           updateSkillLevels={updateSkillLevels}
           updateCompetencies={updateCompetencies}
           updateCareerGoals={updateCareerGoals}
+          updateEducationInfo={updateEducationInfo}
           updateTrainingHistory={updateTrainingHistory}
           notifyTrainingRequest={notifyTrainingRequest}
           notifyTrainingDecision={notifyTrainingDecision}

@@ -58,6 +58,28 @@ export function AdminAnalytics() {
   const roleRows = sortedCounts(roleCounts)
   const affiliationRows = sortedCounts(affiliationCounts)
 
+  // 大学別人数（item 2: 大学名等の収集）。3人未満の大学は個別表示すると
+  // 実質個人が特定できてしまうため、「その他」にまとめて集計する。
+  const universityCountsRaw = new Map<string, number>()
+  members.forEach((m) => {
+    if (!m.university) return
+    universityCountsRaw.set(m.university, (universityCountsRaw.get(m.university) ?? 0) + 1)
+  })
+  const universityCounts = new Map<string, number>()
+  let universityOtherCount = 0
+  universityCountsRaw.forEach((count, university) => {
+    if (count < 3) {
+      universityOtherCount += count
+    } else {
+      universityCounts.set(university, count)
+    }
+  })
+  const universityRows = sortedCounts(universityCounts)
+  if (universityOtherCount > 0) {
+    universityRows.push([t('admin.analytics.university.other'), universityOtherCount])
+  }
+  const maxUniversity = Math.max(1, ...universityRows.map(([, c]) => c))
+
   const skillCounts = new Map<string, number>()
   const skillLevelSum = new Map<string, number>()
   members.forEach((m) => {
@@ -138,6 +160,20 @@ export function AdminAnalytics() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.university.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.university.desc')}</p>
+        {universityRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.university.empty')}</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {universityRows.map(([university, count]) => (
+              <BarRow key={university} label={university} count={count} max={maxUniversity} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
