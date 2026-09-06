@@ -705,6 +705,7 @@ export const en = {
   'person.tasks.view.list': 'List',
   'person.tasks.view.board': 'Board',
   'person.tasks.view.calendar': 'Calendar',
+  'person.tasks.exportExcel': 'Download Excel',
   'person.tasks.table.task': 'Task',
   'person.tasks.table.project': 'Project',
   'person.tasks.table.difficulty': 'Difficulty',

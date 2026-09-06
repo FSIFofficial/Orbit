@@ -705,6 +705,7 @@ export const ja = {
   'person.tasks.view.list': 'リスト',
   'person.tasks.view.board': 'ボード',
   'person.tasks.view.calendar': 'カレンダー',
+  'person.tasks.exportExcel': 'Excelダウンロード',
   'person.tasks.table.task': 'タスク',
   'person.tasks.table.project': 'プロジェクト',
   'person.tasks.table.difficulty': '難易度',
