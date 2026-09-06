@@ -935,6 +935,7 @@ function doPost(e) {
         result = updateProjectFields(body.projectId, {
           description: body.description || '',
           type: body.type || '',
+          goal: body.goal || '',
         })
         break
       case 'updateProjectArchived':
@@ -2648,6 +2649,7 @@ function setupOrbit() {
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
+    'goal', // 目標（概要=descriptionとは別枠）
   ]
   var TASKS_HEADERS = [
     'id', 'project_id', 'title', 'description', 'status', 'assign_type',

@@ -147,6 +147,8 @@ export const ja = {
   'admin.projects.subtitleLimited': '担当プロジェクトの一覧です。新規追加やテンプレート管理は代表など上位の管理者のみ行えます。',
   'admin.projects.form.nameLabel': 'プロジェクト名',
   'admin.projects.form.namePlaceholder': '例：新歓イベント2027',
+  'admin.projects.form.goalLabel': '目標',
+  'admin.projects.form.goalHint': '概要とは別に、このプロジェクトが目指すゴールを記載できます。',
   'admin.projects.form.descLabel': '概要',
   'admin.projects.form.typeLabel': '種類',
   'admin.projects.form.parentLabel': '上位プロジェクト（任意）',

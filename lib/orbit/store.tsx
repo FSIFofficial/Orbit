@@ -267,7 +267,7 @@ interface OrbitContextValue extends OrbitState {
   removeProject: (projectId: string) => void
   updateProjectMembers: (projectId: string, memberIds: string[]) => void
   updateProjectOwner: (projectId: string, ownerId: string | null) => void
-  updateProjectDetails: (projectId: string, description: string, type?: string) => void
+  updateProjectDetails: (projectId: string, description: string, type?: string, goal?: string) => void
   activeProjects: Project[]
   setProjectArchived: (projectId: string, archived: boolean) => void
   setProjectOrder: (orderedIds: string[]) => void
@@ -2516,11 +2516,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 概要・種類は作成後も編集できる（種類を変えても、既存タスクやテンプレートの
   // 自動追加には影響しない — あくまで新規作成時の初期タスク生成に使われるだけ）
   const updateProjectDetails = useCallback(
-    (projectId: string, description: string, type?: string) => {
+    (projectId: string, description: string, type?: string, goal?: string) => {
       setProjects((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, description, type: type || undefined } : p)),
+        prev.map((p) => (p.id === projectId ? { ...p, description, type: type || undefined, goal: goal || undefined } : p)),
       )
-      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, description, type))
+      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, description, type, goal))
     },
     [runRemote],
   )

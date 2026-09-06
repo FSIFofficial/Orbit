@@ -258,6 +258,7 @@ function mapProjectRow(r: Record<string, string>): Project {
     ownerId: r.owner_id || undefined,
     parentId: r.parent_id || undefined,
     archived: r.archived === 'TRUE',
+    goal: r.goal || undefined,
   }
 }
 
@@ -751,8 +752,8 @@ export const remoteApi = {
     postToGas('updateProjectOwner', { projectId, ownerId }),
   updateProjectParent: (projectId: string, parentId: string | null) =>
     postToGas('updateProjectParent', { projectId, parentId }),
-  updateProjectDetails: (projectId: string, description: string, type: string | undefined) =>
-    postToGas('updateProjectDetails', { projectId, description, type }),
+  updateProjectDetails: (projectId: string, description: string, type: string | undefined, goal?: string) =>
+    postToGas('updateProjectDetails', { projectId, description, type, goal }),
   updateProjectArchived: (projectId: string, archived: boolean) =>
     postToGas('updateProjectArchived', { projectId, archived }),
   updateComments: (taskId: string, comments: TaskComment[]) =>

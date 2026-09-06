@@ -100,7 +100,7 @@ export function AdminProjects() {
   const [managingOwnerOf, setManagingOwnerOf] = useState<Project | null>(null)
   const [editingDetailsOf, setEditingDetailsOf] = useState<Project | null>(null)
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
-  const [detailsDraft, setDetailsDraft] = useState({ description: '', type: '' })
+  const [detailsDraft, setDetailsDraft] = useState({ description: '', type: '', goal: '' })
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('')
@@ -287,7 +287,7 @@ export function AdminProjects() {
                       <span className="min-w-0 flex-1 truncate">{p.description || '—'}</span>
                       <button
                         onClick={() => {
-                          setDetailsDraft({ description: p.description, type: p.type ?? '' })
+                          setDetailsDraft({ description: p.description, type: p.type ?? '', goal: p.goal ?? '' })
                           setEditingDetailsOf(p)
                         }}
                         className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -692,6 +692,17 @@ export function AdminProjects() {
         <h2 className="text-base font-semibold">{t('admin.projects.detailsModal.title', { name: editingDetailsOf?.name ?? '' })}</h2>
         <div className="mt-3 flex flex-col gap-3">
           <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.goalLabel')}</label>
+            <textarea
+              value={detailsDraft.goal}
+              onChange={(e) => setDetailsDraft({ ...detailsDraft, goal: e.target.value })}
+              placeholder={t('feedback.optional')}
+              rows={2}
+              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">{t('admin.projects.form.goalHint')}</p>
+          </div>
+          <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.descLabel')}</label>
             <input
               value={detailsDraft.description}
@@ -731,6 +742,7 @@ export function AdminProjects() {
                   editingDetailsOf.id,
                   detailsDraft.description.trim(),
                   detailsDraft.type || undefined,
+                  detailsDraft.goal.trim() || undefined,
                 )
                 toast(t('admin.projects.detailsModal.updateToast'))
               }

@@ -357,6 +357,8 @@ export interface Project {
   // アーカイブ — 終了したプロジェクトを一覧から隠す（削除とは異なり、
   // タスク履歴などのデータは残したまま非表示にするだけ）
   archived?: boolean
+  // 目標 — descriptionは概要欄として維持しつつ、目標専用の欄を別に持つ
+  goal?: string
 }
 
 // A template task an admin defines for a Project type (store.tsx's

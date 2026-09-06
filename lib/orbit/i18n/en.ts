@@ -147,6 +147,8 @@ export const en = {
   'admin.projects.subtitleLimited': 'A list of your projects. Adding new projects or managing templates is limited to senior admins such as the representative.',
   'admin.projects.form.nameLabel': 'Project name',
   'admin.projects.form.namePlaceholder': 'e.g. Welcome Event 2027',
+  'admin.projects.form.goalLabel': 'Goal',
+  'admin.projects.form.goalHint': "Separate from the description, note what this project is aiming to achieve.",
   'admin.projects.form.descLabel': 'Description',
   'admin.projects.form.typeLabel': 'Type',
   'admin.projects.form.parentLabel': 'Parent project (optional)',
