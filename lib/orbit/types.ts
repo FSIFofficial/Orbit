@@ -454,6 +454,9 @@ export interface Task {
   projectId: string
   department: Department
   assigneeIds: string[]
+  // Tasksシートのassign_type列 — 現状は常に'open_bid'（createTasksで固定設定）。
+  // assigneeIdsが空 かつ assignType==='open_bid' のタスクが「公募」タブに並ぶ。
+  assignType?: string
   startDate?: string | null // YYYY-MM-DD, when work is expected to begin
   deadline: string | null // YYYY-MM-DD
   dueTime?: string | null // HH:MM, optional time-of-day on top of deadline

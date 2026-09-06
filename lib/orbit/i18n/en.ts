@@ -259,6 +259,7 @@ export const en = {
   'output.view.difficulty': 'Difficulty',
   'output.view.dependency': 'Dependency',
   'output.view.gantt': 'Gantt',
+  'output.view.openbid': 'Open bid',
   'output.fields.button': 'Fields',
   'output.fields.hint': 'Fields shown on cards (task name is always shown)',
   'output.projectVisibility.button': 'Show projects',
@@ -489,6 +490,9 @@ export const en = {
   'taskDrawer.assign.unassignedToast': 'Assignee has been unset',
   'taskDrawer.assign.unassignAll': 'Unassign all',
   'taskDrawer.assign.activeCount': '{count}',
+  'taskDrawer.assign.capacity.available': 'Available',
+  'taskDrawer.assign.capacity.normal': 'Normal',
+  'taskDrawer.assign.capacity.full': 'Full',
 
   // ---- task-detail-drawer: handoff (引き継ぎ) -----------------------------
   'taskDrawer.handoff.title': 'Hand off task',
@@ -1076,6 +1080,10 @@ export const en = {
   'admin.tags.notify.freq.weekly': 'Weekly',
   'admin.tags.notify.freq.off': 'OFF',
   'admin.tags.notify.updatedToast': 'Set "{kind}" notifications to {freq}',
+  'admin.tags.surveyInvite.title': 'Survey respondents',
+  'admin.tags.surveyInvite.desc': 'Only the selected members can respond to the experience survey. If nobody is selected, everyone can respond.',
+  'admin.tags.surveyInvite.everyone': 'Everyone can respond',
+  'admin.tags.surveyInvite.updatedToast': 'Updated the survey respondents',
   'admin.permissionOverrides.access.view': 'View',
   'admin.permissionOverrides.access.approve': 'Approve',
   'admin.permissionOverrides.targetType.task': 'Task',
@@ -1253,6 +1261,7 @@ export const en = {
 
   // ---- survey (member experience survey) ---------------------------------
   'survey.back': 'Back to workspace',
+  'survey.notInvited': 'Only invited members can respond to this survey',
   'survey.title': 'Member experience survey',
   'survey.tab.form': 'Answer',
   'survey.tab.history': 'Past answers',
@@ -1389,4 +1398,15 @@ export const en = {
   'calendar.gcal.synced': 'Synced with GCal',
   'calendar.gcal.connect': 'Connect Google Calendar',
   'calendar.absent.eventTitle': '[Orbit] Absent',
+
+  // ---- gantt: critical path -----------------------------------------
+  'gantt.criticalPath.legend': 'Critical path (the dependency chain with the biggest delay impact)',
+  'gantt.criticalPath.tooltip': 'This task is on the critical path',
+
+  // ---- open bid tasks ---------------------------------------------------
+  'openBid.subtitle': 'Tasks with no assignee yet, open for anyone to apply. Applying makes you the assignee.',
+  'openBid.empty': 'No open bid tasks',
+  'openBid.apply': 'Apply',
+  'openBid.appliedToast': 'Applied to "{name}"',
+  'openBid.deadlineLabel': 'Deadline: {date}',
 } satisfies Record<keyof typeof ja, string>

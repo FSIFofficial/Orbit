@@ -273,6 +273,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     projectId: r.project_id,
     department: (r.department || '未分類') as Department,
     assigneeIds: splitTags(r.assignee_id),
+    assignType: r.assign_type || 'open_bid',
     startDate: r.start_date || null,
     deadline: r.due_date || null,
     dueTime: r.due_time || null,
@@ -387,6 +388,8 @@ export interface RemoteSettings {
   // 団体メール — 個々のメンバーの通知設定に関わらず常に通知先へ含める
   // 共有配信先アドレス（幹部/事業責任者=full adminがAdmin > Tagsで追加）
   orgNotificationEmails: string[]
+  // アンケート回答対象者の限定（メンバーID配列）— 空なら全員回答可
+  surveyInvitedIds: string[]
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定。載っていないIDは末尾に元の順序のまま追加される
   projectOrder: string[]
@@ -476,6 +479,7 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     skillFieldSkills,
     skillFieldThreshold: Number.isFinite(skillFieldThreshold) ? skillFieldThreshold : null,
     orgNotificationEmails: splitTags(byKey.get('org_notification_emails')),
+    surveyInvitedIds: splitTags(byKey.get('survey_invited_ids')),
     orgName: byKey.get('org_name') ?? '',
     orgLogoUrl: byKey.get('org_logo_url') ?? '',
     projectOrder: splitTags(byKey.get('project_order')),

@@ -49,7 +49,12 @@ export function Header() {
     orgName,
     orgLogoUrl,
     isFullAdmin,
+    surveyInvitedIds,
   } = useOrbit()
+  const canAccessSurvey =
+    surveyInvitedIds.length === 0 ||
+    isFullAdmin ||
+    (!!currentUser && surveyInvitedIds.includes(currentUser.id))
   const { screen, go, goBack, canGoBack } = useNav()
   const { theme, toggle } = useTheme()
   const { t } = useI18n()
@@ -382,15 +387,17 @@ export function Header() {
                   <BookOpen className="size-4" />
                   {t('header.menu.dailyreport')}
                 </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false)
-                    go({ name: 'survey' })
-                  }}
-                >
-                  <ClipboardList className="size-4" />
-                  {t('header.menu.survey')}
-                </MenuItem>
+                {canAccessSurvey && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false)
+                      go({ name: 'survey' })
+                    }}
+                  >
+                    <ClipboardList className="size-4" />
+                    {t('header.menu.survey')}
+                  </MenuItem>
+                )}
                 {isFullAdmin && (
                   <MenuItem
                     onClick={() => {

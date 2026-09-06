@@ -11,6 +11,7 @@ import { ProjectView } from './project-view'
 import { DifficultyBoard } from './difficulty-board'
 import { DependencyView } from './dependency-view'
 import { GanttView } from './gantt-view'
+import { OpenBidView } from './open-bid-view'
 import { TaskDetailDrawer } from './task-detail-drawer'
 import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_KEY, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
@@ -32,6 +33,7 @@ import {
   Receipt,
   FileText,
   BarChart2,
+  Megaphone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
@@ -39,7 +41,7 @@ import { CustomFormModal } from '@/components/orbit/custom-form-modal'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
-type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt'
+type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt' | 'openbid'
 
 const DEFAULT_TARGET_ORDER: Target[] = ['mine', 'all', 'people', 'projects', 'archive']
 const TARGET_KEY: Record<Target, TranslationKey> = {
@@ -235,6 +237,13 @@ export function OutputScreen() {
     [filteredTasks, hiddenProjectIds],
   )
 
+  // 公募タブは対象/絞り込みタブとは独立に、visibleTasks全体から
+  // 未アサインの公募タスクだけを抜き出す
+  const openBidTasks = useMemo(
+    () => visibleTasks.filter((t) => t.assigneeIds.length === 0 && (t.assignType ?? 'open_bid') === 'open_bid'),
+    [visibleTasks],
+  )
+
   const hasActiveFilter = !!(projectFilter || fromDate || toDate)
 
   return (
@@ -375,6 +384,18 @@ export function OutputScreen() {
               <BarChart2 className="size-3.5" />
               {tr('output.view.gantt')}
             </Seg>
+            <Seg
+              active={(target === 'all' || target === 'mine') && view === 'openbid'}
+              onClick={() => selectView('openbid')}
+            >
+              <Megaphone className="size-3.5" />
+              {tr('output.view.openbid')}
+              {openBidTasks.length > 0 && (
+                <span className="rounded-full bg-secondary px-1.5 text-[10px] tabular-nums">
+                  {openBidTasks.length}
+                </span>
+              )}
+            </Seg>
           </Segment>
 
           {(target === 'all' || target === 'mine') &&
@@ -478,7 +499,7 @@ export function OutputScreen() {
             </div>
           )}
 
-          {(target === 'all' || target === 'mine') && (
+          {(target === 'all' || target === 'mine') && view !== 'openbid' && (
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={projectFilter}
@@ -562,6 +583,9 @@ export function OutputScreen() {
           )}
           {(target === 'all' || target === 'mine') && view === 'gantt' && (
             <GanttView tasks={filteredTasks} onOpenTask={setOpenTaskId} />
+          )}
+          {(target === 'all' || target === 'mine') && view === 'openbid' && (
+            <OpenBidView tasks={openBidTasks} onOpenTask={setOpenTaskId} />
           )}
         </>
       )}
