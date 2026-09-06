@@ -32,6 +32,11 @@ export type AdminSection =
   | 'forms'
   | 'memberdb'
   | 'leadership'
+  // 'recruiting' はrolePermissions/visibleAdminSectionsのロール単位制御とは
+  // 独立に、Member.permissionOverrides(targetType:'recruiting')の個別付与
+  // だけでアクセス可否を決める（admin-screen.tsxのcanAccessRecruiting参照）。
+  // そのためADMIN_SECTIONS/DEFAULT_NON_TOP_SECTIONSには意図的に含めない。
+  | 'recruiting'
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -218,11 +223,33 @@ export interface Member {
   // レベルアップのベースになる生の累計点を保持する。
   // 例: { "デザイン": 120, "プログラミング": 340 }
   skillPoints?: SkillPoints
+
+  // ---- 学歴情報 ------------------------------------------------------------
+  // 本人が入力し管理者が確認・修正する（updateEducationInfo, selfOrAdmin）。
+  // admin-member-db.tsxではemailと同じくADMIN_ONLY_COL_KEYS扱いにする。
+  university?: string
+  faculty?: string
+  // 既存のdepartmentPath（組織所属パス）と紛らわしいため departmentName とする
+  departmentName?: string
+  gradeYear?: string
+}
+
+/** 採用支援（入会前の候補者）— Candidatesシート */
+export interface Candidate {
+  id: string
+  name: string
+  email?: string
+  phone?: string
+  resumeText?: string
+  interviewNotes?: string
+  status: 'candidate' | 'hired' | 'rejected'
+  createdAt: string
+  updatedAt: string
 }
 
 /** 個別例外許可エントリ (Member.permissionOverrides の要素) */
 export interface PermissionOverride {
-  targetType: 'task' | 'project' | 'department'
+  targetType: 'task' | 'project' | 'department' | 'recruiting'
   targetId: string
   access: 'view' | 'edit' | 'approve'
 }

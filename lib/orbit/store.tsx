@@ -12,6 +12,7 @@ import type {
   AdminSection,
   ApprovalRecord,
   ApprovalStep,
+  Candidate,
   CareerHistoryEntry,
   Competency,
   CustomFormDef,
@@ -380,6 +381,20 @@ interface OrbitContextValue extends OrbitState {
   updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
   // Phase 6: スキル一括更新
   bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) => void
+  // ---- 採用支援（候補者） --------------------------------------------------
+  candidates: import('./types').Candidate[]
+  addCandidate: (candidate: Omit<import('./types').Candidate, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => void
+  updateCandidate: (
+    candidateId: string,
+    fields: Partial<Pick<import('./types').Candidate, 'name' | 'email' | 'phone' | 'resumeText' | 'interviewNotes' | 'status'>>,
+  ) => void
+  removeCandidate: (candidateId: string) => void
+  convertCandidateToMember: (candidateId: string, role?: string) => void
+  // ---- 学歴情報 --------------------------------------------------------
+  updateEducationInfo: (
+    memberId: string,
+    info: { university: string; faculty: string; departmentName: string; gradeYear: string },
+  ) => void
 }
 
 const OrbitContext = createContext<OrbitContextValue | null>(null)
@@ -681,6 +696,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [expenseApplications, setExpenseApplications] = useState<ExpenseApplication[]>([])
   const [customFormDefs, setCustomFormDefs] = useState<CustomFormDef[]>([])
   const [customFormSubmissions, setCustomFormSubmissions] = useState<CustomFormSubmission[]>([])
+  // 採用支援（候補者）— Expenses/FormSubmissionsと同じくローカルstateのみで
+  // 管理し、書き込みはGASへfire-and-forget。読み取り専用の一覧取得APIは無い。
+  const [candidates, setCandidates] = useState<Candidate[]>([])
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
@@ -1507,6 +1525,58 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         ),
       )
       if (isRemoteConfigured) runRemote(remoteApi.rejectFormSubmission(submissionId, reason))
+    },
+    [runRemote],
+  )
+
+  // ---- 採用支援（候補者） ---------------------------------------------------
+
+  const addCandidate = useCallback(
+    (candidate: Omit<Candidate, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => {
+      const now = new Date().toISOString()
+      const newCandidate: Candidate = {
+        ...candidate,
+        id: crypto.randomUUID(),
+        status: 'candidate',
+        createdAt: now,
+        updatedAt: now,
+      }
+      setCandidates((prev) => [newCandidate, ...prev])
+      if (isRemoteConfigured) runRemote(remoteApi.addCandidate(candidate))
+    },
+    [runRemote],
+  )
+
+  const updateCandidate = useCallback(
+    (
+      candidateId: string,
+      fields: Partial<Pick<Candidate, 'name' | 'email' | 'phone' | 'resumeText' | 'interviewNotes' | 'status'>>,
+    ) => {
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, ...fields, updatedAt: new Date().toISOString() } : c)),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updateCandidate(candidateId, fields))
+    },
+    [runRemote],
+  )
+
+  const removeCandidate = useCallback(
+    (candidateId: string) => {
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateId))
+      if (isRemoteConfigured) runRemote(remoteApi.removeCandidate(candidateId))
+    },
+    [runRemote],
+  )
+
+  // 候補者を正式なMemberとして登録する。Candidatesシートの行は自動削除しない
+  // （手動でremoveCandidateするまで残る）ため、ローカルstateもここでは消さず
+  // statusを'hired'にするだけに留める。
+  const convertCandidateToMember = useCallback(
+    (candidateId: string, role?: string) => {
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, status: 'hired', updatedAt: new Date().toISOString() } : c)),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.convertCandidateToMember(candidateId, role))
     },
     [runRemote],
   )
@@ -2641,6 +2711,29 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  const updateEducationInfo = useCallback(
+    (
+      memberId: string,
+      info: { university: string; faculty: string; departmentName: string; gradeYear: string },
+    ) => {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId
+            ? {
+                ...m,
+                university: info.university || undefined,
+                faculty: info.faculty || undefined,
+                departmentName: info.departmentName || undefined,
+                gradeYear: info.gradeYear || undefined,
+              }
+            : m,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updateEducationInfo(memberId, info))
+    },
+    [runRemote],
+  )
+
   const updateTrainingHistory = useCallback(
     (memberId: string, entries: TrainingRecord[]) => {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, trainingHistory: entries } : m)))
@@ -3758,6 +3851,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     approveFormStep,
     rejectFormSubmission,
     bulkUpdateSkills,
+    candidates,
+    addCandidate,
+    updateCandidate,
+    removeCandidate,
+    convertCandidateToMember,
+    updateEducationInfo,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>

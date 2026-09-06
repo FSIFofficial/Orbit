@@ -16,10 +16,11 @@ import { AdminExpenses } from './admin-expenses'
 import { AdminFormBuilder } from './admin-form-builder'
 import { AdminMemberDb } from './admin-member-db'
 import { AdminLeadership } from './admin-leadership'
+import { AdminRecruiting } from './admin-recruiting'
 import { useOrbit } from '@/lib/orbit/store'
 import { OrbitMark } from '../primitives'
 import type { AdminSection } from '@/lib/orbit/types'
-import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, Radar, Receipt, FileText, Database, Crown } from 'lucide-react'
+import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, Radar, Receipt, FileText, Database, Crown, Briefcase } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Section = AdminSection
@@ -46,9 +47,20 @@ function buildNav(t: (key: TranslationKey) => string): { key: Section; label: st
 export function AdminScreen({ section }: { section: Section }) {
   const { go } = useNav()
   const { t } = useI18n()
-  const { pendingTasks, visibleAdminSections, dataReady } = useOrbit()
+  const { pendingTasks, visibleAdminSections, dataReady, isFullAdmin, currentUser } = useOrbit()
+  // 採用（recruiting）はrolePermissions/visibleAdminSectionsのロール単位制御
+  // とは独立に、permission_overrides(targetType:'recruiting')を個別に持つ
+  // メンバーだけがアクセスできる（ロール自体には一切依存しない）
+  const canAccessRecruiting =
+    isFullAdmin ||
+    (currentUser?.permissionOverrides ?? []).some(
+      (ov) => ov.targetType === 'recruiting' && (ov.access === 'edit' || ov.access === 'approve'),
+    )
   const nav = buildNav(t).filter((n) => visibleAdminSections.includes(n.key))
-  const allowed = visibleAdminSections.includes(section)
+  if (canAccessRecruiting) {
+    nav.push({ key: 'recruiting', label: t('admin.nav.recruiting'), icon: <Briefcase className="size-4" /> })
+  }
+  const allowed = section === 'recruiting' ? canAccessRecruiting : visibleAdminSections.includes(section)
 
   // a scoped admin landing on a section they can't see (stale link, direct
   // nav) bounces to the dashboard instead of rendering it — but only once
@@ -148,6 +160,7 @@ export function AdminScreen({ section }: { section: Section }) {
           {section === 'forms' && <AdminFormBuilder />}
           {section === 'memberdb' && <AdminMemberDb />}
           {section === 'leadership' && <AdminLeadership />}
+          {section === 'recruiting' && <AdminRecruiting />}
         </div>
       </div>
     </div>
