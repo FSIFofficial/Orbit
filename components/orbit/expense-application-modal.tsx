@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { Modal } from '@/components/orbit/modal'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
   const { expenseCategories, submitExpenseApplication, currentUser } = useOrbit()
+  const { t } = useI18n()
 
   const [categoryId, setCategoryId] = useState(expenseCategories[0]?.id ?? '')
   const [amount, setAmount] = useState('')
@@ -19,10 +21,10 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = () => {
     setError('')
     const amt = Number(amount)
-    if (!categoryId) { setError('カテゴリを選択してください'); return }
-    if (!amount || isNaN(amt) || amt <= 0) { setError('金額を正しく入力してください'); return }
+    if (!categoryId) { setError(t('expenseApplication.categoryError')); return }
+    if (!amount || isNaN(amt) || amt <= 0) { setError(t('expenseApplication.amountError')); return }
     if (!receiptUrl.trim() && !justification.trim()) {
-      setError('領収書URLまたは理由のいずれかを入力してください')
+      setError(t('expenseApplication.receiptOrJustificationError'))
       return
     }
     if (!currentUser) return
@@ -42,10 +44,10 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal open={true} onClose={onClose}>
       <div className="space-y-4 p-5" style={{ minWidth: 400 }}>
-        <h2 className="text-lg font-semibold">経費申請</h2>
+        <h2 className="text-lg font-semibold">{t('admin.expenses.title')}</h2>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">カテゴリ <span className="text-destructive">*</span></label>
+          <label className="text-xs text-muted-foreground">{t('expenseApplication.categoryLabel')} <span className="text-destructive">*</span></label>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
@@ -58,31 +60,31 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">金額（円） <span className="text-destructive">*</span></label>
+          <label className="text-xs text-muted-foreground">{t('expenseApplication.amountLabel')} <span className="text-destructive">*</span></label>
           <input
             type="number"
             min={1}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="例: 3500"
+            placeholder={t('expenseApplication.amountPlaceholder')}
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
           />
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">用途（任意）</label>
+          <label className="text-xs text-muted-foreground">{t('expenseApplication.purposeLabel')}</label>
           <input
             type="text"
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            placeholder="例: 懇親会費、交通費など"
+            placeholder={t('expenseApplication.purposePlaceholder')}
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
           />
         </div>
 
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">
-            領収書URL <span className="text-muted-foreground">（いずれか必須）</span>
+            {t('expenseApplication.receiptLabel')} <span className="text-muted-foreground">{t('expenseApplication.eitherRequired')}</span>
           </label>
           <input
             type="url"
@@ -95,12 +97,12 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
 
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">
-            正当な理由テキスト <span className="text-muted-foreground">（領収書がない場合）</span>
+            {t('expenseApplication.justificationLabel')} <span className="text-muted-foreground">{t('expenseApplication.justificationNote')}</span>
           </label>
           <textarea
             value={justification}
             onChange={(e) => setJustification(e.target.value)}
-            placeholder="領収書がない場合、理由を詳しく記載してください"
+            placeholder={t('expenseApplication.justificationPlaceholder')}
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
             rows={3}
           />
@@ -108,7 +110,7 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
 
         {category && category.approvalSteps.length > 0 && (
           <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-            承認フロー: {category.approvalSteps.length}段階の承認が必要です
+            {t('expenseApplication.approvalFlow', { count: category.approvalSteps.length })}
           </div>
         )}
 
@@ -116,13 +118,13 @@ export function ExpenseApplicationModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm">
-            キャンセル
+            {t('admin.expenses.cancel')}
           </button>
           <button
             onClick={handleSubmit}
             className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
           >
-            申請する
+            {t('expenseApplication.submit')}
           </button>
         </div>
       </div>

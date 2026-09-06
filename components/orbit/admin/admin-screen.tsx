@@ -20,30 +20,34 @@ import { useOrbit } from '@/lib/orbit/store'
 import { OrbitMark } from '../primitives'
 import type { AdminSection } from '@/lib/orbit/types'
 import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, Radar, Receipt, FileText, Database, Crown } from 'lucide-react'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Section = AdminSection
 
-const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="size-4" /> },
-  { key: 'leadership', label: '幹部 View', icon: <Crown className="size-4" /> },
-  { key: 'approvals', label: 'Approvals', icon: <FileClock className="size-4" /> },
-  { key: 'assignments', label: 'Assignments', icon: <UserPlus className="size-4" /> },
-  { key: 'projects', label: 'Projects', icon: <FolderPlus className="size-4" /> },
-  { key: 'members', label: 'Members', icon: <Users className="size-4" /> },
-  { key: 'analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
-  { key: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
-  { key: 'org', label: 'Org Tree', icon: <Network className="size-4" /> },
-  { key: 'quiz', label: '検定', icon: <GraduationCap className="size-4" /> },
-  { key: 'radar', label: 'レーダー', icon: <Radar className="size-4" /> },
-  { key: 'expenses', label: '経費申請', icon: <Receipt className="size-4" /> },
-  { key: 'forms', label: 'フォーム', icon: <FileText className="size-4" /> },
-  { key: 'memberdb', label: '人材DB', icon: <Database className="size-4" /> },
-]
+function buildNav(t: (key: TranslationKey) => string): { key: Section; label: string; icon: React.ReactNode }[] {
+  return [
+    { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="size-4" /> },
+    { key: 'leadership', label: t('admin.nav.leadership'), icon: <Crown className="size-4" /> },
+    { key: 'approvals', label: 'Approvals', icon: <FileClock className="size-4" /> },
+    { key: 'assignments', label: 'Assignments', icon: <UserPlus className="size-4" /> },
+    { key: 'projects', label: 'Projects', icon: <FolderPlus className="size-4" /> },
+    { key: 'members', label: 'Members', icon: <Users className="size-4" /> },
+    { key: 'analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
+    { key: 'tags', label: 'Tags', icon: <Tags className="size-4" /> },
+    { key: 'org', label: 'Org Tree', icon: <Network className="size-4" /> },
+    { key: 'quiz', label: t('admin.nav.quiz'), icon: <GraduationCap className="size-4" /> },
+    { key: 'radar', label: t('admin.nav.radar'), icon: <Radar className="size-4" /> },
+    { key: 'expenses', label: t('admin.nav.expenses'), icon: <Receipt className="size-4" /> },
+    { key: 'forms', label: t('admin.nav.forms'), icon: <FileText className="size-4" /> },
+    { key: 'memberdb', label: t('admin.nav.memberdb'), icon: <Database className="size-4" /> },
+  ]
+}
 
 export function AdminScreen({ section }: { section: Section }) {
   const { go } = useNav()
+  const { t } = useI18n()
   const { pendingTasks, visibleAdminSections, dataReady } = useOrbit()
-  const nav = NAV.filter((n) => visibleAdminSections.includes(n.key))
+  const nav = buildNav(t).filter((n) => visibleAdminSections.includes(n.key))
   const allowed = visibleAdminSections.includes(section)
 
   // a scoped admin landing on a section they can't see (stale link, direct
@@ -65,7 +69,7 @@ export function AdminScreen({ section }: { section: Section }) {
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
             <span className="relative inline-flex size-3 rounded-full bg-primary" />
           </span>
-          データを読み込んでいます…
+          {t('app.loading')}
         </div>
       </div>
     )
@@ -79,7 +83,7 @@ export function AdminScreen({ section }: { section: Section }) {
       <aside className="hidden w-56 shrink-0 border-r border-border bg-card md:block">
         <div className="px-4 py-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            ADMIN
+            {t('admin.nav.section')}
           </div>
         </div>
         <nav className="space-y-0.5 px-2">

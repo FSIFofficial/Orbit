@@ -5,6 +5,7 @@ import type { Task } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { Avatar } from '@/components/orbit/primitives'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/orbit/i18n'
 
 // ガントチャート（item 12）— depends_on_ids と due_date/startDate から描画。
 // 1日 = DAY_PX px で水平スクロール。依存矢印は別途SVGでオーバーレイしていないが
@@ -30,6 +31,7 @@ export function GanttView({
   onOpenTask: (id: string) => void
 }) {
   const { members, getProject } = useOrbit()
+  const { t } = useI18n()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [today] = useState(() => new Date())
 
@@ -79,23 +81,23 @@ export function GanttView({
       next.setMonth(next.getMonth() + 1)
       const end = Math.min(totalDays, diffDays(minDate, next)) * DAY_PX
       labels.push({
-        label: `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`,
+        label: t('gantt.monthLabel', { year: cursor.getFullYear(), month: cursor.getMonth() + 1 }),
         x: start,
         width: end - start,
       })
       cursor = next
     }
     return labels
-  }, [minDate, maxDate, totalDays])
+  }, [minDate, maxDate, totalDays, t])
 
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
         <p className="text-sm font-medium text-muted-foreground">
-          期限が設定されたタスクがありません
+          {t('gantt.noDeadline.title')}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          期限を設定するとガントチャートが表示されます。
+          {t('gantt.noDeadline.desc')}
         </p>
       </div>
     )
@@ -107,7 +109,7 @@ export function GanttView({
         {/* 左ペイン: タスク名 */}
         <div className="w-60 shrink-0 border-r border-border">
           <div className="h-12 border-b border-border bg-secondary/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-            タスク
+            {t('gantt.taskColumnHeader')}
           </div>
           {rows.map(({ task: t }) => {
             const assignees = t.assigneeIds

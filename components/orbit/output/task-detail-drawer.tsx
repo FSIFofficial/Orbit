@@ -17,7 +17,6 @@ import {
 import {
   DEPARTMENTS,
   DIFFICULTY_LABEL,
-  STATUS_LABEL,
   TASK_IMPORTANCE,
   isAdminRole,
   type Department,
@@ -38,7 +37,7 @@ import {
 } from '@/lib/orbit/types'
 import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
-import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
+import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
 import { formatDateTimeInTz, DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
@@ -65,22 +64,22 @@ import {
   X,
 } from 'lucide-react'
 
-const HISTORY_FIELD_LABEL: Record<TaskHistoryEntry['field'], string> = {
-  assignee: '担当者',
-  deadline: '期限',
-  startDate: '開始日',
-  priority: '優先度',
-  status: 'ステータス',
-  reviewer: '確認者',
-  title: 'タスク名',
-  description: '詳細',
-  project: 'プロジェクト',
-  department: '部門',
-  category: 'カテゴリ',
-  skills: '要求スキル',
-  difficulty: '難易度',
-  visibility: '公開範囲',
-  importance: '重要度',
+const HISTORY_FIELD_KEY: Record<TaskHistoryEntry['field'], TranslationKey> = {
+  assignee: 'taskDrawer.row.assignee',
+  deadline: 'taskDrawer.row.deadline',
+  startDate: 'taskDrawer.row.startDate',
+  priority: 'taskDrawer.edit.priorityLabel',
+  status: 'taskDrawer.row.status',
+  reviewer: 'taskDrawer.row.reviewer',
+  title: 'taskDrawer.edit.nameLabel',
+  description: 'taskDrawer.edit.descriptionLabel',
+  project: 'taskDrawer.row.project',
+  department: 'taskDrawer.row.department',
+  category: 'taskDrawer.row.category',
+  skills: 'taskDrawer.row.skills',
+  difficulty: 'taskDrawer.row.difficulty',
+  visibility: 'taskDrawer.edit.visibilityLabel',
+  importance: 'taskDrawer.edit.importanceLabel',
 }
 
 function historyValueLabel(
@@ -88,8 +87,9 @@ function historyValueLabel(
   raw: string,
   members: Member[],
   projects: Project[],
+  t: (key: TranslationKey) => string,
 ): string {
-  if (!raw) return '未設定'
+  if (!raw) return t('common.notSet')
   if (field === 'assignee') {
     return raw
       .split(',')
@@ -108,7 +108,7 @@ function historyValueLabel(
     return projects.find((p) => p.id === raw)?.name ?? raw
   }
   if (field === 'visibility') {
-    return raw === '幹部' ? '幹部限定' : '全員'
+    return raw === '幹部' ? t('taskDrawer.execOnly') : t('common.everyone')
   }
   return raw
 }
@@ -169,7 +169,7 @@ export function TaskDetailDrawer({
   const [editOpen, setEditOpen] = useState(false)
   const [awardOpen, setAwardOpen] = useState(false)
 
-  const { locale } = useI18n()
+  const { t: tr, locale } = useI18n()
   const task = tasks.find((t) => t.id === taskId) ?? null
   const open = !!taskId
   const sourceInput = getInput(task?.originalInputId)
@@ -213,7 +213,7 @@ export function TaskDetailDrawer({
             onOpenBlocker={() => setBlockerOpen(true)}
             onClearBlocker={() => {
               setBlocker(task.id, null)
-              toast('ブロックを解除しました')
+              toast(tr('taskDrawer.blocker.cleared'))
             }}
             onOpenHandoff={() => setHandoffOpen(true)}
             onOpenAward={() => setAwardOpen(true)}
@@ -223,13 +223,13 @@ export function TaskDetailDrawer({
             onRemoveComment={(commentId) => removeComment(task.id, commentId)}
             onProgress={(text) => {
               updateProgress(task.id, text)
-              toast('進捗を更新しました')
+              toast(tr('taskDrawer.progressUpdated'))
             }}
             onUpdateEstimatedHours={(hours) => updateEstimatedHours(task.id, hours)}
             onUpdateActualHours={(hours) => updateActualHours(task.id, hours)}
             onSaveRetrospective={(r) => {
               updateRetrospective(task.id, r)
-              toast('振り返りを保存しました')
+              toast(tr('taskDrawer.retrospectiveSaved'))
             }}
             onSetSchedule={(candidates, invitedIds) =>
               setTaskSchedule(task.id, candidates, invitedIds)
@@ -249,9 +249,9 @@ export function TaskDetailDrawer({
       <Modal open={inputOpen} onClose={() => setInputOpen(false)} labelledBy="source-input-title">
         <div className="mb-3 flex items-center justify-between">
           <h2 id="source-input-title" className="text-base font-semibold">
-            元の入力内容
+            {tr('taskDrawer.sourceInput.title')}
           </h2>
-          <button onClick={() => setInputOpen(false)} aria-label="閉じる">
+          <button onClick={() => setInputOpen(false)} aria-label={tr('common.close')}>
             <X className="size-4 text-muted-foreground" />
           </button>
         </div>
@@ -261,48 +261,48 @@ export function TaskDetailDrawer({
               {sourceInput.text}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {formatDateTimeInTz(sourceInput.createdAt, currentUser?.timezone ?? DEFAULT_TIMEZONE, locale)} ・ この入力から{sourceInput.generatedTaskIds.length}件のタスクが生成されました
+              {formatDateTimeInTz(sourceInput.createdAt, currentUser?.timezone ?? DEFAULT_TIMEZONE, locale)} ・ {tr('taskDrawer.sourceInput.generatedCount', { count: sourceInput.generatedTaskIds.length })}
             </p>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">元の入力は見つかりませんでした。</p>
+          <p className="text-sm text-muted-foreground">{tr('taskDrawer.sourceInput.notFound')}</p>
         )}
       </Modal>
 
       {/* Take task confirm */}
       <Modal open={confirmTake} onClose={() => setConfirmTake(false)}>
-        <h2 className="text-base font-semibold">このタスクを担当しますか？</h2>
+        <h2 className="text-base font-semibold">{tr('taskDrawer.confirmTake.title')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          「{task?.name}」の担当者としてあなたが追加されます。
+          {tr('taskDrawer.confirmTake.body', { name: task?.name ?? '' })}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setConfirmTake(false)}>
-            キャンセル
+            {tr('common.cancel')}
           </Button>
           <Button
             className="h-9"
             onClick={() => {
               if (task && currentUser && !task.assigneeIds.includes(currentUser.id)) {
                 assignTask(task.id, [...task.assigneeIds, currentUser.id])
-                toast('このタスクの担当になりました')
+                toast(tr('taskDrawer.confirmTake.done'))
               }
               setConfirmTake(false)
             }}
           >
-            担当する
+            {tr('taskDrawer.confirmTake.confirm')}
           </Button>
         </div>
       </Modal>
 
       {/* Delete task (admin only) */}
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <h2 className="text-base font-semibold">このタスクを削除しますか？</h2>
+        <h2 className="text-base font-semibold">{tr('taskDrawer.confirmDelete.title')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          「{task?.name}」を削除します。この操作は取り消せません。
+          {tr('taskDrawer.confirmDelete.body', { name: task?.name ?? '' })}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setConfirmDelete(false)}>
-            キャンセル
+            {tr('common.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -310,13 +310,13 @@ export function TaskDetailDrawer({
             onClick={() => {
               if (task) {
                 removeTask(task.id)
-                toast('タスクを削除しました')
+                toast(tr('taskDrawer.confirmDelete.done'))
               }
               setConfirmDelete(false)
               onClose()
             }}
           >
-            削除する
+            {tr('taskDrawer.confirmDelete.confirm')}
           </Button>
         </div>
       </Modal>
@@ -324,12 +324,12 @@ export function TaskDetailDrawer({
       {/* Admin assign (multi-select) */}
       <Modal open={assignOpen} onClose={() => setAssignOpen(false)}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">担当者を変更</h2>
-          <button onClick={() => setAssignOpen(false)} aria-label="閉じる">
+          <h2 className="text-base font-semibold">{tr('taskDrawer.assign.title')}</h2>
+          <button onClick={() => setAssignOpen(false)} aria-label={tr('common.close')}>
             <X className="size-4 text-muted-foreground" />
           </button>
         </div>
-        <p className="mb-2 text-xs text-muted-foreground">複数人選べます。</p>
+        <p className="mb-2 text-xs text-muted-foreground">{tr('taskDrawer.assign.hint')}</p>
         {(() => {
           const deptTops = task?.department
             ? getDepartmentTopsBySegment(task.department, members)
@@ -340,16 +340,16 @@ export function TaskDetailDrawer({
               <button
                 onClick={() => {
                   if (task) assignTask(task.id, [])
-                  toast('担当者を未アサインにしました')
+                  toast(tr('taskDrawer.assign.unassignedToast'))
                 }}
                 className="flex items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
               >
                 <Avatar member={null} size={28} />
-                全員はずす
+                {tr('taskDrawer.assign.unassignAll')}
               </button>
               {deptTops.length > 0 && (
                 <>
-                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">部署トップ（おすすめ）</div>
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.deptTopsRecommended')}</div>
                   {deptTops.map((m) => {
                     const checked = !!task?.assigneeIds.includes(m.id)
                     return (
@@ -376,7 +376,7 @@ export function TaskDetailDrawer({
                       </button>
                     )
                   })}
-                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">全メンバー</div>
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.allMembers')}</div>
                 </>
               )}
               {members
@@ -412,7 +412,7 @@ export function TaskDetailDrawer({
                         'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
                         activeCount === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : activeCount <= 2 ? 'bg-secondary text-muted-foreground' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
                       )}>
-                        {activeCount}件
+                        {tr('taskDrawer.assign.activeCount', { count: activeCount })}
                       </span>
                       {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
                     </button>
@@ -437,16 +437,23 @@ export function TaskDetailDrawer({
           const fromM = members.find((m) => m.id === fromId)
           const toM = members.find((m) => m.id === toId)
           const summary = [
-            `${fromM?.displayName || fromM?.name || '担当者'} から ${toM?.displayName || toM?.name || '新しい担当者'} に引き継ぎました。`,
-            task.progress ? `直近の進捗: ${task.progress}` : null,
-            (task.deliverables?.length ?? 0) > 0 ? `成果物: ${task.deliverables!.length}件` : null,
-            (task.dependsOnIds?.length ?? 0) > 0 ? `前提タスク: ${task.dependsOnIds!.length}件` : null,
-            note.trim() ? `引き継ぎメモ: ${note.trim()}` : null,
+            tr('taskDrawer.handoff.summaryLine', {
+              from: fromM?.displayName || fromM?.name || tr('taskDrawer.handoff.defaultFrom'),
+              to: toM?.displayName || toM?.name || tr('taskDrawer.handoff.defaultTo'),
+            }),
+            task.progress ? tr('taskDrawer.handoff.recentProgress', { progress: task.progress }) : null,
+            (task.deliverables?.length ?? 0) > 0
+              ? tr('taskDrawer.handoff.deliverablesCount', { count: task.deliverables!.length })
+              : null,
+            (task.dependsOnIds?.length ?? 0) > 0
+              ? tr('taskDrawer.handoff.dependsCount', { count: task.dependsOnIds!.length })
+              : null,
+            note.trim() ? tr('taskDrawer.handoff.noteLine', { note: note.trim() }) : null,
           ]
             .filter(Boolean)
             .join('\n')
           addComment(task.id, summary)
-          toast('タスクを引き継ぎました')
+          toast(tr('taskDrawer.handoff.done'))
           setHandoffOpen(false)
         }}
       />
@@ -459,7 +466,7 @@ export function TaskDetailDrawer({
         onSave={(startDate, deadline) => {
           if (!task) return
           updateSchedule(task.id, startDate, deadline)
-          toast('日程を変更しました。管理者に通知されます。')
+          toast(tr('taskDrawer.schedule.savedToast'))
           setScheduleOpen(false)
         }}
       />
@@ -478,7 +485,7 @@ export function TaskDetailDrawer({
         onSave={(details) => {
           if (!task) return
           updateTaskDetails(task.id, details)
-          toast('タスクを更新しました')
+          toast(tr('taskDrawer.edit.savedToast'))
           setEditOpen(false)
         }}
       />
@@ -492,26 +499,26 @@ export function TaskDetailDrawer({
         }}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">前提タスクを設定</h2>
+          <h2 className="text-base font-semibold">{tr('taskDrawer.depends.title')}</h2>
           <button
             onClick={() => {
               setDependsOpen(false)
               setDependsQuery('')
             }}
-            aria-label="閉じる"
+            aria-label={tr('common.close')}
           >
             <X className="size-4 text-muted-foreground" />
           </button>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
-          このタスクを開始する前に完了しておく必要があるタスクを選びます。
+          {tr('taskDrawer.depends.hint')}
         </p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={dependsQuery}
             onChange={(e) => setDependsQuery(e.target.value)}
-            placeholder="タスク名で検索"
+            placeholder={tr('taskDrawer.depends.searchPlaceholder')}
             autoFocus
             className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2.5 text-sm outline-none focus:border-primary"
           />
@@ -522,7 +529,7 @@ export function TaskDetailDrawer({
               .filter((t) => t.id !== task?.id)
               .filter((t) => t.name.toLowerCase().includes(dependsQuery.trim().toLowerCase()))
             if (filtered.length === 0) {
-              return <p className="px-3 py-2 text-sm text-muted-foreground">該当するタスクがありません。</p>
+              return <p className="px-3 py-2 text-sm text-muted-foreground">{tr('taskDrawer.depends.noResults')}</p>
             }
             return filtered.map((t) => {
               const checked = !!task?.dependsOnIds?.includes(t.id)
@@ -542,7 +549,7 @@ export function TaskDetailDrawer({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{t.name}</div>
-                    <div className="text-xs text-muted-foreground">{STATUS_LABEL[t.status]}</div>
+                    <div className="text-xs text-muted-foreground">{tr(STATUS_KEY[t.status])}</div>
                   </div>
                   {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
                 </button>
@@ -555,13 +562,13 @@ export function TaskDetailDrawer({
       {/* Reviewer (確認者) select */}
       <Modal open={reviewerOpen} onClose={() => setReviewerOpen(false)}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">確認者を設定</h2>
-          <button onClick={() => setReviewerOpen(false)} aria-label="閉じる">
+          <h2 className="text-base font-semibold">{tr('taskDrawer.reviewer.title')}</h2>
+          <button onClick={() => setReviewerOpen(false)} aria-label={tr('common.close')}>
             <X className="size-4 text-muted-foreground" />
           </button>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
-          複数選択できます。担当者とは別に、完了確認を行う人を指定してください。
+          {tr('taskDrawer.reviewer.hint')}
         </p>
         {(() => {
           const currentIds = task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])
@@ -573,7 +580,7 @@ export function TaskDetailDrawer({
             <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
               {deptTops.length > 0 && (
                 <>
-                  <div className="px-1 pb-0.5 pt-1 text-xs font-medium text-muted-foreground">部署トップ（おすすめ）</div>
+                  <div className="px-1 pb-0.5 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.deptTopsRecommended')}</div>
                   {deptTops.map((m) => {
                     const checked = currentIds.includes(m.id)
                     return (
@@ -598,7 +605,7 @@ export function TaskDetailDrawer({
                       </button>
                     )
                   })}
-                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">全メンバー</div>
+                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.allMembers')}</div>
                 </>
               )}
               {members.filter((m) => !topIds.has(m.id)).map((m) => {
@@ -635,7 +642,7 @@ export function TaskDetailDrawer({
           const req = task?.requiredApprovals
           return (
             <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
-              <span className="text-xs text-muted-foreground shrink-0">必要な承認数:</span>
+              <span className="text-xs text-muted-foreground shrink-0">{tr('taskDrawer.reviewer.requiredApprovalsLabel')}</span>
               <select
                 value={req === 'all' ? 'all' : (req ?? 1)}
                 onChange={(e) => {
@@ -646,9 +653,9 @@ export function TaskDetailDrawer({
                 className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
               >
                 {currentIds.map((_, i) => (
-                  <option key={i + 1} value={i + 1}>{i + 1}人</option>
+                  <option key={i + 1} value={i + 1}>{tr('taskDrawer.reviewer.approvalCount', { count: i + 1 })}</option>
                 ))}
-                <option value="all">全員</option>
+                <option value="all">{tr('common.everyone')}</option>
               </select>
             </div>
           )
@@ -660,7 +667,7 @@ export function TaskDetailDrawer({
           }}
           className="mt-2 w-full rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
         >
-          すべて解除
+          {tr('taskDrawer.reviewer.clearAll')}
         </button>
       </Modal>
 
@@ -672,7 +679,7 @@ export function TaskDetailDrawer({
         onSave={(note) => {
           if (!task) return
           setBlocker(task.id, note)
-          toast(note ? 'ブロッカーを登録しました' : 'ブロックを解除しました')
+          toast(note ? tr('taskDrawer.blocker.registered') : tr('taskDrawer.blocker.cleared'))
           setBlockerOpen(false)
         }}
       />
@@ -687,7 +694,7 @@ export function TaskDetailDrawer({
           allTasks={tasks}
           onAward={(memberId, points) => {
             awardSkillPoints(task.id, memberId, points)
-            toast('スキルポイントを付与しました')
+            toast(tr('taskDrawer.award.done'))
             setAwardOpen(false)
           }}
         />
@@ -707,6 +714,7 @@ function BlockerModal({
   task: Task | null
   onSave: (note: string | null) => void
 }) {
+  const { t } = useI18n()
   const [note, setNote] = useState('')
   const [lastTaskId, setLastTaskId] = useState<string | null>(null)
   if (task && task.id !== lastTaskId && open) {
@@ -716,28 +724,28 @@ function BlockerModal({
 
   return (
     <Modal open={open} onClose={onClose}>
-      <h2 className="text-base font-semibold">ブロッカーを登録</h2>
+      <h2 className="text-base font-semibold">{t('taskDrawer.blocker.title')}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        困っていること・作業が止まっている理由を記録します。管理者画面の Blocked Tasks に表示されます。
+        {t('taskDrawer.blocker.hint')}
       </p>
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={3}
-        placeholder="例：企業から素材未提出"
+        placeholder={t('taskDrawer.blocker.placeholder')}
         className="mt-3 w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
       />
       <div className="mt-5 flex justify-end gap-2">
         {task?.blocker && (
           <Button variant="ghost" className="h-9 mr-auto text-destructive" onClick={() => onSave(null)}>
-            解除する
+            {t('taskDrawer.blocker.release')}
           </Button>
         )}
         <Button variant="ghost" className="h-9" onClick={onClose}>
-          キャンセル
+          {t('common.cancel')}
         </Button>
         <Button className="h-9" disabled={!note.trim()} onClick={() => onSave(note)}>
-          保存
+          {t('common.save')}
         </Button>
       </div>
     </Modal>
@@ -760,6 +768,7 @@ function SkillAwardModal({
   allTasks: Task[]
   onAward: (memberId: string, points: SkillPoints) => void
 }) {
+  const { t } = useI18n()
   const [memberId, setMemberId] = useState(assignees[0]?.id ?? '')
   const [pointsMap, setPointsMap] = useState<Record<string, number>>(() =>
     Object.fromEntries(task.skills.map((s) => [s, 10])),
@@ -786,10 +795,10 @@ function SkillAwardModal({
 
   return (
     <Modal open={open} onClose={onClose}>
-      <h2 className="mb-3 text-base font-semibold">スキルポイントを付与</h2>
+      <h2 className="mb-3 text-base font-semibold">{t('taskDrawer.award.title')}</h2>
       {assignees.length > 1 && (
         <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">対象メンバー</label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('taskDrawer.award.targetMember')}</label>
           <select
             value={memberId}
             onChange={(e) => setMemberId(e.target.value)}
@@ -810,7 +819,7 @@ function SkillAwardModal({
                 onClick={() => setPoint(skill, avgPoints[skill]!)}
                 className="shrink-0 text-xs text-muted-foreground hover:text-primary"
               >
-                参考値: {avgPoints[skill]}pt
+                {t('taskDrawer.award.referenceValue', { points: avgPoints[skill] })}
               </button>
             )}
             <input
@@ -825,7 +834,7 @@ function SkillAwardModal({
         ))}
       </div>
       <div className="mt-4 flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>キャンセル</Button>
+        <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           disabled={!memberId}
           onClick={() => {
@@ -835,7 +844,7 @@ function SkillAwardModal({
             onAward(memberId, points)
           }}
         >
-          付与する
+          {t('taskDrawer.award.confirm')}
         </Button>
       </div>
     </Modal>
@@ -859,6 +868,7 @@ function HandoffModal({
   members: Member[]
   onHandoff: (fromId: string, toId: string, note: string) => void
 }) {
+  const { t } = useI18n()
   const [fromId, setFromId] = useState('')
   const [toId, setToId] = useState('')
   const [note, setNote] = useState('')
@@ -882,13 +892,13 @@ function HandoffModal({
         onClose()
       }}
     >
-      <h2 className="text-base font-semibold">タスクを引き継ぐ</h2>
+      <h2 className="text-base font-semibold">{t('taskDrawer.handoff.title')}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        進捗・成果物・前提タスクの件数を要約したコメントが自動で残ります。
+        {t('taskDrawer.handoff.hint')}
       </p>
       <div className="mt-4 flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">誰から</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.handoff.from')}</span>
           <select
             value={fromId}
             onChange={(e) => {
@@ -897,7 +907,7 @@ function HandoffModal({
             }}
             className="h-9 cursor-pointer rounded-lg border border-border bg-card px-2.5 text-sm outline-none focus:border-primary"
           >
-            <option value="">選択してください</option>
+            <option value="">{t('common.selectPlaceholder')}</option>
             {assignees.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.displayName || m.name}
@@ -906,14 +916,14 @@ function HandoffModal({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">誰へ</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.handoff.to')}</span>
           <select
             value={toId}
             onChange={(e) => setToId(e.target.value)}
             disabled={!fromId}
             className="h-9 cursor-pointer rounded-lg border border-border bg-card px-2.5 text-sm outline-none focus:border-primary disabled:opacity-50"
           >
-            <option value="">選択してください</option>
+            <option value="">{t('common.selectPlaceholder')}</option>
             {candidates.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.displayName || m.name}
@@ -922,12 +932,12 @@ function HandoffModal({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">引き継ぎメモ（任意）</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.handoff.noteLabel')}</span>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
-            placeholder="伝えておきたいことがあれば"
+            placeholder={t('taskDrawer.handoff.notePlaceholder')}
             className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
           />
         </label>
@@ -941,7 +951,7 @@ function HandoffModal({
             onClose()
           }}
         >
-          キャンセル
+          {t('common.cancel')}
         </Button>
         <Button
           className="h-9"
@@ -951,7 +961,7 @@ function HandoffModal({
             reset()
           }}
         >
-          引き継ぐ
+          {t('taskDrawer.handoff')}
         </Button>
       </div>
     </Modal>
@@ -969,6 +979,7 @@ function ScheduleModal({
   task: Task | null
   onSave: (startDate: string | null, deadline: string | null) => void
 }) {
+  const { t } = useI18n()
   const [start, setStart] = useState('')
   const [deadline, setDeadline] = useState('')
 
@@ -982,11 +993,11 @@ function ScheduleModal({
 
   return (
     <Modal open={open} onClose={onClose}>
-      <h2 className="text-base font-semibold">日程を変更</h2>
-      <p className="mt-1 text-xs text-muted-foreground">変更すると管理者に通知が送られます。</p>
+      <h2 className="text-base font-semibold">{t('taskDrawer.schedule.title')}</h2>
+      <p className="mt-1 text-xs text-muted-foreground">{t('taskDrawer.schedule.hint')}</p>
       <div className="mt-4 flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">開始日</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.startDate')}</span>
           <input
             type="date"
             value={start}
@@ -995,7 +1006,7 @@ function ScheduleModal({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">期限</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.deadline')}</span>
           <input
             type="date"
             value={deadline}
@@ -1006,10 +1017,10 @@ function ScheduleModal({
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" className="h-9" onClick={onClose}>
-          キャンセル
+          {t('common.cancel')}
         </Button>
         <Button className="h-9" onClick={() => onSave(start || null, deadline || null)}>
-          保存
+          {t('common.save')}
         </Button>
       </div>
     </Modal>
@@ -1052,6 +1063,7 @@ function EditTaskModal({
     importance: TaskImportance
   }) => void
 }) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -1109,15 +1121,15 @@ function EditTaskModal({
     <Modal open={open} onClose={onClose} labelledBy="edit-task-title">
       <div className="mb-3 flex items-center justify-between">
         <h2 id="edit-task-title" className="text-base font-semibold">
-          タスクを編集
+          {t('taskDrawer.edit.title')}
         </h2>
-        <button onClick={onClose} aria-label="閉じる">
+        <button onClick={onClose} aria-label={t('common.close')}>
           <X className="size-4 text-muted-foreground" />
         </button>
       </div>
       <div className="flex max-h-[70vh] flex-col gap-3 overflow-auto orbit-scroll pr-1">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">タスク名</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.nameLabel')}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -1125,7 +1137,7 @@ function EditTaskModal({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">詳細</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.descriptionLabel')}</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -1135,7 +1147,7 @@ function EditTaskModal({
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">プロジェクト</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.project')}</span>
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={fieldClass}>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -1145,7 +1157,7 @@ function EditTaskModal({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">部門</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.department')}</span>
             <select
               value={department}
               onChange={(e) => setDepartment(e.target.value as Department)}
@@ -1159,7 +1171,7 @@ function EditTaskModal({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">カテゴリ</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.category')}</span>
             {addingCategory ? (
               <input
                 autoFocus
@@ -1177,7 +1189,7 @@ function EditTaskModal({
                   }
                 }}
                 onBlur={commitNewCategory}
-                placeholder="新しいカテゴリ名"
+                placeholder={t('taskDrawer.edit.newCategoryPlaceholder')}
                 className="h-9 rounded-lg border border-primary bg-card px-3 text-sm outline-none"
               />
             ) : (
@@ -1200,12 +1212,12 @@ function EditTaskModal({
                     {c}
                   </option>
                 ))}
-                <option value="__new__">＋ 新しいカテゴリを追加</option>
+                <option value="__new__">{t('taskDrawer.edit.addCategoryOption')}</option>
               </select>
             )}
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">難易度</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.difficulty')}</span>
             <select
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value as Difficulty)}
@@ -1219,7 +1231,7 @@ function EditTaskModal({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">優先度</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.priorityLabel')}</span>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority)}
@@ -1233,18 +1245,18 @@ function EditTaskModal({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">公開範囲</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.visibilityLabel')}</span>
             <select
               value={visibility}
               onChange={(e) => setVisibility(e.target.value as 'all' | '幹部')}
               className={fieldClass}
             >
-              <option value="all">全員</option>
-              <option value="幹部">幹部限定</option>
+              <option value="all">{t('common.everyone')}</option>
+              <option value="幹部">{t('taskDrawer.execOnly')}</option>
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">重要度</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.importanceLabel')}</span>
             <select
               value={importance}
               onChange={(e) => setImportance(e.target.value as TaskImportance)}
@@ -1259,7 +1271,7 @@ function EditTaskModal({
           </label>
         </div>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">要求スキル</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.skills')}</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {skills.map((s) => (
               <Tag key={s} onRemove={() => setSkills(skills.filter((x) => x !== s))}>
@@ -1292,15 +1304,15 @@ function EditTaskModal({
                     addSkill()
                   }
                 }}
-                placeholder="追加"
+                placeholder={t('common.add')}
                 className="w-14 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground"
-                aria-label="スキルを追加"
+                aria-label={t('taskDrawer.edit.addSkillAria')}
               />
               <button
                 type="button"
                 onClick={addSkill}
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="スキルを追加"
+                aria-label={t('taskDrawer.edit.addSkillAria')}
               >
                 <Plus className="size-3" />
               </button>
@@ -1310,7 +1322,7 @@ function EditTaskModal({
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" className="h-9" onClick={onClose}>
-          キャンセル
+          {t('common.cancel')}
         </Button>
         <Button
           className="h-9"
@@ -1330,7 +1342,7 @@ function EditTaskModal({
             })
           }}
         >
-          保存
+          {t('common.save')}
         </Button>
       </div>
     </Modal>
@@ -1441,8 +1453,7 @@ function DrawerBody({
   // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
   const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
   const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
-  const canSetDone = reviewerIds.length === 0 ? isAdmin : isReviewer
-  const statusOptions = allowedStatusOptions(isAdmin).filter((s) => s !== 'done' || canSetDone)
+  const statusOptions = allowedStatusOptions(isAdmin, isReviewer)
 
   return (
     <div className="flex h-full flex-col">
@@ -1702,7 +1713,7 @@ function DrawerBody({
               className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
             >
               <FileText className="size-3.5" />
-              元の入力内容を見る
+              {t('taskDrawer.viewSourceInput')}
             </button>
           )}
           {calendarUrl && (
@@ -1713,7 +1724,7 @@ function DrawerBody({
               className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
             >
               <CalendarPlus className="size-3.5" />
-              自分のGoogleカレンダーに追加
+              {t('taskDrawer.addToMyGCal')}
             </a>
           )}
           {canManageBlocker && !task.blocker && (
@@ -1722,7 +1733,7 @@ function DrawerBody({
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
             >
               <Ban className="size-3.5" />
-              ブロッカーを登録
+              {t('taskDrawer.blocker.title')}
             </button>
           )}
         </div>
@@ -1731,7 +1742,7 @@ function DrawerBody({
         {canChangeStatus && (
           <div className="mt-6">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              ステータスを変更
+              {t('taskDrawer.changeStatusHeader')}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {statusOptions.map((s) => {
@@ -1743,7 +1754,7 @@ function DrawerBody({
                     disabled={blocked}
                     title={
                       blocked
-                        ? `前提タスクが未完了です：${incompleteDeps.map((d) => d.name).join('、')}`
+                        ? t('taskDrawer.dependsIncompleteTitle', { names: incompleteDeps.map((d) => d.name).join('、') })
                         : undefined
                     }
                     className={cn(
@@ -1755,7 +1766,7 @@ function DrawerBody({
                     )}
                   >
                     <StatusDot status={s} />
-                    {STATUS_LABEL[s]}
+                    {t(STATUS_KEY[s])}
                   </button>
                 )
               })}
@@ -1763,18 +1774,18 @@ function DrawerBody({
             {incompleteDeps.length > 0 && (
               <p className="mt-1.5 flex items-center gap-1 text-[11px] text-warning">
                 <TriangleAlert className="size-3" />
-                前提タスクが未完了のため「完了」にできません：{incompleteDeps.map((d) => d.name).join('、')}
+                {t('taskDrawer.dependsIncompleteWarning', { names: incompleteDeps.map((d) => d.name).join('、') })}
               </p>
             )}
             {reviewerIds.length > 0 && !isReviewer && isAdmin && (
               <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
                 <UserCheck className="size-3" />
-                確認者が設定されています。「完了」への変更は確認者本人のみ行えます。
+                {t('taskDrawer.reviewerOnlyDoneNotice')}
               </p>
             )}
             {!isAdmin && (
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                「確認待ち」にすると管理者に通知され、確認後「完了」になります。
+                {t('taskDrawer.pendingReviewNotice')}
               </p>
             )}
           </div>
@@ -1783,7 +1794,7 @@ function DrawerBody({
         {/* Progress */}
         <div className="mt-6">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            進捗
+            {t('taskDrawer.progressHeader')}
           </div>
           {canUpdateProgress && (
             <div className="mb-3 flex items-start gap-2">
@@ -1791,7 +1802,7 @@ function DrawerBody({
                 value={progressDraft}
                 onChange={(e) => setProgressDraft(e.target.value)}
                 rows={2}
-                placeholder="どこまで進んだか記録する"
+                placeholder={t('taskDrawer.progressPlaceholder')}
                 className="min-h-[52px] flex-1 resize-none rounded-lg border border-border bg-card px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
               />
               <Button
@@ -1802,7 +1813,7 @@ function DrawerBody({
                   setProgressDraft('')
                 }}
               >
-                記録
+                {t('taskDrawer.recordButton')}
               </Button>
             </div>
           )}
@@ -1818,14 +1829,14 @@ function DrawerBody({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">まだ進捗の記録がありません。</p>
+            <p className="text-sm text-muted-foreground">{t('taskDrawer.progressEmpty')}</p>
           )}
         </div>
 
         {/* Deliverables */}
         <div className="mt-6">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            成果物
+            {t('taskDrawer.deliverablesHeader')}
           </div>
           {(task.deliverables?.length ?? 0) > 0 ? (
             <ul className="mb-3 flex flex-col gap-1.5">
@@ -1847,7 +1858,7 @@ function DrawerBody({
                     <button
                       onClick={() => onRemoveDeliverable(d.id)}
                       className="shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label="削除"
+                      aria-label={t('common.delete')}
                     >
                       <X className="size-3.5" />
                     </button>
@@ -1856,14 +1867,14 @@ function DrawerBody({
               ))}
             </ul>
           ) : (
-            <p className="mb-3 text-sm text-muted-foreground">まだ成果物が登録されていません。</p>
+            <p className="mb-3 text-sm text-muted-foreground">{t('taskDrawer.deliverablesEmpty')}</p>
           )}
           {canManageDeliverables && (
             <div className="flex flex-col gap-1.5 sm:flex-row">
               <input
                 value={deliverableLabel}
                 onChange={(e) => setDeliverableLabel(e.target.value)}
-                placeholder="名前（例：ポスターPDF）"
+                placeholder={t('taskDrawer.deliverableNamePlaceholder')}
                 className="h-9 flex-1 rounded-lg border border-border bg-card px-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
               />
               <input
@@ -1883,7 +1894,7 @@ function DrawerBody({
                 }}
               >
                 <Plus className="size-4" />
-                追加
+                {t('common.add')}
               </Button>
             </div>
           )}
@@ -1910,7 +1921,7 @@ function DrawerBody({
         {/* Comments */}
         <div className="mt-6">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            コメント
+            {t('taskDrawer.commentsHeader')}
           </div>
           {(task.comments?.length ?? 0) > 0 ? (
             <ul className="mb-3 flex flex-col gap-2.5">
@@ -1923,7 +1934,7 @@ function DrawerBody({
                       <div className="flex items-center gap-1.5">
                         {author && <Avatar member={author} size={18} />}
                         <span className="text-xs font-medium">
-                          {author?.displayName || author?.name || '不明'}
+                          {author?.displayName || author?.name || t('taskDrawer.unknown')}
                         </span>
                         <span className="text-[11px] text-muted-foreground">{formatDateTime(c.at)}</span>
                       </div>
@@ -1931,7 +1942,7 @@ function DrawerBody({
                         <button
                           onClick={() => onRemoveComment(c.id)}
                           className="shrink-0 text-muted-foreground hover:text-destructive"
-                          aria-label="削除"
+                          aria-label={t('common.delete')}
                         >
                           <X className="size-3.5" />
                         </button>
@@ -1943,7 +1954,7 @@ function DrawerBody({
               })}
             </ul>
           ) : (
-            <p className="mb-3 text-sm text-muted-foreground">まだコメントがありません。</p>
+            <p className="mb-3 text-sm text-muted-foreground">{t('taskDrawer.commentsEmpty')}</p>
           )}
           <div className="flex items-start gap-2">
             <div className="relative flex-1">
@@ -1951,7 +1962,7 @@ function DrawerBody({
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
                 rows={2}
-                placeholder="コメントを追加（@名前でメンション）"
+                placeholder={t('taskDrawer.commentPlaceholder')}
                 className="min-h-[52px] w-full resize-none rounded-lg border border-border bg-card px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
               />
               {(() => {
@@ -1994,7 +2005,7 @@ function DrawerBody({
                 setCommentDraft('')
               }}
             >
-              送信
+              {t('taskDrawer.sendButton')}
             </Button>
           </div>
         </div>
@@ -2019,10 +2030,10 @@ function DrawerBody({
               className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <Plus className="size-3.5" />
-              スキルポイントを付与
+              {t('taskDrawer.award.title')}
               {task.awardedPoints && Object.keys(task.awardedPoints).length > 0 && (
                 <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                  付与済み
+                  {t('taskDrawer.award.alreadyAwarded')}
                 </span>
               )}
             </button>
@@ -2038,7 +2049,7 @@ function DrawerBody({
             >
               <span className="inline-flex items-center gap-1.5">
                 <HistoryIcon className="size-3.5" />
-                変更履歴
+                {t('taskDrawer.historyHeader')}
               </span>
               <ChevronDown className={cn('size-3.5 transition-transform', historyOpen && 'rotate-180')} />
             </button>
@@ -2048,11 +2059,15 @@ function DrawerBody({
                   <li key={h.id} className="text-xs">
                     <p className="text-muted-foreground">{formatDateTime(h.at)}</p>
                     <p className="mt-0.5">
-                      {members.find((m) => m.id === h.byId)?.displayName ||
-                        members.find((m) => m.id === h.byId)?.name ||
-                        '不明'}
-                      が{HISTORY_FIELD_LABEL[h.field]}を「{historyValueLabel(h.field, h.from, members, projects)}」→「
-                      {historyValueLabel(h.field, h.to, members, projects)}」に変更
+                      {t('taskDrawer.historyChangeLine', {
+                        who:
+                          members.find((m) => m.id === h.byId)?.displayName ||
+                          members.find((m) => m.id === h.byId)?.name ||
+                          t('taskDrawer.unknown'),
+                        field: t(HISTORY_FIELD_KEY[h.field]),
+                        from: historyValueLabel(h.field, h.from, members, projects, t),
+                        to: historyValueLabel(h.field, h.to, members, projects, t),
+                      })}
                     </p>
                   </li>
                 ))}
@@ -2067,16 +2082,16 @@ function DrawerBody({
         {isAdmin ? (
           <Button variant="outline" className="h-9 w-full" onClick={onOpenAssign}>
             <UserPlus className="size-4" />
-            担当者を変更
+            {t('taskDrawer.assign.title')}
           </Button>
         ) : !isAssignee ? (
           <Button className="h-9 w-full" onClick={onTake}>
             <UserPlus className="size-4" />
-            このタスクを担当する
+            {t('taskDrawer.takeButton')}
           </Button>
         ) : (
           <p className="text-center text-xs text-muted-foreground">
-            あなたが担当しています。上のボタンでステータスを更新できます。
+            {t('taskDrawer.assigneeFooterNote')}
           </p>
         )}
       </div>
@@ -2134,6 +2149,7 @@ function TimerWidget({
   actualHours: number | undefined
   onAddHours: (hours: number) => void
 }) {
+  const { t } = useI18n()
   const [state, setState] = useState<TimerState>(() => loadTimerState(taskId, userId))
   const [, forceTick] = useState(0)
 
@@ -2185,7 +2201,7 @@ function TimerWidget({
         type="button"
         onClick={toggle}
         className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-        aria-label={state.runningSince ? '一時停止' : '開始'}
+        aria-label={state.runningSince ? t('taskDrawer.timer.pause') : t('taskDrawer.timer.start')}
       >
         {state.runningSince ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
       </button>
@@ -2196,13 +2212,13 @@ function TimerWidget({
             onClick={addToActual}
             className="text-xs font-medium text-primary hover:underline"
           >
-            実績に加算
+            {t('taskDrawer.timer.addToActual')}
           </button>
           <button
             type="button"
             onClick={reset}
             className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-            aria-label="リセット"
+            aria-label={t('taskDrawer.timer.reset')}
           >
             <RotateCcw className="size-3.5" />
           </button>
@@ -2222,6 +2238,7 @@ const SCHEDULE_RESPONSE_COLOR: Record<ScheduleResponseValue, string> = {
 // Googleカレンダーへの追加ボタン — 日程調整完了後に表示する
 function AddToGCalButton({ task }: { task: Task }) {
   const toast = useToast()
+  const { t } = useI18n()
   const [added, setAdded] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -2250,9 +2267,9 @@ function AddToGCalButton({ task }: { task: Task }) {
         await createCalendarEvent(token, { summary: `[Orbit] ${title}`, description: desc, startDate: new Date().toISOString().slice(0, 10) })
       }
       setAdded(true)
-      toast('Googleカレンダーに追加しました')
+      toast(t('taskDrawer.gcal.added'))
     } catch (e) {
-      toast(`カレンダー追加に失敗しました: ${String(e)}`)
+      toast(t('taskDrawer.gcal.failed', { error: String(e) }))
     } finally {
       setLoading(false)
     }
@@ -2265,7 +2282,7 @@ function AddToGCalButton({ task }: { task: Task }) {
       className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50"
     >
       <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      {loading ? '追加中...' : 'Googleカレンダーに追加'}
+      {loading ? t('taskDrawer.gcal.adding') : t('taskDrawer.gcal.addButton')}
     </button>
   )
 }
@@ -2288,6 +2305,7 @@ function ScheduleSection({
   onSetSchedule: (candidates: { id: string; label: string }[], invitedIds: string[]) => void
   onRespondSchedule: (responses: Record<string, ScheduleResponseValue>) => void
 }) {
+  const { t } = useI18n()
   const schedule = task.schedule
   const canConfigure = isAdmin || task.createdById === currentUserId
   const [configOpen, setConfigOpen] = useState(false)
@@ -2312,7 +2330,8 @@ function ScheduleSection({
   const addCandidate = () => {
     if (!dateTimeInput) return
     const d = new Date(dateTimeInput)
-    const label = `${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    const weekdays = t('taskDrawer.schedule.weekdayShort').split(',')
+    const label = `${d.getMonth() + 1}/${d.getDate()}(${weekdays[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     setCandidateDraft((prev) => [
       ...prev,
       { id: `sc-${Math.random().toString(36).slice(2, 9)}`, label },
@@ -2357,7 +2376,7 @@ function ScheduleSection({
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          日程調整
+          {t('taskDrawer.schedule.sectionHeader')}
         </div>
         {canConfigure && (
           <button
@@ -2365,13 +2384,13 @@ function ScheduleSection({
             className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             <Pencil className="size-3" />
-            {schedule ? '編集' : '設定'}
+            {schedule ? t('common.edit') : t('taskDrawer.setupButton')}
           </button>
         )}
       </div>
 
       {!schedule && !configOpen && (
-        <p className="text-sm text-muted-foreground">まだ設定されていません。</p>
+        <p className="text-sm text-muted-foreground">{t('taskDrawer.notConfiguredYet')}</p>
       )}
 
       {schedule && !configOpen && (
@@ -2379,11 +2398,11 @@ function ScheduleSection({
           {canRespond && (
             <div className="rounded-lg border border-border bg-secondary/40 p-3">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">候補ごとに回答してください</p>
+                <p className="text-xs text-muted-foreground">{t('taskDrawer.schedule.respondHint')}</p>
                 {isGoogleOAuthConfigured() && getCalendarToken() && (
                   <button onClick={checkFreeBusy} className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
                     <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    GCalで空き確認
+                    {t('taskDrawer.schedule.checkFreeBusy')}
                   </button>
                 )}
               </div>
@@ -2394,7 +2413,7 @@ function ScheduleSection({
                       {c.label}
                       {freeBusy[c.id] !== undefined && (
                         <span className={cn('rounded-full px-1.5 py-0.5 text-[9px] font-medium', freeBusy[c.id] ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400')}>
-                          {freeBusy[c.id] ? '予定あり' : '空き'}
+                          {freeBusy[c.id] ? t('taskDrawer.schedule.busy') : t('taskDrawer.schedule.free')}
                         </span>
                       )}
                     </span>
@@ -2422,7 +2441,7 @@ function ScheduleSection({
                 disabled={!canSubmitResponse}
                 onClick={() => onRespondSchedule(responseDraft)}
               >
-                回答を送信
+                {t('taskDrawer.submitResponse')}
               </Button>
             </div>
           )}
@@ -2432,7 +2451,7 @@ function ScheduleSection({
               <thead>
                 <tr>
                   <th className="border-b border-border px-1.5 py-1 text-left font-medium text-muted-foreground">
-                    候補
+                    {t('taskDrawer.schedule.candidateColumn')}
                   </th>
                   {schedule.invitedIds.map((mid) => {
                     const m = members.find((mm) => mm.id === mid)
@@ -2441,7 +2460,7 @@ function ScheduleSection({
                         key={mid}
                         className="border-b border-border px-1.5 py-1 text-center font-medium text-muted-foreground"
                       >
-                        {m?.displayName || m?.name || '不明'}
+                        {m?.displayName || m?.name || t('taskDrawer.unknown')}
                       </th>
                     )
                   })}
@@ -2465,7 +2484,7 @@ function ScheduleSection({
                               {resp}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">未回答</span>
+                            <span className="text-muted-foreground">{t('taskDrawer.noResponse')}</span>
                           )}
                         </td>
                       )
@@ -2477,7 +2496,7 @@ function ScheduleSection({
           </div>
           {task.status === 'done' && (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+              <p className="text-xs font-medium text-emerald-700">{t('taskDrawer.allRespondedDone')}</p>
               <AddToGCalButton task={task} />
             </div>
           )}
@@ -2486,7 +2505,7 @@ function ScheduleSection({
 
       {configOpen && (
         <div className="rounded-lg border border-border bg-secondary/40 p-3">
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">候補日時</p>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">{t('taskDrawer.schedule.candidatesLabel')}</p>
           <ul className="mb-2 flex flex-col gap-1">
             {candidateDraft.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
@@ -2494,7 +2513,7 @@ function ScheduleSection({
                 <button
                   onClick={() => setCandidateDraft((prev) => prev.filter((x) => x.id !== c.id))}
                   className="text-muted-foreground hover:text-destructive"
-                  aria-label="削除"
+                  aria-label={t('common.delete')}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -2514,11 +2533,11 @@ function ScheduleSection({
               className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong px-2 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              追加
+              {t('common.add')}
             </button>
           </div>
 
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">招待するメンバー</p>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">{t('taskDrawer.schedule.inviteMembersLabel')}</p>
           <div className="mb-3 flex max-h-40 flex-col gap-1 overflow-y-auto orbit-scroll">
             {members.map((m) => {
               const checked = inviteDraft.includes(m.id)
@@ -2545,14 +2564,14 @@ function ScheduleSection({
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-8" onClick={() => setConfigOpen(false)}>
-              キャンセル
+              {t('common.cancel')}
             </Button>
             <Button
               className="h-8"
               disabled={candidateDraft.length === 0 || inviteDraft.length === 0}
               onClick={saveConfig}
             >
-              保存
+              {t('common.save')}
             </Button>
           </div>
         </div>
@@ -2561,12 +2580,12 @@ function ScheduleSection({
   )
 }
 
-const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
-  text: '一行テキスト',
-  textarea: '複数行テキスト',
-  select: '単一選択',
-  checkbox: '複数選択',
-  image: '画像アップロード',
+const FORM_FIELD_TYPE_KEY: Record<FormFieldType, TranslationKey> = {
+  text: 'taskDrawer.form.fieldType.text',
+  textarea: 'taskDrawer.form.fieldType.textarea',
+  select: 'taskDrawer.form.fieldType.select',
+  checkbox: 'taskDrawer.form.fieldType.checkbox',
+  image: 'taskDrawer.form.fieldType.image',
 }
 
 function formAnswerText(v: FormAnswerValue | undefined): string {
@@ -2592,6 +2611,7 @@ function FormSection({
   onSetForm: (fields: FormFieldDef[], invitedIds: string[]) => void
   onRespondForm: (responses: Record<string, FormAnswerValue>) => void
 }) {
+  const { t: tr } = useI18n()
   const form = task.form
   const canConfigure = isAdmin || task.createdById === currentUserId
   const [configOpen, setConfigOpen] = useState(false)
@@ -2656,7 +2676,7 @@ function FormSection({
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          フォーム
+          {tr('taskDrawer.form.sectionHeader')}
         </div>
         {canConfigure && (
           <button
@@ -2664,12 +2684,12 @@ function FormSection({
             className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             <Pencil className="size-3" />
-            {form ? '編集' : '設定'}
+            {form ? tr('common.edit') : tr('taskDrawer.setupButton')}
           </button>
         )}
       </div>
 
-      {!form && !configOpen && <p className="text-sm text-muted-foreground">まだ設定されていません。</p>}
+      {!form && !configOpen && <p className="text-sm text-muted-foreground">{tr('taskDrawer.notConfiguredYet')}</p>}
 
       {form && !configOpen && (
         <div className="flex flex-col gap-3">
@@ -2709,7 +2729,7 @@ function FormSection({
                         }
                         className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm outline-none focus:border-primary"
                       >
-                        <option value="">選択してください</option>
+                        <option value="">{tr('common.selectPlaceholder')}</option>
                         {(f.options ?? []).map((o) => (
                           <option key={o} value={o}>
                             {o}
@@ -2767,7 +2787,7 @@ function FormSection({
                         {responseDraft[f.id] && (
                           <img
                             src={responseDraft[f.id] as string}
-                            alt="プレビュー"
+                            alt={tr('taskDrawer.form.previewAlt')}
                             className="max-h-40 rounded-md object-contain"
                           />
                         )}
@@ -2781,7 +2801,7 @@ function FormSection({
                 disabled={!canSubmitResponse}
                 onClick={() => onRespondForm(responseDraft)}
               >
-                回答を送信
+                {tr('taskDrawer.submitResponse')}
               </Button>
             </div>
           )}
@@ -2791,7 +2811,7 @@ function FormSection({
               <thead>
                 <tr>
                   <th className="border-b border-border px-1.5 py-1 text-left font-medium text-muted-foreground">
-                    質問
+                    {tr('taskDrawer.form.questionColumn')}
                   </th>
                   {form.invitedIds.map((mid) => {
                     const m = members.find((mm) => mm.id === mid)
@@ -2800,7 +2820,7 @@ function FormSection({
                         key={mid}
                         className="border-b border-border px-1.5 py-1 text-left font-medium text-muted-foreground"
                       >
-                        {m?.displayName || m?.name || '不明'}
+                        {m?.displayName || m?.name || tr('taskDrawer.unknown')}
                       </th>
                     )
                   })}
@@ -2816,12 +2836,12 @@ function FormSection({
                         <td key={mid} className="border-b border-border/60 px-1.5 py-1">
                           {answer != null && formAnswerText(answer) ? (
                             f.type === 'image' ? (
-                              <img src={answer as string} alt="回答画像" className="max-h-20 rounded object-contain" />
+                              <img src={answer as string} alt={tr('taskDrawer.form.answerImageAlt')} className="max-h-20 rounded object-contain" />
                             ) : (
                               formAnswerText(answer)
                             )
                           ) : (
-                            <span className="text-muted-foreground">未回答</span>
+                            <span className="text-muted-foreground">{tr('taskDrawer.noResponse')}</span>
                           )}
                         </td>
                       )
@@ -2832,28 +2852,28 @@ function FormSection({
             </table>
           </div>
           {task.status === 'done' && (
-            <p className="text-xs font-medium text-emerald-700">全員が回答し、タスクは完了になりました。</p>
+            <p className="text-xs font-medium text-emerald-700">{tr('taskDrawer.allRespondedDone')}</p>
           )}
         </div>
       )}
 
       {configOpen && (
         <div className="rounded-lg border border-border bg-secondary/40 p-3">
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">質問項目</p>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">{tr('taskDrawer.form.questionsLabel')}</p>
           <ul className="mb-2 flex flex-col gap-1">
             {fieldDraft.map((f) => (
               <li key={f.id} className="flex items-center justify-between gap-2 text-sm">
                 <span>
                   {f.label}
                   <span className="ml-1.5 text-xs text-muted-foreground">
-                    （{FORM_FIELD_TYPE_LABEL[f.type]}
-                    {f.required ? '・必須' : ''}）
+                    （{tr(FORM_FIELD_TYPE_KEY[f.type])}
+                    {f.required ? tr('taskDrawer.form.requiredSuffix') : ''}）
                   </span>
                 </span>
                 <button
                   onClick={() => setFieldDraft((prev) => prev.filter((x) => x.id !== f.id))}
                   className="text-muted-foreground hover:text-destructive"
-                  aria-label="削除"
+                  aria-label={tr('common.delete')}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -2864,7 +2884,7 @@ function FormSection({
             <input
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="質問文（例：参加できますか？）"
+              placeholder={tr('taskDrawer.form.questionPlaceholder')}
               className="h-8 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
             />
             <div className="flex items-center gap-1.5">
@@ -2873,9 +2893,9 @@ function FormSection({
                 onChange={(e) => setNewType(e.target.value as FormFieldType)}
                 className="h-8 flex-1 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
               >
-                {(Object.keys(FORM_FIELD_TYPE_LABEL) as FormFieldType[]).map((t) => (
+                {(Object.keys(FORM_FIELD_TYPE_KEY) as FormFieldType[]).map((t) => (
                   <option key={t} value={t}>
-                    {FORM_FIELD_TYPE_LABEL[t]}
+                    {tr(FORM_FIELD_TYPE_KEY[t])}
                   </option>
                 ))}
               </select>
@@ -2886,14 +2906,14 @@ function FormSection({
                   onChange={(e) => setNewRequired(e.target.checked)}
                   className="size-3.5 cursor-pointer accent-primary"
                 />
-                必須
+                {tr('taskDrawer.form.requiredLabel')}
               </label>
             </div>
             {(newType === 'select' || newType === 'checkbox') && (
               <input
                 value={newOptions}
                 onChange={(e) => setNewOptions(e.target.value)}
-                placeholder="選択肢をカンマ区切りで（例：〇,△,×）"
+                placeholder={tr('taskDrawer.form.optionsPlaceholder')}
                 className="h-8 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
               />
             )}
@@ -2903,11 +2923,11 @@ function FormSection({
               className="flex h-8 items-center justify-center gap-1 rounded-md border border-border-strong px-2 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              質問を追加
+              {tr('taskDrawer.form.addQuestion')}
             </button>
           </div>
 
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">回答してもらうメンバー</p>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">{tr('taskDrawer.form.inviteMembersLabel')}</p>
           <div className="mb-3 flex max-h-40 flex-col gap-1 overflow-y-auto orbit-scroll">
             {members.map((m) => {
               const checked = inviteDraft.includes(m.id)
@@ -2934,14 +2954,14 @@ function FormSection({
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-8" onClick={() => setConfigOpen(false)}>
-              キャンセル
+              {tr('common.cancel')}
             </Button>
             <Button
               className="h-8"
               disabled={fieldDraft.length === 0 || inviteDraft.length === 0}
               onClick={saveConfig}
             >
-              保存
+              {tr('common.save')}
             </Button>
           </div>
         </div>
@@ -3019,6 +3039,7 @@ function RetrospectiveSection({
   editable: boolean
   onSave: (r: TaskRetrospective | null) => void
 }) {
+  const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [good, setGood] = useState(retrospective?.good ?? '')
   const [bad, setBad] = useState(retrospective?.bad ?? '')
@@ -3040,12 +3061,12 @@ function RetrospectiveSection({
   return (
     <div className="mt-6">
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        振り返り
+        {t('taskDrawer.retrospective.sectionHeader')}
       </div>
       {editing ? (
         <div className="flex flex-col gap-2.5">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">良かった点</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.retrospective.goodLabel')}</span>
             <textarea
               value={good}
               onChange={(e) => setGood(e.target.value)}
@@ -3054,7 +3075,7 @@ function RetrospectiveSection({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">困った点</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.retrospective.badLabel')}</span>
             <textarea
               value={bad}
               onChange={(e) => setBad(e.target.value)}
@@ -3063,7 +3084,7 @@ function RetrospectiveSection({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">改善点</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.retrospective.improveLabel')}</span>
             <textarea
               value={improve}
               onChange={(e) => setImprove(e.target.value)}
@@ -3073,10 +3094,10 @@ function RetrospectiveSection({
           </label>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-8" onClick={() => setEditing(false)}>
-              キャンセル
+              {t('common.cancel')}
             </Button>
             <Button className="h-8" onClick={save}>
-              保存
+              {t('common.save')}
             </Button>
           </div>
         </div>
@@ -3084,19 +3105,19 @@ function RetrospectiveSection({
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm">
           {retrospective.good && (
             <p>
-              <span className="font-medium text-muted-foreground">良かった点：</span>
+              <span className="font-medium text-muted-foreground">{t('taskDrawer.retrospective.goodLabel')}：</span>
               {retrospective.good}
             </p>
           )}
           {retrospective.bad && (
             <p>
-              <span className="font-medium text-muted-foreground">困った点：</span>
+              <span className="font-medium text-muted-foreground">{t('taskDrawer.retrospective.badLabel')}：</span>
               {retrospective.bad}
             </p>
           )}
           {retrospective.improve && (
             <p>
-              <span className="font-medium text-muted-foreground">改善点：</span>
+              <span className="font-medium text-muted-foreground">{t('taskDrawer.retrospective.improveLabel')}：</span>
               {retrospective.improve}
             </p>
           )}
@@ -3105,7 +3126,7 @@ function RetrospectiveSection({
               onClick={startEdit}
               className="self-start text-xs font-medium text-primary hover:underline"
             >
-              編集
+              {t('common.edit')}
             </button>
           )}
         </div>
@@ -3114,10 +3135,10 @@ function RetrospectiveSection({
           onClick={startEdit}
           className="text-sm text-muted-foreground hover:text-foreground hover:underline"
         >
-          振り返りを記録する
+          {t('taskDrawer.retrospective.recordPrompt')}
         </button>
       ) : (
-        <p className="text-sm text-muted-foreground">振り返りは記録されていません。</p>
+        <p className="text-sm text-muted-foreground">{t('taskDrawer.retrospective.empty')}</p>
       )}
     </div>
   )

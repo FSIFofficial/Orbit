@@ -7,6 +7,7 @@ import { useNav } from '@/lib/orbit/nav'
 import { exportProjectTasksToExcel } from '@/lib/orbit/export-excel'
 import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react'
 import { Project } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 
 function ProjectCard({
   p,
@@ -29,6 +30,7 @@ function ProjectCard({
   hasChildren: boolean
   children?: React.ReactNode
 }) {
+  const { t } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const pt = tasks.filter((t) => t.projectId === p.id)
   const done = pt.filter((t) => t.status === 'done').length
@@ -45,7 +47,7 @@ function ProjectCard({
               type="button"
               onClick={() => setCollapsed((c) => !c)}
               className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={collapsed ? '展開' : '折りたたむ'}
+              aria-label={collapsed ? t('project.card.expand') : t('project.card.collapse')}
             >
               {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
             </button>
@@ -57,13 +59,13 @@ function ProjectCard({
             <p className="text-sm font-semibold text-foreground">{p.name}</p>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span>メンバー {pm.length}</span>
-            <span>タスク {pt.length}</span>
-            <span className={waiting > 0 ? 'text-warning' : ''}>確認待ち {waiting}</span>
+            <span>{t('project.card.membersCount', { count: pm.length })}</span>
+            <span>{t('project.card.tasksCount', { count: pt.length })}</span>
+            <span className={waiting > 0 ? 'text-warning' : ''}>{t('project.card.waitingCount', { count: waiting })}</span>
           </div>
           <div>
             <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">進捗</span>
+              <span className="text-muted-foreground">{t('project.card.progress')}</span>
               <span className="font-medium tabular-nums text-foreground">{completion}%</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -89,7 +91,7 @@ function ProjectCard({
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
           >
             <FileSpreadsheet className="size-3.5" />
-            Excel出力
+            {t('output.list.exportExcel')}
           </button>
         </div>
       </div>

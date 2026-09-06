@@ -8,12 +8,14 @@ import { Crown, AlertTriangle, Users, TrendingUp, CheckCircle2, Clock, UserCheck
 import { isOverdue, deadlineLevel } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { Avatar } from '@/components/orbit/primitives'
+import { useI18n } from '@/lib/orbit/i18n'
 
 // item 21: 幹部が見れるダッシュボードページ。
 // 組織全体の運用状況（承認待ち・期限超過・停滞タスク・稼働率）を1画面で把握。
 export function AdminLeadership() {
   const { visibleTasks, pendingTasks, members, projects, archivedTasks, currentUser } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
   const tz = currentUser?.timezone ?? DEFAULT_TIMEZONE
 
   const stats = useMemo(() => {
@@ -94,60 +96,58 @@ export function AdminLeadership() {
     <div className="space-y-6">
       <div className="flex items-center gap-2.5">
         <Crown className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold">幹部ダッシュボード</h2>
+        <h2 className="text-lg font-semibold">{t('admin.leadership.title')}</h2>
       </div>
 
-      {/* KPIカード */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
           icon={<AlertTriangle className="size-5 text-destructive" />}
-          label="期限超過"
+          label={t('admin.leadership.kpi.overdue')}
           value={stats.overdue.length}
-          sub="件"
+          sub={t('admin.leadership.kpi.countSuffix')}
           danger={stats.overdue.length > 0}
           onClick={() => go({ name: 'admin', section: 'approvals' })}
         />
         <KpiCard
           icon={<Clock className="size-5 text-warning" />}
-          label="確認待ち"
+          label={t('admin.leadership.kpi.reviewing')}
           value={stats.reviewing.length}
-          sub="件"
+          sub={t('admin.leadership.kpi.countSuffix')}
           warn={stats.reviewing.length > 0}
         />
         <KpiCard
           icon={<CheckCircle2 className="size-5 text-success" />}
-          label="30日間完了"
+          label={t('admin.leadership.kpi.doneLast30')}
           value={stats.doneLast30.length}
-          sub="件"
+          sub={t('admin.leadership.kpi.countSuffix')}
         />
         <KpiCard
           icon={<Users className="size-5 text-primary" />}
-          label="稼働メンバー"
+          label={t('admin.leadership.kpi.engagedMembers')}
           value={stats.engagedCount}
-          sub={`/ ${stats.activeMembers.length}名`}
+          sub={t('admin.leadership.kpi.ofMembers', { count: stats.activeMembers.length })}
         />
         <KpiCard
           icon={<TrendingUp className="size-5 text-muted-foreground" />}
-          label="承認待ち"
+          label={t('admin.leadership.kpi.pending')}
           value={pendingTasks.length}
-          sub="件"
+          sub={t('admin.leadership.kpi.countSuffix')}
           warn={pendingTasks.length > 0}
           onClick={() => go({ name: 'admin', section: 'approvals' })}
         />
       </div>
 
-      {/* プロジェクト別サマリー */}
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-muted-foreground">プロジェクト別状況</h3>
+        <h3 className="mb-3 text-sm font-semibold text-muted-foreground">{t('admin.leadership.projectSummary.title')}</h3>
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50 text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-                <th className="px-4 py-2.5 font-medium text-center">タスク</th>
-                <th className="px-4 py-2.5 font-medium text-center">完了率</th>
-                <th className="px-4 py-2.5 font-medium text-center">確認待ち</th>
-                <th className="px-4 py-2.5 font-medium text-center">期限超過</th>
+                <th className="px-4 py-2.5 font-medium">{t('admin.leadership.projectSummary.colProject')}</th>
+                <th className="px-4 py-2.5 font-medium text-center">{t('admin.leadership.projectSummary.colTasks')}</th>
+                <th className="px-4 py-2.5 font-medium text-center">{t('admin.leadership.projectSummary.colCompletion')}</th>
+                <th className="px-4 py-2.5 font-medium text-center">{t('admin.leadership.projectSummary.colReview')}</th>
+                <th className="px-4 py-2.5 font-medium text-center">{t('admin.leadership.projectSummary.colOverdue')}</th>
               </tr>
             </thead>
             <tbody>
@@ -197,7 +197,7 @@ export function AdminLeadership() {
               {projectSummaries.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    プロジェクトがありません
+                    {t('admin.leadership.projectSummary.empty')}
                   </td>
                 </tr>
               )}
@@ -206,10 +206,9 @@ export function AdminLeadership() {
         </div>
       </div>
 
-      {/* メンバー稼働ランキング */}
       <div>
         <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-          メンバー稼働（担当中タスク数 Top 10）
+          {t('admin.leadership.memberRanking.title')}
         </h3>
         <div className="space-y-1.5">
           {memberRanking.map(({ member: m, count, overdueCount }) => (
@@ -230,23 +229,22 @@ export function AdminLeadership() {
               <span className="w-8 text-right text-sm tabular-nums">{count}</span>
               {overdueCount > 0 && (
                 <span className="rounded-full bg-danger-muted px-2 py-0.5 text-xs text-danger">
-                  超過 {overdueCount}
+                  {t('admin.leadership.memberRanking.overdue', { count: overdueCount })}
                 </span>
               )}
             </div>
           ))}
           {memberRanking.length === 0 && (
-            <p className="text-sm text-muted-foreground">メンバーがいません</p>
+            <p className="text-sm text-muted-foreground">{t('admin.leadership.memberRanking.empty')}</p>
           )}
         </div>
       </div>
 
-      {/* item 19: 後継者・候補者サジェスト */}
       {successorSuggestions.length > 0 && (
         <div>
           <div className="mb-3 flex items-center gap-2">
             <UserCheck className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-muted-foreground">後継者・候補者サジェスト</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">{t('admin.leadership.successor.title')}</h3>
           </div>
           <div className="space-y-3">
             {successorSuggestions.map(({ leader, candidates }) => (
@@ -268,11 +266,11 @@ export function AdminLeadership() {
                       <Avatar member={m} size={18} />
                       <span className="font-medium">{m.displayName || m.name}</span>
                       <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
-                        適合 {Math.round(score * 100)}%
+                        {t('admin.leadership.successor.matchScore', { score: Math.round(score * 100) })}
                       </span>
                       <span className="truncate max-w-40 text-[10px] text-muted-foreground">
                         {matches.slice(0, 3).join(' / ')}
-                        {matches.length > 3 && ` 他${matches.length - 3}`}
+                        {matches.length > 3 && t('admin.leadership.successor.andOthers', { count: matches.length - 3 })}
                       </span>
                     </button>
                   ))}

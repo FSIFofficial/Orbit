@@ -27,6 +27,7 @@ import { TriangleAlert } from 'lucide-react'
 // shown while a persisted session (currentUserId from localStorage) is
 // waiting on the spreadsheet fetch to resolve who that is
 function RemoteLoadingScreen() {
+  const { t } = useI18n()
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-4 text-center">
       <OrbitMark size={30} />
@@ -35,7 +36,7 @@ function RemoteLoadingScreen() {
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
           <span className="relative inline-flex size-3 rounded-full bg-primary" />
         </span>
-        データを読み込んでいます…
+        {t('app.loading')}
       </div>
     </main>
   )
@@ -44,12 +45,13 @@ function RemoteLoadingScreen() {
 // shown when that same fetch has failed outright, instead of silently
 // falling back to the login screen (which would look like a sign-out)
 function RemoteLoadErrorScreen({ message }: { message: string | null }) {
+  const { t } = useI18n()
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-4 text-center">
       <OrbitMark size={30} />
       <div className="flex items-center gap-1.5 text-sm font-medium text-destructive">
         <TriangleAlert className="size-4 shrink-0" />
-        スプレッドシートとの同期に失敗しました
+        {t('app.syncFailed')}
       </div>
       {message && <p className="max-w-sm text-xs text-muted-foreground">{message}</p>}
       <button
@@ -57,7 +59,7 @@ function RemoteLoadErrorScreen({ message }: { message: string | null }) {
         onClick={() => window.location.reload()}
         className="mt-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary"
       >
-        再読み込み
+        {t('common.reload')}
       </button>
     </main>
   )
@@ -68,12 +70,13 @@ function RemoteLoadErrorScreen({ message }: { message: string | null }) {
 function SkillCertifiedWatcher() {
   const { skillCertifiedEvent, clearSkillCertifiedEvent } = useOrbit()
   const toast = useToast()
+  const { t } = useI18n()
 
   useEffect(() => {
     if (!skillCertifiedEvent) return
-    toast(`${skillCertifiedEvent.memberName} さんのスキルに「${skillCertifiedEvent.skill}」が認定されました`)
+    toast(t('app.skillCertifiedToast', { name: skillCertifiedEvent.memberName, skill: skillCertifiedEvent.skill }))
     clearSkillCertifiedEvent()
-  }, [skillCertifiedEvent, clearSkillCertifiedEvent, toast])
+  }, [skillCertifiedEvent, clearSkillCertifiedEvent, toast, t])
 
   return null
 }
@@ -102,6 +105,7 @@ function Router() {
     useOrbit()
   const { screen } = useNav()
   const { openTaskId, closeTask } = useTaskDrawer()
+  const { t } = useI18n()
 
   if (!currentUser) {
     // currentUserId persists across reloads (localStorage), but resolving
@@ -125,7 +129,7 @@ function Router() {
       {remoteEnabled && remoteError && (
         <div className="flex items-center justify-center gap-1.5 bg-warning-muted px-4 py-1.5 text-center text-xs font-medium text-warning">
           <TriangleAlert className="size-3.5 shrink-0" />
-          スプレッドシートとの同期に失敗しました。表示中のデータが最新でない可能性があります。
+          {t('app.syncFailedBanner')}
         </div>
       )}
       <Header />

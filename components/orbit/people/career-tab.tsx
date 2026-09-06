@@ -5,7 +5,7 @@ import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/orbit/modal'
-import { useI18n } from '@/lib/orbit/i18n'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
 import { cn } from '@/lib/utils'
 import { X, Plus, GraduationCap, CheckCircle2 } from 'lucide-react'
@@ -67,6 +67,7 @@ function EntryRow({
   onRemove: () => void
   editable: boolean
 }) {
+  const { t } = useI18n()
   return (
     <li className="flex items-start justify-between gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2 text-sm">
       <div className="min-w-0 flex-1">{children}</div>
@@ -74,7 +75,7 @@ function EntryRow({
         <button
           onClick={onRemove}
           className="shrink-0 text-muted-foreground hover:text-destructive"
-          aria-label="削除"
+          aria-label={t('common.delete')}
         >
           <X className="size-3.5" />
         </button>
@@ -235,7 +236,7 @@ function SearchProfileSection({
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">経験年数</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('career.searchProfile.yearsOfExperience')}</span>
           <input
             type="number"
             min={0}
@@ -265,11 +266,11 @@ function SearchProfileSection({
             }
             className="size-3.5 accent-primary disabled:opacity-50"
           />
-          <span className="text-xs">管理職経験あり</span>
+          <span className="text-xs">{t('career.searchProfile.hasManagementExperience')}</span>
         </label>
       </div>
       <div className="mt-3">
-        <span className="text-xs font-medium text-muted-foreground">成長したい領域</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('career.searchProfile.desiredAreas')}</span>
         <div className="mt-1">
           <EditableTags
             tags={member.desiredAreas ?? []}
@@ -281,8 +282,8 @@ function SearchProfileSection({
                 desiredAreas: next,
               })
             }
-            emptyText="未設定"
-            placeholder="領域を追加"
+            emptyText={t('common.notSet')}
+            placeholder={t('career.searchProfile.addAreaPlaceholder')}
           />
         </div>
       </div>
@@ -311,7 +312,7 @@ function CareerGoalsSection({
     <Section title={t('career.goals.title')}>
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">将来やりたいこと</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('career.goals.aspirationLabel')}</span>
           <textarea
             disabled={!editable}
             defaultValue={member.careerAspiration ?? ''}
@@ -321,7 +322,7 @@ function CareerGoalsSection({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">目指したい役職・ポジション</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('career.goals.desiredFutureRoleLabel')}</span>
           <input
             disabled={!editable}
             defaultValue={member.desiredFutureRole ?? ''}
@@ -330,7 +331,7 @@ function CareerGoalsSection({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">キャリアプランのメモ</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('career.goals.planLabel')}</span>
           <textarea
             disabled={!editable}
             defaultValue={member.careerPlan ?? ''}
@@ -375,7 +376,7 @@ function SkillLevelsSection({
       title={t('career.skillLevels.title')}
       description={t('career.skillLevels.desc')}
     >
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {levels.map((l) => (
           <EntryRow
             key={l.skill}
@@ -390,7 +391,7 @@ function SkillLevelsSection({
       {editable && available.length > 0 && (
         <div className="mt-2 flex items-center gap-1.5">
           <select value={skill} onChange={(e) => setSkill(e.target.value)} className={cn(fieldClass, 'cursor-pointer')}>
-            <option value="">スキルを選択</option>
+            <option value="">{t('career.skillLevels.selectSkillPlaceholder')}</option>
             {available.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -412,7 +413,7 @@ function SkillLevelsSection({
             onClick={add}
             disabled={!skill}
             className="flex size-8 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            aria-label="追加"
+            aria-label={t('common.add')}
           >
             <Plus className="size-4" />
           </button>
@@ -465,7 +466,7 @@ function QuizSection({
     <>
       <Section title={t('career.quiz.title')} description={t('career.quiz.desc')}>
         {!editable ? (
-          <p className="text-xs text-muted-foreground">本人のみ受験できます。</p>
+          <p className="text-xs text-muted-foreground">{t('career.quiz.selfOnly')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {quizDefinitions.map((quiz) => {
@@ -477,20 +478,20 @@ function QuizSection({
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm">{quiz.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {quiz.targetSkill} → Lv.{quiz.targetLevel} / {quiz.questions.length}問 / 合格 {quiz.passRate}%
-                      {lv > 0 && <span className="ml-2">現在 Lv.{lv}</span>}
+                      {t('career.quiz.meta', { skill: quiz.targetSkill, level: quiz.targetLevel, count: quiz.questions.length, passRate: quiz.passRate })}
+                      {lv > 0 && <span className="ml-2">{t('career.quiz.currentLevel', { level: lv })}</span>}
                     </div>
                   </div>
                   {alreadyPassed ? (
                     <span className="flex items-center gap-1 text-xs text-emerald-600">
-                      <CheckCircle2 className="size-3.5" /> 達成済み
+                      <CheckCircle2 className="size-3.5" /> {t('career.quiz.achieved')}
                     </span>
                   ) : (
                     <button
                       onClick={() => openQuiz(quiz)}
                       className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                     >
-                      受験する
+                      {t('career.quiz.take')}
                     </button>
                   )}
                 </li>
@@ -525,9 +526,9 @@ function QuizSection({
               ))}
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setActiveQuiz(null)}>キャンセル</Button>
+              <Button variant="outline" onClick={() => setActiveQuiz(null)}>{t('common.cancel')}</Button>
               <Button disabled={!allAnswered || submitting} onClick={handleSubmit}>
-                {submitting ? '採点中…' : '提出する'}
+                {submitting ? t('career.quiz.grading') : t('career.quiz.submit')}
               </Button>
             </div>
           </>
@@ -543,16 +544,16 @@ function QuizSection({
               <GraduationCap className="size-12 text-muted-foreground" />
             )}
             <h3 className="text-lg font-semibold">
-              {result.passed ? '合格！' : '不合格'}
+              {result.passed ? t('career.quiz.passed') : t('career.quiz.failed')}
             </h3>
-            <p className="text-sm text-muted-foreground">スコア: {result.score}% (合格ライン: {activeQuiz.passRate}%)</p>
+            <p className="text-sm text-muted-foreground">{t('career.quiz.scoreLine', { score: result.score, passRate: activeQuiz.passRate })}</p>
             {result.passed && (
               <p className="text-sm font-medium text-emerald-600">
-                {activeQuiz.targetSkill} が Lv.{activeQuiz.targetLevel} に引き上げられました。
+                {t('career.quiz.levelUpMessage', { skill: activeQuiz.targetSkill, level: activeQuiz.targetLevel })}
               </p>
             )}
             <Button onClick={() => { setResult(null); setActiveQuiz(null) }} className="mt-2">
-              閉じる
+              {t('common.close')}
             </Button>
           </div>
         )}
@@ -585,7 +586,7 @@ function CompetenciesSection({
   const { t } = useI18n()
   return (
     <Section title={t('career.competencies.title')} description={t('career.competencies.desc')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items.map((c, i) => (
           <EntryRow
             key={`${c.name}-${i}`}
@@ -602,7 +603,7 @@ function CompetenciesSection({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="項目名"
+            placeholder={t('career.competencies.namePlaceholder')}
             className={cn(fieldClass, 'flex-1')}
           />
           <select
@@ -620,7 +621,7 @@ function CompetenciesSection({
             onClick={add}
             disabled={!name.trim()}
             className="flex size-8 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            aria-label="追加"
+            aria-label={t('common.add')}
           >
             <Plus className="size-4" />
           </button>
@@ -662,14 +663,14 @@ function CareerHistorySection({
   const { t } = useI18n()
   return (
     <Section title={t('career.history.title')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items.map((c) => (
           <EntryRow key={c.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== c.id))}>
             <div className="font-medium">
               {c.affiliation}　<span className="text-muted-foreground">{c.role}</span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {c.startDate}〜{c.endDate ?? '現在'}
+              {c.startDate}〜{c.endDate ?? t('career.history.present')}
             </div>
           </EntryRow>
         ))}
@@ -677,16 +678,16 @@ function CareerHistorySection({
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldClass} />
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="現在まで" className={fieldClass} />
-          <input value={affiliation} onChange={(e) => setAffiliation(e.target.value)} placeholder="所属" className={fieldClass} />
-          <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="役割" className={fieldClass} />
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder={t('career.history.toPresentPlaceholder')} className={fieldClass} />
+          <input value={affiliation} onChange={(e) => setAffiliation(e.target.value)} placeholder={t('career.history.affiliationPlaceholder')} className={fieldClass} />
+          <input value={role} onChange={(e) => setRole(e.target.value)} placeholder={t('career.history.rolePlaceholder')} className={fieldClass} />
           <button
             onClick={add}
             disabled={!startDate || !affiliation.trim() || !role.trim()}
             className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
           >
             <Plus className="size-3.5" />
-            追加
+            {t('common.add')}
           </button>
         </div>
       )}
@@ -725,7 +726,7 @@ function QualificationsSection({
   const { t } = useI18n()
   return (
     <Section title={t('career.qualifications.title')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items.map((q) => (
           <EntryRow key={q.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== q.id))}>
             <span className="font-medium">{q.name}</span>
@@ -739,16 +740,16 @@ function QualificationsSection({
       </EntryList>
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="資格名" className={fieldClass} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('career.qualifications.namePlaceholder')} className={fieldClass} />
           <input type="date" value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)} className={fieldClass} />
-          <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="発行元（任意）" className={fieldClass} />
+          <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={t('career.qualifications.issuerPlaceholder')} className={fieldClass} />
           <button
             onClick={add}
             disabled={!name.trim()}
             className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
           >
             <Plus className="size-3.5" />
-            追加
+            {t('common.add')}
           </button>
         </div>
       )}
@@ -758,11 +759,11 @@ function QualificationsSection({
 
 const TRAINING_STATUS_BADGE: Record<
   NonNullable<TrainingRecord['status']>,
-  { label: string; className: string }
+  { labelKey: TranslationKey; className: string }
 > = {
-  pending: { label: '承認待ち', className: 'bg-amber-50 text-amber-700' },
-  approved: { label: '承認済み', className: 'bg-emerald-50 text-emerald-700' },
-  rejected: { label: '却下', className: 'bg-rose-50 text-rose-700' },
+  pending: { labelKey: 'admin.expenses.status.pending', className: 'bg-amber-50 text-amber-700' },
+  approved: { labelKey: 'admin.expenses.status.approved', className: 'bg-emerald-50 text-emerald-700' },
+  rejected: { labelKey: 'admin.expenses.status.rejected', className: 'bg-rose-50 text-rose-700' },
 }
 
 function TrainingHistorySection({
@@ -814,7 +815,7 @@ function TrainingHistorySection({
   const { t: tr } = useI18n()
   return (
     <Section title={tr('career.training.title')} description={!isAdmin ? tr('career.training.desc') : undefined}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={tr('career.noRecords')}>
         {items.map((t) => {
           const status = t.status ?? 'approved'
           const badge = TRAINING_STATUS_BADGE[status]
@@ -828,7 +829,7 @@ function TrainingHistorySection({
                 </span>
                 {status !== 'approved' && (
                   <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold', badge.className)}>
-                    {badge.label}
+                    {tr(badge.labelKey)}
                   </span>
                 )}
                 {isAdmin && status === 'pending' && (
@@ -837,13 +838,13 @@ function TrainingHistorySection({
                       onClick={() => decide(t, true)}
                       className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
                     >
-                      承認
+                      {tr('admin.expenses.approve')}
                     </button>
                     <button
                       onClick={() => decide(t, false)}
                       className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
                     >
-                      却下
+                      {tr('admin.expenses.reject')}
                     </button>
                   </div>
                 )}
@@ -854,16 +855,16 @@ function TrainingHistorySection({
       </EntryList>
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="研修名" className={fieldClass} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('career.training.namePlaceholder')} className={fieldClass} />
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="実施元（任意）" className={fieldClass} />
+          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={tr('career.training.providerPlaceholder')} className={fieldClass} />
           <button
             onClick={add}
             disabled={!name.trim() || !date}
             className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
           >
             <Plus className="size-3.5" />
-            {isAdmin ? '追加' : '申請'}
+            {isAdmin ? tr('common.add') : tr('career.training.apply')}
           </button>
         </div>
       )}
@@ -871,10 +872,10 @@ function TrainingHistorySection({
   )
 }
 
-const PLAN_STATUS_LABEL: Record<DevelopmentPlanEntry['status'], string> = {
-  not_started: '未着手',
-  in_progress: '進行中',
-  done: '完了',
+const PLAN_STATUS_KEY: Record<DevelopmentPlanEntry['status'], TranslationKey> = {
+  not_started: 'status.todo',
+  in_progress: 'status.progress',
+  done: 'status.done',
 }
 
 function DevelopmentPlanSection({
@@ -912,7 +913,7 @@ function DevelopmentPlanSection({
   const { t } = useI18n()
   return (
     <Section title={t('career.developmentPlan.title')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items.map((p) => (
           <EntryRow key={p.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== p.id))}>
             <div className="flex flex-wrap items-center gap-2">
@@ -923,7 +924,7 @@ function DevelopmentPlanSection({
                 disabled={!editable}
                 className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-secondary/70 disabled:opacity-60"
               >
-                {PLAN_STATUS_LABEL[p.status]}
+                {t(PLAN_STATUS_KEY[p.status])}
               </button>
             </div>
           </EntryRow>
@@ -934,7 +935,7 @@ function DevelopmentPlanSection({
           <input
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
-            placeholder="目標"
+            placeholder={t('career.developmentPlan.goalPlaceholder')}
             className={cn(fieldClass, 'flex-1')}
           />
           <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={fieldClass} />
@@ -942,7 +943,7 @@ function DevelopmentPlanSection({
             onClick={add}
             disabled={!goal.trim()}
             className="flex size-8 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            aria-label="追加"
+            aria-label={t('common.add')}
           >
             <Plus className="size-4" />
           </button>
@@ -1003,7 +1004,7 @@ function OneOnOnesSection({
   const { t } = useI18n()
   return (
     <Section title={t('career.oneOnOnes.title')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items
           .slice()
           .sort((a, b) => b.date.localeCompare(a.date))
@@ -1030,7 +1031,7 @@ function OneOnOnesSection({
           <div className="flex items-center gap-1.5">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
             <select value={withId} onChange={(e) => setWithId(e.target.value)} className={cn(fieldClass, 'cursor-pointer flex-1')}>
-              <option value="">相手を選択</option>
+              <option value="">{t('career.oneOnOnes.selectPartnerPlaceholder')}</option>
               {members
                 .filter((m) => m.id !== member.id)
                 .map((m) => (
@@ -1054,7 +1055,7 @@ function OneOnOnesSection({
                 </div>
               ))}
               <Button size="sm" className="h-8 self-end" disabled={!canAdd} onClick={add}>
-                追加
+                {t('common.add')}
               </Button>
             </div>
           ) : (
@@ -1062,12 +1063,12 @@ function OneOnOnesSection({
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="メモ"
+                placeholder={t('career.oneOnOnes.notesPlaceholder')}
                 rows={2}
                 className="flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
               />
               <Button size="sm" className="h-8 shrink-0" disabled={!canAdd} onClick={add}>
-                追加
+                {t('common.add')}
               </Button>
             </div>
           )}
@@ -1109,7 +1110,7 @@ function EvaluationHistorySection({
   const { t } = useI18n()
   return (
     <Section title={t('career.evaluation.title')} description={t('career.adminOnlyDesc')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={t('career.noRecords')}>
         {items
           .slice()
           .sort((a, b) => b.date.localeCompare(a.date))
@@ -1124,15 +1125,15 @@ function EvaluationHistorySection({
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-          <input value={rating} onChange={(e) => setRating(e.target.value)} placeholder="評価" className={fieldClass} />
-          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="コメント（任意）" className={cn(fieldClass, 'sm:col-span-1')} />
+          <input value={rating} onChange={(e) => setRating(e.target.value)} placeholder={t('career.evaluation.ratingPlaceholder')} className={fieldClass} />
+          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t('career.evaluation.commentPlaceholder')} className={cn(fieldClass, 'sm:col-span-1')} />
           <button
             onClick={add}
             disabled={!date || !rating.trim()}
             className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
           >
             <Plus className="size-3.5" />
-            追加
+            {t('common.add')}
           </button>
         </div>
       )}
@@ -1172,7 +1173,7 @@ function TransferHistorySection({
   const { t: tr } = useI18n()
   return (
     <Section title={tr('career.transfer.title')} description={tr('career.adminOnlyDesc')}>
-      <EntryList emptyText="まだ記録されていません">
+      <EntryList emptyText={tr('career.noRecords')}>
         {items
           .slice()
           .sort((a, b) => b.date.localeCompare(a.date))
@@ -1189,16 +1190,16 @@ function TransferHistorySection({
       {editable && (
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-          <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="異動元" className={fieldClass} />
-          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="異動先" className={fieldClass} />
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="理由（任意）" className={fieldClass} />
+          <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder={tr('career.transfer.fromPlaceholder')} className={fieldClass} />
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder={tr('career.transfer.toPlaceholder')} className={fieldClass} />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr('career.transfer.reasonPlaceholder')} className={fieldClass} />
           <button
             onClick={add}
             disabled={!date || !from.trim() || !to.trim()}
             className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
           >
             <Plus className="size-3.5" />
-            追加
+            {tr('common.add')}
           </button>
         </div>
       )}

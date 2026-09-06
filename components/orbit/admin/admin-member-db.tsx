@@ -5,6 +5,9 @@ import { useOrbit } from '@/lib/orbit/store'
 import { Download, Upload, Eye, Search } from 'lucide-react'
 import type { Member } from '@/lib/orbit/types'
 import { BASE_ROLE } from '@/lib/orbit/types'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+
+type TranslationFn = (key: TranslationKey, vars?: Record<string, string | number>) => string
 
 // ---------- column definitions ----------
 
@@ -23,19 +26,21 @@ function skillLevelText(m: Member, skill: string): string {
   return sl ? String(sl.level) : ''
 }
 
-const BASE_COLS: ColDef[] = [
-  { key: 'name', label: '氏名', getValue: (m) => m.name, editable: false, width: 140 },
-  { key: 'affiliation', label: '所属', getValue: (m) => m.affiliation, editable: false, width: 140, tooltip: 'このセルは所属プロジェクトから自動的に決まります。変更するには管理者がメンバーのプロジェクト割り当てを変更してください。' },
-  { key: 'role', label: '役職', getValue: (m) => m.role, editable: false, width: 100 },
-  { key: 'skills', label: 'スキル', getValue: (m) => (m.skills ?? []).join(', '), editable: false, width: 180 },
-  { key: 'yearsOfExperience', label: '経験年数', getValue: (m) => m.yearsOfExperience != null ? String(m.yearsOfExperience) : '', editable: true, width: 90 },
-  { key: 'hasManagementExperience', label: '管理職経験', getValue: (m) => m.hasManagementExperience ? '有' : '無', editable: false, width: 90 },
-  { key: 'joinedAt', label: '所属開始日', getValue: (m) => m.joinedAt ?? '', editable: true, width: 110 },
-  { key: 'careerAspiration', label: 'キャリア目標', getValue: (m) => m.careerAspiration ?? '', editable: true, width: 180 },
-  { key: 'desiredFutureRole', label: '希望役職', getValue: (m) => m.desiredFutureRole ?? '', editable: true, width: 120 },
-  // admin-only: hidden from 一般 (see filterColsForViewer)
-  { key: 'email', label: 'メール', getValue: (m) => m.email ?? '', editable: false, width: 180 },
-]
+function buildBaseCols(t: TranslationFn): ColDef[] {
+  return [
+    { key: 'name', label: t('admin.memberDb.col.name'), getValue: (m) => m.name, editable: false, width: 140 },
+    { key: 'affiliation', label: t('admin.memberDb.col.affiliation'), getValue: (m) => m.affiliation, editable: false, width: 140, tooltip: t('admin.memberDb.col.affiliationTooltip') },
+    { key: 'role', label: t('admin.memberDb.col.role'), getValue: (m) => m.role, editable: false, width: 100 },
+    { key: 'skills', label: t('admin.memberDb.col.skills'), getValue: (m) => (m.skills ?? []).join(', '), editable: false, width: 180 },
+    { key: 'yearsOfExperience', label: t('admin.memberDb.col.yearsOfExperience'), getValue: (m) => m.yearsOfExperience != null ? String(m.yearsOfExperience) : '', editable: true, width: 90 },
+    { key: 'hasManagementExperience', label: t('admin.memberDb.col.hasManagementExperience'), getValue: (m) => m.hasManagementExperience ? t('admin.memberDb.yes') : t('admin.memberDb.no'), editable: false, width: 90 },
+    { key: 'joinedAt', label: t('admin.memberDb.col.joinedAt'), getValue: (m) => m.joinedAt ?? '', editable: true, width: 110 },
+    { key: 'careerAspiration', label: t('admin.memberDb.col.careerAspiration'), getValue: (m) => m.careerAspiration ?? '', editable: true, width: 180 },
+    { key: 'desiredFutureRole', label: t('admin.memberDb.col.desiredFutureRole'), getValue: (m) => m.desiredFutureRole ?? '', editable: true, width: 120 },
+    // admin-only: hidden from 一般 (see filterColsForViewer)
+    { key: 'email', label: t('admin.memberDb.col.email'), getValue: (m) => m.email ?? '', editable: false, width: 180 },
+  ]
+}
 
 // Keys that must not be shown to non-admin (一般) viewers.
 // Keep this in sync with the server-side GAS restriction list.
@@ -83,12 +88,13 @@ export function AdminMemberDb() {
     isFullAdmin,
     adminProjects,
   } = useOrbit()
+  const { t } = useI18n()
 
   // true for any admin role (代表・班長 etc.), false for 一般
   const isAnyAdmin = !!(currentUser?.role) && currentUser.role !== BASE_ROLE
 
   // Columns the current viewer is allowed to see/export
-  const allowedCols = useMemo(() => filterColsForViewer(BASE_COLS, isAnyAdmin), [isAnyAdmin])
+  const allowedCols = useMemo(() => filterColsForViewer(buildBaseCols(t), isAnyAdmin), [isAnyAdmin, t])
 
   // Members scoped to this viewer's access:
   //   full admin  → all members
@@ -180,7 +186,7 @@ export function AdminMemberDb() {
       try {
         const text = ev.target?.result as string
         const lines = text.split(/\r?\n/).filter((l) => l.trim())
-        if (lines.length < 2) { setSkillCsvError('データ行がありません'); return }
+        if (lines.length < 2) { setSkillCsvError(t('admin.memberDb.skillCsvError.noDataRows')); return }
         const parse = (line: string) => line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
         const headers = parse(lines[0])
         if (headers[0].toLowerCase().includes('氏名') || headers[0].toLowerCase().includes('name')) {
@@ -202,11 +208,11 @@ export function AdminMemberDb() {
             updates.push({ memberId: member.id, skill, level })
           }
         }
-        if (updates.length === 0) { setSkillCsvError('更新対象データがありませんでした'); return }
+        if (updates.length === 0) { setSkillCsvError(t('admin.memberDb.skillCsvError.noUpdates')); return }
         bulkUpdateSkills(updates)
         setSkillCsvOk(true)
       } catch {
-        setSkillCsvError('CSVの解析に失敗しました')
+        setSkillCsvError(t('admin.memberDb.skillCsvError.parseFailed'))
       }
     }
     reader.readAsText(file)
@@ -215,7 +221,7 @@ export function AdminMemberDb() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="text-lg font-semibold">人材データベース</h2>
+        <h2 className="text-lg font-semibold">{t('admin.memberDb.title')}</h2>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Column visibility */}
           <div className="relative">
@@ -224,7 +230,7 @@ export function AdminMemberDb() {
               className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent"
             >
               <Eye className="size-3.5" />
-              列表示
+              {t('admin.memberDb.colVisibility')}
             </button>
             {colPanelOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 rounded-md border border-border bg-card shadow-md p-3 space-y-1 min-w-[160px]">
@@ -255,7 +261,7 @@ export function AdminMemberDb() {
             className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent"
           >
             <Download className="size-3.5" />
-            メンバーCSV
+            {t('admin.memberDb.memberCsv')}
           </button>
 
           {/* Skill CSV export */}
@@ -264,13 +270,13 @@ export function AdminMemberDb() {
             className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent"
           >
             <Download className="size-3.5" />
-            スキルCSV
+            {t('admin.memberDb.skillCsv')}
           </button>
 
           {/* Skill CSV import */}
           <label className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent cursor-pointer">
             <Upload className="size-3.5" />
-            スキルCSV取込
+            {t('admin.memberDb.skillCsvImport')}
             <input
               ref={skillCsvRef}
               type="file"
@@ -286,11 +292,11 @@ export function AdminMemberDb() {
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{skillCsvError}</div>
       )}
       {skillCsvOk && (
-        <div className="rounded-md bg-green-500/10 p-2 text-xs text-green-700 dark:text-green-400">スキルデータを一括更新しました</div>
+        <div className="rounded-md bg-green-500/10 p-2 text-xs text-green-700 dark:text-green-400">{t('admin.memberDb.skillCsvOk')}</div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        {filteredMembers.length} / {scopedMembers.length} 件表示 · セルをクリックで編集
+        {t('admin.memberDb.rowCount', { filtered: filteredMembers.length, total: scopedMembers.length })}
       </p>
 
       {/* Table */}
@@ -374,7 +380,7 @@ export function AdminMemberDb() {
             {filteredMembers.length === 0 && (
               <tr>
                 <td colSpan={visibleCols.length} className="py-6 text-center text-xs text-muted-foreground">
-                  該当するメンバーがいません
+                  {t('admin.memberDb.noMembers')}
                 </td>
               </tr>
             )}
@@ -384,7 +390,7 @@ export function AdminMemberDb() {
 
       {/* Skill level reference */}
       <p className="text-[11px] text-muted-foreground">
-        スキルCSVフォーマット: 1行目=「氏名,スキル1,スキル2,...」、2行目以降=メンバー名+レベル(1〜5)
+        {t('admin.memberDb.skillCsvFormatHint')}
       </p>
     </div>
   )

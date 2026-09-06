@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { ArrowLeft, ClipboardList, Check, ChevronRight } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 // item 22: メンバー体験定点測定（簡易アンケートフォーム）
 // 回答はlocalStorageに保存し、管理者は記録を閲覧できる
@@ -17,14 +18,16 @@ interface SurveyQuestion {
   scaleMax?: string
 }
 
-const DEFAULT_QUESTIONS: SurveyQuestion[] = [
-  { id: 'q1', text: '今月の活動に全体的に満足していますか？', type: 'scale', scaleMin: '全く満足していない', scaleMax: '非常に満足している' },
-  { id: 'q2', text: 'タスクや役割が自分のスキルや志向に合っていると感じますか？', type: 'scale', scaleMin: '全く合っていない', scaleMax: '非常に合っている' },
-  { id: 'q3', text: 'チームメンバーとの連携や協力関係は良好ですか？', type: 'scale', scaleMin: '全く良くない', scaleMax: '非常に良い' },
-  { id: 'q4', text: '成長や学習の機会があると感じますか？', type: 'scale', scaleMin: '全くない', scaleMax: '十分にある' },
-  { id: 'q5', text: '団体への貢献度や参加意欲はどのくらいですか？', type: 'scale', scaleMin: '低い', scaleMax: '高い' },
-  { id: 'q6', text: '自由記述：気になっていることや改善提案があれば書いてください', type: 'text' },
-]
+function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKey) => string): SurveyQuestion[] {
+  return [
+    { id: 'q1', text: t('survey.q1.text'), type: 'scale', scaleMin: t('survey.q1.scaleMin'), scaleMax: t('survey.q1.scaleMax') },
+    { id: 'q2', text: t('survey.q2.text'), type: 'scale', scaleMin: t('survey.q2.scaleMin'), scaleMax: t('survey.q2.scaleMax') },
+    { id: 'q3', text: t('survey.q3.text'), type: 'scale', scaleMin: t('survey.q3.scaleMin'), scaleMax: t('survey.q3.scaleMax') },
+    { id: 'q4', text: t('survey.q4.text'), type: 'scale', scaleMin: t('survey.q4.scaleMin'), scaleMax: t('survey.q4.scaleMax') },
+    { id: 'q5', text: t('survey.q5.text'), type: 'scale', scaleMin: t('survey.q5.scaleMin'), scaleMax: t('survey.q5.scaleMax') },
+    { id: 'q6', text: t('survey.q6.text'), type: 'text' },
+  ]
+}
 
 interface SurveyResponse {
   id: string
@@ -66,6 +69,8 @@ function loadAllResponses(): SurveyResponse[] {
 export function SurveyScreen() {
   const { currentUser, members } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
+  const DEFAULT_QUESTIONS = buildDefaultQuestions(t)
   const [mode, setMode] = useState<'form' | 'history' | 'admin'>('form')
   const [answers, setAnswers] = useState<Record<string, number | string>>({})
   const [submitted, setSubmitted] = useState(false)
@@ -111,17 +116,16 @@ export function SurveyScreen() {
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
-        ワークスペースへ戻る
+        {t('survey.back')}
       </button>
 
       <div className="mb-5 flex items-center gap-2.5">
         <ClipboardList className="size-5 text-primary" />
-        <h1 className="text-lg font-semibold">メンバー体験アンケート</h1>
+        <h1 className="text-lg font-semibold">{t('survey.title')}</h1>
       </div>
 
-      {/* タブ */}
       <div className="mb-5 flex gap-1 border-b border-border">
-        {([['form', '回答する'], ['history', '過去の回答']] as const).map(([key, label]) => (
+        {([['form', t('survey.tab.form')], ['history', t('survey.tab.history')]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => { setMode(key); setSubmitted(false) }}
@@ -139,7 +143,7 @@ export function SurveyScreen() {
               mode === 'admin' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            全回答（管理者）
+            {t('survey.tab.admin')}
           </button>
         )}
       </div>
@@ -176,7 +180,7 @@ export function SurveyScreen() {
                   value={(answers[q.id] as string) ?? ''}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
                   rows={3}
-                  placeholder="任意記入"
+                  placeholder={t('survey.textPlaceholder')}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               )}
@@ -187,7 +191,7 @@ export function SurveyScreen() {
             disabled={!canSubmit}
             className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
           >
-            送信する
+            {t('survey.submit')}
           </button>
         </div>
       )}
@@ -197,13 +201,13 @@ export function SurveyScreen() {
           <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
             <Check className="size-6 text-primary" />
           </div>
-          <p className="text-base font-semibold">回答を送信しました</p>
-          <p className="text-sm text-muted-foreground">ご協力ありがとうございます。</p>
+          <p className="text-base font-semibold">{t('survey.submitted.title')}</p>
+          <p className="text-sm text-muted-foreground">{t('survey.submitted.desc')}</p>
           <button
             onClick={() => setSubmitted(false)}
             className="mt-2 rounded-md border border-border px-4 py-1.5 text-sm text-muted-foreground hover:bg-secondary"
           >
-            もう一度回答する
+            {t('survey.submitAgain')}
           </button>
         </div>
       )}
@@ -211,7 +215,7 @@ export function SurveyScreen() {
       {mode === 'history' && (
         <div className="space-y-3">
           {myHistory.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">回答がまだありません</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('survey.history.empty')}</p>
           ) : (
             myHistory
               .slice()
@@ -227,7 +231,7 @@ export function SurveyScreen() {
                         <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                         <span className="text-muted-foreground">{q.text.slice(0, 20)}…</span>
                         <span className="ml-auto font-medium">
-                          {q.type === 'scale' ? `${r.answers[q.id]} / 5` : (r.answers[q.id] as string || '—')}
+                          {q.type === 'scale' ? t('survey.scaleScore', { score: r.answers[q.id] as number }) : (r.answers[q.id] as string || '—')}
                         </span>
                       </div>
                     ))}
@@ -241,12 +245,11 @@ export function SurveyScreen() {
       {mode === 'admin' && isAdmin && (
         <div className="space-y-3">
           {allResponses.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">まだ回答がありません</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('survey.admin.empty')}</p>
           ) : (
             <>
-              {/* 平均スコアサマリー */}
               <div className="rounded-xl border border-border bg-card p-4">
-                <p className="mb-3 text-sm font-semibold">全体平均スコア</p>
+                <p className="mb-3 text-sm font-semibold">{t('survey.admin.avgScoreTitle')}</p>
                 {DEFAULT_QUESTIONS.filter((q) => q.type === 'scale').map((q) => {
                   const vals = allResponses
                     .map((r) => r.answers[q.id] as number)
@@ -262,10 +265,9 @@ export function SurveyScreen() {
                     </div>
                   )
                 })}
-                <p className="mt-2 text-[10px] text-muted-foreground">回答数: {allResponses.length}件</p>
+                <p className="mt-2 text-[10px] text-muted-foreground">{t('survey.admin.responseCount', { count: allResponses.length })}</p>
               </div>
 
-              {/* 個別回答一覧 */}
               {allResponses
                 .slice()
                 .reverse()
@@ -282,7 +284,7 @@ export function SurveyScreen() {
                         <div key={q.id} className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground truncate max-w-48">{q.text.slice(0, 20)}…</span>
                           <span className="ml-auto font-medium">
-                            {q.type === 'scale' ? `${r.answers[q.id]}点` : (r.answers[q.id] as string || '—')}
+                            {q.type === 'scale' ? t('survey.admin.scalePoint', { score: r.answers[q.id] as number }) : (r.answers[q.id] as string || '—')}
                           </span>
                         </div>
                       ))}

@@ -9,7 +9,7 @@ import {
   type TaskStatus,
 } from '@/lib/orbit/types'
 import type { Member, Department } from '@/lib/orbit/types'
-import { useI18n, STATUS_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY } from '@/lib/orbit/i18n'
+import { useI18n, STATUS_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY, PRIORITY_KEY } from '@/lib/orbit/i18n'
 
 export function Avatar({
   member,
@@ -120,6 +120,7 @@ export function Tag({
   className?: string
   onRemove?: () => void
 }) {
+  const { t } = useI18n()
   return (
     <span
       className={cn(
@@ -133,7 +134,7 @@ export function Tag({
           type="button"
           onClick={onRemove}
           className="text-muted-foreground hover:text-foreground"
-          aria-label="削除"
+          aria-label={t('primitives.removeAria')}
         >
           ×
         </button>
@@ -161,6 +162,7 @@ export function DepartmentTag({ name }: { name: Department }) {
 }
 
 export function UnassignedBadge({ className }: { className?: string }) {
+  const { t } = useI18n()
   return (
     <span
       className={cn(
@@ -168,13 +170,14 @@ export function UnassignedBadge({ className }: { className?: string }) {
         className,
       )}
     >
-      未アサイン
+      {t('output.list.unassigned')}
     </span>
   )
 }
 
 // Small priority indicator: filled dot + label. High priority is emphasized.
 export function PriorityBadge({ priority }: { priority: Priority }) {
+  const { t } = useI18n()
   return (
     <span
       className={cn(
@@ -187,7 +190,7 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
         style={{ backgroundColor: PRIORITY_LINE[priority] }}
         aria-hidden
       />
-      優先度: {priority}
+      {t('primitives.priorityLabel', { priority: t(PRIORITY_KEY[priority]) })}
     </span>
   )
 }

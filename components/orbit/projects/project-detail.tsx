@@ -11,12 +11,14 @@ import { isOverdue } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 type Tab = 'overview' | 'workflow' | 'calendar'
 
 export function ProjectDetail({ id }: { id: string }) {
   const { getProject, visibleTasks: tasks, members, getProjectMembers, currentUser } = useOrbit()
   const { go } = useNav()
+  const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('overview')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
@@ -24,7 +26,7 @@ export function ProjectDetail({ id }: { id: string }) {
   if (!project) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <p className="text-sm text-muted-foreground">プロジェクトが見つかりません。</p>
+        <p className="text-sm text-muted-foreground">{t('project.detail.notFound')}</p>
       </div>
     )
   }
@@ -44,7 +46,7 @@ export function ProjectDetail({ id }: { id: string }) {
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
-        ワークスペースへ戻る
+        {t('survey.back')}
       </button>
 
       {/* Header */}
@@ -62,7 +64,7 @@ export function ProjectDetail({ id }: { id: string }) {
                 className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-secondary"
               >
                 <Avatar member={owner} size={18} />
-                <span className="text-muted-foreground">責任者:</span>
+                <span className="text-muted-foreground">{t('project.detail.ownerLabel')}</span>
                 {owner.displayName || owner.name}
               </button>
             )}
@@ -76,7 +78,7 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
           <div className="text-right">
             <p className="text-3xl font-semibold tabular-nums">{completion}%</p>
-            <p className="text-xs text-muted-foreground">完了率</p>
+            <p className="text-xs text-muted-foreground">{t('project.detail.completionRate')}</p>
           </div>
         </div>
       </div>
@@ -109,14 +111,14 @@ export function ProjectDetail({ id }: { id: string }) {
         {tab === 'overview' && (
           <div className="flex flex-col gap-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric label="タスク総数" value={pt.length} />
-              <Metric label="完了" value={done} />
-              <Metric label="確認待ち" value={waiting} accent={waiting > 0 ? 'warning' : undefined} />
-              <Metric label="期限超過" value={overdue} accent={overdue > 0 ? 'danger' : undefined} />
+              <Metric label={t('project.detail.metric.totalTasks')} value={pt.length} />
+              <Metric label={t('project.detail.metric.done')} value={done} />
+              <Metric label={t('admin.leadership.kpi.reviewing')} value={waiting} accent={waiting > 0 ? 'warning' : undefined} />
+              <Metric label={t('admin.leadership.kpi.overdue')} value={overdue} accent={overdue > 0 ? 'danger' : undefined} />
             </div>
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                メンバー
+                {t('project.detail.membersHeading')}
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {projMembers.map((m) => {
@@ -133,7 +135,7 @@ export function ProjectDetail({ id }: { id: string }) {
                         <p className="truncate text-sm font-medium">{m.displayName || m.name}</p>
                         <p className="truncate text-xs text-muted-foreground">{m.affiliation}</p>
                       </div>
-                      <span className="text-xs text-muted-foreground">{count}件</span>
+                      <span className="text-xs text-muted-foreground">{t('project.detail.taskCount', { count })}</span>
                     </button>
                   )
                 })}

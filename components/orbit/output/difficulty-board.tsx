@@ -6,6 +6,7 @@ import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { KanbanCard, KANBAN_CARD_FIELDS, type KanbanCardField } from './kanban-card'
 import { cn } from '@/lib/utils'
+import { useI18n, DIFFICULTY_KEY } from '@/lib/orbit/i18n'
 
 export function DifficultyBoard({
   tasks,
@@ -17,6 +18,7 @@ export function DifficultyBoard({
   fields?: Set<KanbanCardField>
 }) {
   const { updateDifficulty } = useOrbit()
+  const { t } = useI18n()
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [overColumn, setOverColumn] = useState<Difficulty | null>(null)
 
@@ -49,7 +51,7 @@ export function DifficultyBoard({
             )}
           >
             <div className="flex items-center justify-between px-3 py-2.5">
-              <span className="text-sm font-medium">{difficulty}</span>
+              <span className="text-sm font-medium">{t(DIFFICULTY_KEY[difficulty])}</span>
               <span className="rounded-md bg-card px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {columnTasks.length}
               </span>
@@ -70,7 +72,7 @@ export function DifficultyBoard({
               ))}
               {columnTasks.length === 0 && (
                 <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
-                  ここにドロップ
+                  {t('kanban.board.dropHere')}
                 </div>
               )}
             </div>

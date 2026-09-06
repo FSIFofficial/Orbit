@@ -5,9 +5,11 @@ import { useOrbit } from '@/lib/orbit/store'
 import { Button } from '@/components/ui/button'
 import { OrbitMark } from './primitives'
 import { Plus, X } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function OnboardingScreen() {
   const { currentUser, completeOnboarding, skipOnboarding } = useOrbit()
+  const { t: tr } = useI18n()
   const [will, setWill] = useState<string[]>([])
   const [draft, setDraft] = useState('')
 
@@ -23,15 +25,15 @@ export function OnboardingScreen() {
         <div className="flex items-center gap-2">
           <OrbitMark size={26} />
           <span className="text-lg font-semibold tracking-tight">
-            ようこそ、{currentUser?.name} さん
+            {tr('onboarding.welcome', { name: currentUser?.name ?? '' })}
           </span>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          やってみたいこと・興味のある分野を入力してください。タスクのおすすめ担当の提案に使われます。後からいつでも変更できます。
+          {tr('onboarding.desc')}
         </p>
 
         <div className="mt-5">
-          <div className="mb-1.5 text-xs font-medium text-muted-foreground">Will（やりたいこと）</div>
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{tr('onboarding.willLabel')}</div>
           <div className="flex flex-wrap gap-1.5">
             {will.map((t) => (
               <span
@@ -42,7 +44,7 @@ export function OnboardingScreen() {
                 <button
                   onClick={() => setWill((prev) => prev.filter((x) => x !== t))}
                   className="opacity-60 hover:opacity-100"
-                  aria-label={`${t} を削除`}
+                  aria-label={tr('onboarding.removeAria', { tag: t })}
                 >
                   <X className="size-3" />
                 </button>
@@ -61,7 +63,7 @@ export function OnboardingScreen() {
                   addTag()
                 }
               }}
-              placeholder="例：デザインをやってみたい"
+              placeholder={tr('onboarding.addPlaceholder')}
               className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
             />
             <Button
@@ -71,7 +73,7 @@ export function OnboardingScreen() {
               onClick={addTag}
             >
               <Plus className="size-4" />
-              追加
+              {tr('common.add')}
             </Button>
           </div>
         </div>
@@ -81,14 +83,14 @@ export function OnboardingScreen() {
             onClick={skipOnboarding}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            あとで設定する
+            {tr('onboarding.skip')}
           </button>
           <Button
             className="h-9 px-4"
             disabled={will.length === 0}
             onClick={() => completeOnboarding(will)}
           >
-            はじめる
+            {tr('onboarding.start')}
           </Button>
         </div>
       </div>

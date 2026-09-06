@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 export function EditableTags({
   tags,
@@ -24,6 +25,7 @@ export function EditableTags({
   options?: string[]
   onNewOption?: (value: string) => void
 }) {
+  const { t: tr } = useI18n()
   const [adding, setAdding] = useState(false)
   const [value, setValue] = useState('')
   const selectableOptions = options.filter((o) => !tags.includes(o))
@@ -58,7 +60,7 @@ export function EditableTags({
             <button
               onClick={() => onChange(tags.filter((x) => x !== t))}
               className="opacity-60 hover:opacity-100"
-              aria-label={`${t} を削除`}
+              aria-label={tr('editableTags.removeAria', { tag: t })}
             >
               <X className="size-3" />
             </button>
@@ -73,9 +75,9 @@ export function EditableTags({
             if (v) onChange([...tags, v])
           }}
           className="h-6 cursor-pointer rounded-md border border-dashed border-border-strong bg-transparent px-1.5 text-xs text-muted-foreground outline-none hover:border-border"
-          aria-label="既存の選択肢から追加"
+          aria-label={tr('editableTags.selectExistingAria')}
         >
-          <option value="">選択して追加</option>
+          <option value="">{tr('editableTags.selectPlaceholder')}</option>
           {selectableOptions.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -107,7 +109,7 @@ export function EditableTags({
             className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border-strong px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-secondary"
           >
             <Plus className="size-3" />
-            追加
+            {tr('common.add')}
           </button>
         ))}
     </div>

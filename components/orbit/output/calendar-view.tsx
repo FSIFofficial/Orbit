@@ -8,6 +8,7 @@ import { todayStr } from '@/lib/orbit/utils'
 import { Button } from '@/components/ui/button'
 import { ChevronRight, Calendar, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/orbit/i18n'
 import {
   getCalendarToken,
   requestCalendarToken,
@@ -15,7 +16,6 @@ import {
 } from '@/lib/orbit/google-sheet-sync'
 import { fetchCalendarEvents, createCalendarEvent, deleteCalendarEvent, type GCalEvent } from '@/lib/orbit/google-calendar'
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 type CalView = 'month' | 'week' | 'day'
@@ -129,7 +129,9 @@ function MonthView({
   onToggleAbsent: (date: string) => void
 }) {
   const { getMember } = useOrbit()
+  const { t: tr } = useI18n()
   const today = todayStr()
+  const weekdays = tr('taskDrawer.schedule.weekdayShort').split(',')
 
   const byDay = useMemo(() => {
     const map = new Map<string, Task[]>()
@@ -168,7 +170,7 @@ function MonthView({
   return (
     <>
       <div className="grid grid-cols-7 border-b border-border">
-        {WEEKDAYS.map((w, i) => (
+        {weekdays.map((w, i) => (
           <div key={w} className={cn('py-2 text-center text-xs font-medium', i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-muted-foreground')}>{w}</div>
         ))}
       </div>
@@ -194,10 +196,10 @@ function MonthView({
                     </button>
                     <button
                       onClick={() => onToggleAbsent(dateKey(d))}
-                      title={absentDates.includes(dateKey(d)) ? '不在を解除' : '不在日として登録'}
+                      title={absentDates.includes(dateKey(d)) ? tr('calendar.absent.clear') : tr('calendar.absent.set')}
                       className={cn('rounded px-1 text-[9px] transition-colors', absentDates.includes(dateKey(d)) ? 'bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-400' : 'text-transparent hover:text-muted-foreground hover:bg-secondary')}
                     >
-                      {absentDates.includes(dateKey(d)) ? '不在' : '＋'}
+                      {absentDates.includes(dateKey(d)) ? tr('calendar.absent.badge') : '＋'}
                     </button>
                   </div>
                   <div className="space-y-1">
@@ -247,7 +249,9 @@ function WeekView({
   onOpenTask: (id: string) => void
 }) {
   const { getMember } = useOrbit()
+  const { t: tr } = useI18n()
   const today = todayStr()
+  const weekdays = tr('taskDrawer.schedule.weekdayShort').split(',')
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
@@ -288,7 +292,7 @@ function WeekView({
           const isToday = ds === today
           return (
             <div key={i} className={cn('border-b border-r border-border py-2 text-center last:border-r-0', isToday && 'bg-primary-muted')}>
-              <div className={cn('text-xs font-medium', i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-muted-foreground')}>{WEEKDAYS[i]}</div>
+              <div className={cn('text-xs font-medium', i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-muted-foreground')}>{weekdays[i]}</div>
               <div className={cn('mt-0.5 inline-flex size-6 items-center justify-center rounded-full text-sm font-semibold', isToday ? 'bg-primary text-primary-foreground' : '')}>{d.getDate()}</div>
             </div>
           )
@@ -401,23 +405,25 @@ export function CalendarView({
   onOpenTask: (id: string) => void
 }) {
   const { currentUser, updateAbsentDates } = useOrbit()
+  const { t: tr } = useI18n()
   const myAbsentDates = currentUser?.absentDates ?? []
+  const weekdays = tr('taskDrawer.schedule.weekdayShort').split(',')
 
   const toggleAbsent = useCallback(async (dateStr: string) => {
     if (!currentUser) return
     const token = getCalendarToken()
     if (myAbsentDates.includes(dateStr)) {
       updateAbsentDates(currentUser.id, myAbsentDates.filter((d) => d !== dateStr))
-      // GCalのイベントは削除しない（手動削除に任せる — タイトルで検索が必要なため複雑）
+      // does not delete the GCal event (left to manual deletion — searching by title would be complex)
     } else {
       updateAbsentDates(currentUser.id, [...myAbsentDates, dateStr])
       if (token) {
         try {
-          await createCalendarEvent(token, { summary: `[Orbit] 不在`, startDate: dateStr })
+          await createCalendarEvent(token, { summary: tr('calendar.absent.eventTitle'), startDate: dateStr })
         } catch { /* ignore — calendar sync is best-effort */ }
       }
     }
-  }, [currentUser, myAbsentDates, updateAbsentDates])
+  }, [currentUser, myAbsentDates, updateAbsentDates, tr])
 
   const initial = useMemo(() => {
     const withDeadline = tasks.find((t) => t.deadline)
@@ -469,13 +475,19 @@ export function CalendarView({
   }
 
   const headerLabel = () => {
-    if (calView === 'month') return `${monthView.year}年${monthView.month + 1}月`
+    if (calView === 'month') return tr('calendar.header.month', { year: monthView.year, month: monthView.month + 1 })
     if (calView === 'week') {
       const end = new Date(weekStart)
       end.setDate(end.getDate() + 6)
-      return `${weekStart.getMonth() + 1}月${weekStart.getDate()}日 〜 ${end.getMonth() + 1}月${end.getDate()}日`
+      return tr('calendar.header.week', {
+        startMonth: weekStart.getMonth() + 1, startDay: weekStart.getDate(),
+        endMonth: end.getMonth() + 1, endDay: end.getDate(),
+      })
     }
-    return `${selectedDay.getFullYear()}年${selectedDay.getMonth() + 1}月${selectedDay.getDate()}日（${WEEKDAYS[selectedDay.getDay()]}）`
+    return tr('calendar.header.day', {
+      year: selectedDay.getFullYear(), month: selectedDay.getMonth() + 1, day: selectedDay.getDate(),
+      weekday: weekdays[selectedDay.getDay()],
+    })
   }
 
   const prev = () => { if (calView === 'month') moveMonth(-1); else if (calView === 'week') moveWeek(-1); else moveDay(-1) }
@@ -486,14 +498,14 @@ export function CalendarView({
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" onClick={prev} aria-label="前へ">
+          <Button variant="outline" size="icon-sm" onClick={prev} aria-label={tr('calendar.nav.prev')}>
             <ChevronRight className="size-4 rotate-180" />
           </Button>
           <h3 className="min-w-[160px] text-center text-sm font-semibold">{headerLabel()}</h3>
-          <Button variant="outline" size="icon-sm" onClick={next} aria-label="次へ">
+          <Button variant="outline" size="icon-sm" onClick={next} aria-label={tr('calendar.nav.next')}>
             <ChevronRight className="size-4" />
           </Button>
-          <Button variant="outline" className="h-7 px-2.5 text-xs" onClick={goToday}>今日</Button>
+          <Button variant="outline" className="h-7 px-2.5 text-xs" onClick={goToday}>{tr('calendar.nav.today')}</Button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -504,7 +516,7 @@ export function CalendarView({
                 className={cn('px-2.5 py-1 text-xs font-medium first:rounded-l-md last:rounded-r-md transition-colors',
                   calView === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary')}
               >
-                {v === 'month' ? '月' : v === 'week' ? '週' : '日'}
+                {v === 'month' ? tr('calendar.view.month') : v === 'week' ? tr('calendar.view.week') : tr('calendar.view.day')}
               </button>
             ))}
           </div>
@@ -512,18 +524,18 @@ export function CalendarView({
           {/* Google Calendar connect */}
           {isGoogleOAuthConfigured() && (
             hasToken ? (
-              <button onClick={connect} title="Googleカレンダーを再読み込み"
+              <button onClick={connect} title={tr('calendar.gcal.reload')}
                 className={cn('flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300', gcalLoading && 'animate-pulse')}
               >
                 <RefreshCw className={cn('size-3', gcalLoading && 'animate-spin')} />
-                {gcalLoading ? '読み込み中...' : 'GCalと同期中'}
+                {gcalLoading ? tr('calendar.gcal.loading') : tr('calendar.gcal.synced')}
               </button>
             ) : (
               <button onClick={connect}
                 className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
               >
                 <Calendar className="size-3" />
-                Googleカレンダーと連携
+                {tr('calendar.gcal.connect')}
               </button>
             )
           )}

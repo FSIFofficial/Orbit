@@ -5,6 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import type { CustomFormDef } from '@/lib/orbit/types'
 import { Modal } from '@/components/orbit/modal'
 import { ChevronLeft } from 'lucide-react'
+import { useI18n } from '@/lib/orbit/i18n'
 
 function FormFillStep({
   form,
@@ -15,6 +16,7 @@ function FormFillStep({
   onSubmit: (answers: Record<string, string | number>) => void
   onBack: () => void
 }) {
+  const { t } = useI18n()
   const [answers, setAnswers] = useState<Record<string, string | number>>({})
   const [error, setError] = useState('')
 
@@ -24,7 +26,7 @@ function FormFillStep({
       if (field.required) {
         const val = answers[field.id]
         if (val === undefined || val === '') {
-          setError(`「${field.label}」は必須です`)
+          setError(t('customForm.fieldRequiredError', { label: field.label }))
           return
         }
       }
@@ -81,7 +83,7 @@ function FormFillStep({
                 onChange={(e) => setAnswers((a) => ({ ...a, [field.id]: e.target.value }))}
                 className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
               >
-                <option value="">選択してください</option>
+                <option value="">{t('customForm.selectPlaceholder')}</option>
                 {(field.options ?? []).map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
@@ -93,7 +95,7 @@ function FormFillStep({
 
       {form.approvalSteps.length > 0 && (
         <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-          申請後: {form.approvalSteps.length}段階の承認フローに入ります
+          {t('customForm.approvalFlowNote', { count: form.approvalSteps.length })}
         </div>
       )}
 
@@ -101,13 +103,13 @@ function FormFillStep({
 
       <div className="flex justify-end gap-2 pt-1">
         <button onClick={onBack} className="rounded-md border border-border px-4 py-2 text-sm">
-          戻る
+          {t('customForm.back')}
         </button>
         <button
           onClick={handleSubmit}
           className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
         >
-          申請する
+          {t('customForm.submit')}
         </button>
       </div>
     </div>
@@ -116,6 +118,7 @@ function FormFillStep({
 
 export function CustomFormModal({ onClose }: { onClose: () => void }) {
   const { customFormDefs, submitCustomForm } = useOrbit()
+  const { t } = useI18n()
   const [selectedForm, setSelectedForm] = useState<CustomFormDef | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
@@ -124,10 +127,10 @@ export function CustomFormModal({ onClose }: { onClose: () => void }) {
       <Modal open={true} onClose={onClose}>
         <div className="flex flex-col items-center gap-4 p-8 text-center">
           <div className="text-4xl">✅</div>
-          <h2 className="text-lg font-semibold">申請が完了しました</h2>
-          <p className="text-sm text-muted-foreground">承認フローに進みます。結果はメールでお知らせします。</p>
+          <h2 className="text-lg font-semibold">{t('customForm.submitted.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('customForm.submitted.desc')}</p>
           <button onClick={onClose} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
-            閉じる
+            {t('common.close')}
           </button>
         </div>
       </Modal>
@@ -152,8 +155,8 @@ export function CustomFormModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal open={true} onClose={onClose}>
       <div className="space-y-4 p-5" style={{ minWidth: 400 }}>
-        <h2 className="text-lg font-semibold">フォーム申請</h2>
-        <p className="text-sm text-muted-foreground">申請するフォームを選択してください</p>
+        <h2 className="text-lg font-semibold">{t('output.formApply')}</h2>
+        <p className="text-sm text-muted-foreground">{t('customForm.selectFormDesc')}</p>
         <div className="space-y-2">
           {customFormDefs.map((form) => (
             <button
@@ -166,14 +169,14 @@ export function CustomFormModal({ onClose }: { onClose: () => void }) {
                 <span className="text-xs text-muted-foreground">{form.description}</span>
               )}
               <span className="mt-1 text-xs text-muted-foreground">
-                {form.fields.length}項目 · 承認{form.approvalSteps.length}段階
+                {t('customForm.fieldsAndSteps', { fields: form.fields.length, steps: form.approvalSteps.length })}
               </span>
             </button>
           ))}
         </div>
         <div className="flex justify-end">
           <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm">
-            キャンセル
+            {t('common.cancel')}
           </button>
         </div>
       </div>

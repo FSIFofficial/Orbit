@@ -6,6 +6,7 @@ import { Avatar, ProjectTag } from '@/components/orbit/primitives'
 import { isOverdue, daysSince, formatDeadline } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { STATUS_LABEL } from '@/lib/orbit/types'
+import { useI18n } from '@/lib/orbit/i18n'
 import { exportAllDataToExcel } from '@/lib/orbit/export-excel'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,6 +33,7 @@ export function AdminDashboard() {
     currentUser,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
+  const { t: tr } = useI18n()
   const tz = currentUser?.timezone ?? DEFAULT_TIMEZONE
 
   const inProgress = tasks.filter((t) => t.status === 'progress')
@@ -73,38 +75,38 @@ export function AdminDashboard() {
   // rest of this app uses, e.g. input-screen.tsx's parser)
   const nextActions: string[] = []
   if (overdue.length > 0) {
-    nextActions.push(`${overdue.length}件のタスクが期限超過しています。優先的に確認してください。`)
+    nextActions.push(tr('admin.dashboard.nextActions.overdue', { count: overdue.length }))
   }
   if (blocked.length > 0) {
-    nextActions.push(`${blocked.length}件のタスクがブロックされています。担当者に状況を確認してください。`)
+    nextActions.push(tr('admin.dashboard.nextActions.blocked', { count: blocked.length }))
   }
   if (staleReview.length > 0) {
-    nextActions.push(
-      `${staleReview.length}件のタスクが確認待ちのまま3日以上経過しています。対応をお願いします。`,
-    )
+    nextActions.push(tr('admin.dashboard.nextActions.staleReview', { count: staleReview.length }))
   }
   if (unassigned.length > 0) {
-    nextActions.push(`${unassigned.length}件のタスクが未アサインです。Assignmentsから担当者を割り当ててください。`)
+    nextActions.push(tr('admin.dashboard.nextActions.unassigned', { count: unassigned.length }))
   }
   const attentionProjects = projectHealth.filter((h) => h.health === 'attention')
   if (attentionProjects.length > 0) {
     nextActions.push(
-      `${attentionProjects.map((h) => h.project.name).join('、')}の健全性が低下しています。`,
+      tr('admin.dashboard.nextActions.unhealthyProjects', {
+        projects: attentionProjects.map((h) => h.project.name).join('、'),
+      }),
     )
   }
   if (nextActions.length === 0) {
-    nextActions.push('特に対応が必要な項目はありません。')
+    nextActions.push(tr('admin.dashboard.nextActions.none'))
   }
 
   const metrics = [
-    { label: '全タスク', value: tasks.length, tone: 'neutral' as const },
-    { label: '承認待ち', value: pendingTasks.length, tone: 'accent' as const },
-    { label: '進行中', value: inProgress.length, tone: 'neutral' as const },
-    { label: 'サポート必要', value: needsSupport.length, tone: 'warn' as const },
-    { label: '確認待ち', value: waiting.length, tone: 'warn' as const },
-    { label: '期限超過', value: overdue.length, tone: 'danger' as const },
-    { label: '未アサイン', value: unassigned.length, tone: 'accent' as const },
-    { label: 'Blocked', value: blocked.length, tone: 'danger' as const },
+    { label: tr('admin.dashboard.label.allTasks'), value: tasks.length, tone: 'neutral' as const },
+    { label: tr('admin.dashboard.label.pending'), value: pendingTasks.length, tone: 'accent' as const },
+    { label: tr('admin.dashboard.label.inProgress'), value: inProgress.length, tone: 'neutral' as const },
+    { label: tr('admin.dashboard.label.needsSupport'), value: needsSupport.length, tone: 'warn' as const },
+    { label: tr('admin.dashboard.label.waiting'), value: waiting.length, tone: 'warn' as const },
+    { label: tr('admin.dashboard.label.overdue'), value: overdue.length, tone: 'danger' as const },
+    { label: tr('admin.dashboard.label.unassigned'), value: unassigned.length, tone: 'accent' as const },
+    { label: tr('admin.dashboard.label.blocked'), value: blocked.length, tone: 'danger' as const },
   ]
 
   const toneClass: Record<string, string> = {
@@ -121,8 +123,8 @@ export function AdminDashboard() {
           <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {isFullAdmin
-              ? '組織全体のタスク状況と、対応が必要な項目です。'
-              : '担当プロジェクトのタスク状況と、対応が必要な項目です。'}
+              ? tr('admin.dashboard.subtitle.full')
+              : tr('admin.dashboard.subtitle.scoped')}
           </p>
         </div>
         {isFullAdmin && (
@@ -134,7 +136,7 @@ export function AdminDashboard() {
             onClick={() => exportAllDataToExcel(tasks, adminProjects, members)}
           >
             <FileSpreadsheet className="size-4" />
-            全データをExcel出力
+            {tr('admin.dashboard.exportAll')}
           </Button>
         )}
       </div>
@@ -143,7 +145,7 @@ export function AdminDashboard() {
       <div className="mt-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-primary" />
-          <h2 className="text-sm font-semibold">次にやるべきこと</h2>
+          <h2 className="text-sm font-semibold">{tr('admin.dashboard.nextActions.title')}</h2>
         </div>
         <ul className="mt-2 flex flex-col gap-1.5">
           {nextActions.map((a, i) => (
@@ -169,10 +171,10 @@ export function AdminDashboard() {
 
       {/* Attention required */}
       <div className="mt-8">
-        <h2 className="text-sm font-semibold">対応が必要</h2>
+        <h2 className="text-sm font-semibold">{tr('admin.dashboard.attentionRequired')}</h2>
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
           <AttentionGroup
-            title="承認待ち"
+            title={tr('admin.dashboard.label.pending')}
             icon={<FileClock className="size-4 text-primary" />}
             tasks={pendingTasks}
             renderMeta={(t) => getProject(t.projectId)?.name ?? ''}
@@ -180,7 +182,7 @@ export function AdminDashboard() {
             getProject={getProject}
           />
           <AttentionGroup
-            title="サポート必要"
+            title={tr('admin.dashboard.label.needsSupport')}
             icon={<LifeBuoy className="size-4 text-[var(--status-support)]" />}
             tasks={needsSupport}
             renderMeta={(t) => getProject(t.projectId)?.name ?? ''}
@@ -188,26 +190,26 @@ export function AdminDashboard() {
             getProject={getProject}
           />
           <AttentionGroup
-            title="確認待ち"
+            title={tr('admin.dashboard.label.waiting')}
             icon={<Clock className="size-4 text-[var(--status-review-fg)]" />}
             tasks={waiting}
             renderMeta={(t) => {
               const d = daysSince(t.lastActivity)
-              return d && d > 0 ? `${d}日前から確認待ち` : '確認待ち'
+              return d && d > 0 ? tr('admin.dashboard.meta.waitingReviewDays', { days: d }) : tr('admin.dashboard.meta.waitingReview')
             }}
             onOpen={openTask}
             getProject={getProject}
           />
           <AttentionGroup
-            title="期限超過"
+            title={tr('admin.dashboard.label.overdue')}
             icon={<CircleAlert className="size-4 text-destructive" />}
             tasks={overdue}
-            renderMeta={(t) => `期限：${formatDeadline(t.deadline)}`}
+            renderMeta={(t) => tr('admin.dashboard.meta.deadline', { date: formatDeadline(t.deadline) })}
             onOpen={openTask}
             getProject={getProject}
           />
           <AttentionGroup
-            title="未アサイン"
+            title={tr('admin.dashboard.label.unassigned')}
             icon={<UserX className="size-4 text-primary" />}
             tasks={unassigned}
             renderMeta={(t) => getProject(t.projectId)?.name ?? ''}
@@ -215,15 +217,15 @@ export function AdminDashboard() {
             getProject={getProject}
           />
           <AttentionGroup
-            title="長期間進捗なし"
+            title={tr('admin.dashboard.label.stale')}
             icon={<Activity className="size-4 text-muted-foreground" />}
             tasks={stale}
-            renderMeta={(t) => `${daysSince(t.lastActivity)}日間更新なし`}
+            renderMeta={(t) => tr('admin.dashboard.meta.staleDays', { days: daysSince(t.lastActivity) ?? 0 })}
             onOpen={openTask}
             getProject={getProject}
           />
           <AttentionGroup
-            title="Blocked Tasks"
+            title={tr('admin.dashboard.label.blockedTasks')}
             icon={<Ban className="size-4 text-destructive" />}
             tasks={blocked}
             renderMeta={(t) => t.blocker?.note ?? ''}
@@ -238,21 +240,21 @@ export function AdminDashboard() {
         <div className="mt-8">
           <h2 className="flex items-center gap-1.5 text-sm font-semibold">
             <HeartPulse className="size-4 text-muted-foreground" />
-            プロジェクト健全性
+            {tr('admin.dashboard.projectHealth.title')}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            期限超過・確認待ち・Blockedの件数から、対応が必要な度合いを示しています。
+            {tr('admin.dashboard.projectHealth.desc')}
           </p>
           <div className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 font-medium">プロジェクト</th>
-                  <th className="px-4 py-2.5 font-medium">状態</th>
-                  <th className="px-4 py-2.5 font-medium">期限超過</th>
-                  <th className="px-4 py-2.5 font-medium">確認待ち</th>
-                  <th className="px-4 py-2.5 font-medium">Blocked</th>
-                  <th className="px-4 py-2.5 font-medium">進行中件数</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.projectHealth.colProject')}</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.projectHealth.colHealth')}</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.label.overdue')}</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.label.waiting')}</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.label.blocked')}</th>
+                  <th className="px-4 py-2.5 font-medium">{tr('admin.dashboard.projectHealth.colLoad')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -269,7 +271,7 @@ export function AdminDashboard() {
                               : 'bg-destructive/10 text-destructive'
                         }`}
                       >
-                        {h.health === 'good' ? '良好' : h.health === 'watch' ? '注意' : '要対応'}
+                        {h.health === 'good' ? tr('admin.dashboard.health.good') : h.health === 'watch' ? tr('admin.dashboard.health.watch') : tr('admin.dashboard.health.attention')}
                       </span>
                     </td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">{h.pOverdue}</td>
@@ -302,6 +304,7 @@ function AttentionGroup({
   onOpen: (id: string) => void
   getProject: (id: string) => import('@/lib/orbit/types').Project | undefined
 }) {
+  const { t: tr } = useI18n()
   return (
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
@@ -310,7 +313,7 @@ function AttentionGroup({
         <span className="ml-auto font-mono text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
       </div>
       {tasks.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs text-muted-foreground">該当なし</div>
+        <div className="px-4 py-6 text-center text-xs text-muted-foreground">{tr('admin.dashboard.noneFound')}</div>
       ) : (
         <ul className="divide-y divide-border">
           {tasks.slice(0, 4).map((t) => (
