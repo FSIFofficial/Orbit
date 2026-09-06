@@ -243,6 +243,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     faculty: r.faculty || undefined,
     departmentName: r.department_name || undefined,
     gradeYear: r.grade_year || undefined,
+    customFields: parseJsonObject<Record<string, string>>(r.custom_fields_json),
   }
 }
 
@@ -406,6 +407,8 @@ export interface RemoteSettings {
   quizDefinitions: QuizDefinition[]
   // レーダーチャート軸定義 — Settings キー "radar_axes"
   radarAxes: RadarAxis[]
+  // 人材DBのカスタム列定義 — Settings キー "custom_member_columns_json"
+  customMemberColumns: import('./types').CustomMemberColumn[]
   // 経費カテゴリ — Settings キー "expense_categories"
   expenseCategories: import('./types').ExpenseCategory[]
   // カスタムフォーム定義 — Settings キー "custom_form_defs"
@@ -496,6 +499,9 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     radarAxes: (() => {
       try { const r = byKey.get('radar_axes'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    customMemberColumns: (() => {
+      try { const r = byKey.get('custom_member_columns_json'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
     expenseCategories: (() => {
       try { const r = byKey.get('expense_categories'); return r ? JSON.parse(r) : [] } catch { return [] }
@@ -806,6 +812,11 @@ export const remoteApi = {
   // ---- レーダーチャート軸 ----
   updateRadarAxes: (axes: RadarAxis[]) =>
     postToGas('updateSetting', { key: 'radar_axes', value: JSON.stringify(axes) }),
+  // ---- 人材DBカスタム列 ----
+  updateCustomMemberColumns: (columns: import('./types').CustomMemberColumn[]) =>
+    postToGas('updateSetting', { key: 'custom_member_columns_json', value: JSON.stringify(columns) }),
+  updateCustomFields: (memberId: string, customFields: Record<string, string>) =>
+    postToGas('updateCustomFields', { memberId, customFields }),
   // ---- 経費申請 ----
   submitExpenseApplication: (application: import('./types').ExpenseApplication) =>
     postToGas('submitExpenseApplication', { application }),

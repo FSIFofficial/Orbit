@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { Download, Upload, Eye, Search } from 'lucide-react'
-import type { Member } from '@/lib/orbit/types'
+import type { CustomMemberColumn, Member } from '@/lib/orbit/types'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
@@ -44,6 +44,21 @@ function buildBaseCols(t: TranslationFn): ColDef[] {
     { key: 'departmentName', label: t('admin.memberDb.col.departmentName'), getValue: (m) => m.departmentName ?? '', editable: false, width: 120 },
     { key: 'gradeYear', label: t('admin.memberDb.col.gradeYear'), getValue: (m) => m.gradeYear ?? '', editable: false, width: 80 },
   ]
+}
+
+// 団体ごとにAdmin > Tagsで追加できるカスタム列。値はMember.customFields[key]。
+// 本人・管理者双方が編集できる（selfOrAdmin相当。この画面自体が既に
+// admin/班長のみ到達できる前提のため一律editable:trueでよい）。
+const CUSTOM_COL_PREFIX = 'custom:'
+
+function buildCustomCols(columns: CustomMemberColumn[]): ColDef[] {
+  return columns.map((col) => ({
+    key: CUSTOM_COL_PREFIX + col.key,
+    label: col.label,
+    getValue: (m) => m.customFields?.[col.key] ?? '',
+    editable: true,
+    width: 140,
+  }))
 }
 
 // Keys that must not be shown to non-admin (一般) viewers.
@@ -95,14 +110,21 @@ export function AdminMemberDb() {
     currentUser,
     isFullAdmin,
     adminProjects,
+    customMemberColumns,
+    updateCustomField,
   } = useOrbit()
   const { t } = useI18n()
 
   // true for any admin role (代表・班長 etc.), false for 一般
   const isAnyAdmin = !!(currentUser?.role) && currentUser.role !== BASE_ROLE
 
-  // Columns the current viewer is allowed to see/export
-  const allowedCols = useMemo(() => filterColsForViewer(buildBaseCols(t), isAnyAdmin), [isAnyAdmin, t])
+  // Columns the current viewer is allowed to see/export — fixed cols +
+  // dynamically-defined custom cols (Admin > Tags「カスタム項目」)
+  const allCols = useMemo(
+    () => [...buildBaseCols(t), ...buildCustomCols(customMemberColumns)],
+    [t, customMemberColumns],
+  )
+  const allowedCols = useMemo(() => filterColsForViewer(allCols, isAnyAdmin), [allCols, isAnyAdmin])
 
   // Members scoped to this viewer's access:
   //   full admin  → all members
@@ -147,7 +169,9 @@ export function AdminMemberDb() {
   const commitEdit = useCallback((memberId: string, colKey: string, val: string) => {
     const member = members.find((m) => m.id === memberId)
     if (!member) return
-    if (colKey === 'yearsOfExperience') {
+    if (colKey.startsWith(CUSTOM_COL_PREFIX)) {
+      updateCustomField(memberId, colKey.slice(CUSTOM_COL_PREFIX.length), val)
+    } else if (colKey === 'yearsOfExperience') {
       updateSearchProfile(memberId, {
         yearsOfExperience: val === '' ? null : Number(val),
         hasManagementExperience: member.hasManagementExperience ?? false,
@@ -163,7 +187,7 @@ export function AdminMemberDb() {
       })
     }
     setEditCell(null)
-  }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt])
+  }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt, updateCustomField])
 
   // ---- member CSV export (uses viewer-scoped cols and members) ----
   const exportMemberCsv = () => {

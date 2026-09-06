@@ -588,6 +588,7 @@ function authorizeAction(acting, action, body) {
     'updateTrainingHistory',// 本人が申請、管理者が更新（ステータス変更）
     'notifyTrainingRequest',// 本人が申請するが念のため本人or管理者に制限
     'updateEducationInfo',  // 大学名・学部・学科・学年は本人・管理者双方が編集可
+    'updateCustomFields',   // 人材DBのカスタム列は本人・管理者双方が編集可
   ]
   if (selfOrAdmin.indexOf(action) >= 0) {
     var targetId = String(body.memberId || '')
@@ -973,6 +974,12 @@ function doPost(e) {
           faculty: body.faculty || '',
           department_name: body.departmentName || '',
           grade_year: body.gradeYear || '',
+        })
+        break
+      case 'updateCustomFields':
+        // フロント側（store.tsx）で既存値とマージ済みの完全なオブジェクトを送ってくる
+        result = updateMemberFields(body.memberId, {
+          custom_fields_json: JSON.stringify(body.customFields || {}),
         })
         break
       case 'updateEmail':
@@ -2637,6 +2644,7 @@ function setupOrbit() {
     'faculty',                 // 学部
     'department_name',         // 学科（department_pathと紛らわしいので department_name とする）
     'grade_year',              // 学年
+    'custom_fields_json',      // 団体ごとのカスタム列（人材DB）の値 {"key":"value"}
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',

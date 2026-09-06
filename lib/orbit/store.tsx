@@ -17,6 +17,7 @@ import type {
   Competency,
   CustomFormDef,
   CustomFormSubmission,
+  CustomMemberColumn,
   Department,
   DevelopmentPlanEntry,
   EvaluationRecord,
@@ -293,6 +294,10 @@ interface OrbitContextValue extends OrbitState {
   updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
   updateRadarAxes: (axes: RadarAxis[]) => void
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
+  // 人材DBのカスタム列（団体ごとに追加可能）
+  customMemberColumns: import('./types').CustomMemberColumn[]
+  updateCustomMemberColumns: (columns: import('./types').CustomMemberColumn[]) => void
+  updateCustomField: (memberId: string, key: string, value: string) => void
   updateMentor: (memberId: string, mentorId: string | null) => void
   // ---- タレントマネジメント ----
   updateSearchProfile: (
@@ -676,6 +681,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
+  const [customMemberColumns, setCustomMemberColumns] = useState<CustomMemberColumn[]>([])
   // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
   const [slackWebhookUrl, setSlackWebhookUrlState] = useState<string>('')
   // Settingsシートから取得した初期タスク定義（initial_tasks_json）
@@ -809,6 +815,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
         if (s.radarAxes) setRadarAxes(s.radarAxes)
+        if (s.customMemberColumns) setCustomMemberColumns(s.customMemberColumns)
         if (s.expenseCategories) setExpenseCategories(s.expenseCategories)
         if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
         if (s.oneOnOneQuestions.length) setOneOnOneQuestionsState(s.oneOnOneQuestions)
@@ -872,6 +879,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
           if (settings.radarAxes) setRadarAxes(settings.radarAxes)
+          if (settings.customMemberColumns) setCustomMemberColumns(settings.customMemberColumns)
           if (settings.expenseCategories) setExpenseCategories(settings.expenseCategories)
           if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
           if (settings.oneOnOneQuestions.length) setOneOnOneQuestionsState(settings.oneOnOneQuestions)
@@ -1315,6 +1323,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isSettingsConfigured) runRemote(remoteApi.updateRadarAxes(axes))
     },
     [runRemote],
+  )
+
+  // 人材DBのカスタム列定義の更新（Admin > Tags）
+  const updateCustomMemberColumns = useCallback(
+    (columns: CustomMemberColumn[]) => {
+      setCustomMemberColumns(columns)
+      if (isSettingsConfigured) runRemote(remoteApi.updateCustomMemberColumns(columns))
+    },
+    [runRemote],
+  )
+
+  // 人材DBのカスタム列の値を1件更新する。既存のcustomFieldsとマージした
+  // 完全なオブジェクトを送る（updateCareerGoals等と同じ「まとめて送る」方式）
+  const updateCustomField = useCallback(
+    (memberId: string, key: string, value: string) => {
+      const member = members.find((m) => m.id === memberId)
+      const merged = { ...(member?.customFields ?? {}), [key]: value }
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, customFields: merged } : m)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateCustomFields(memberId, merged))
+    },
+    [members, runRemote],
   )
 
   // 検定を受験する（メンバー）— remote がある場合はサーバーで採点、なければ
@@ -3792,6 +3821,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateQuizDefinitions,
     updateRadarAxes,
     submitQuizResult,
+    customMemberColumns,
+    updateCustomMemberColumns,
+    updateCustomField,
     updateMentor,
     updateSearchProfile,
     updateCareerHistory,

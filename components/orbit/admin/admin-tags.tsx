@@ -6,8 +6,8 @@ import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
-import type { AdminSection } from '@/lib/orbit/types'
-import { Plus, Check, ChevronUp, ChevronDown, X } from 'lucide-react'
+import type { AdminSection, CustomMemberColumn } from '@/lib/orbit/types'
+import { Plus, Check, ChevronUp, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 // dashboard always stays visible (it's the redirect target for a
@@ -211,6 +211,9 @@ export function AdminTags() {
 
       {/* アンケート回答対象者の限定 */}
       <SurveyInviteEditor />
+
+      {/* 人材DBのカスタム列 */}
+      <CustomMemberColumnsEditor />
     </div>
   )
 }
@@ -586,6 +589,88 @@ function SurveyInviteEditor() {
             </button>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// 人材DBのカスタム列（item 1）— 団体ごとに任意の列（現状typeは'text'
+// のみ）を追加できる。列定義はSettings、値はMember.customFieldsに保持。
+// 既存キーの削除は表示上外れるだけで、Members側のcustom_fields_jsonに
+// 残ったデータを一括削除する必要はない（仕様通り）。
+function CustomMemberColumnsEditor() {
+  const { customMemberColumns, updateCustomMemberColumns } = useOrbit()
+  const toast = useToast()
+  const { t } = useI18n()
+  const [draftKey, setDraftKey] = useState('')
+  const [draftLabel, setDraftLabel] = useState('')
+
+  const add = () => {
+    const key = draftKey.trim()
+    const label = draftLabel.trim()
+    if (!key || !label) return
+    if (customMemberColumns.some((c) => c.key === key)) {
+      toast(t('admin.tags.customColumns.duplicateKeyToast'))
+      return
+    }
+    const next: CustomMemberColumn[] = [...customMemberColumns, { key, label, type: 'text' }]
+    updateCustomMemberColumns(next)
+    setDraftKey('')
+    setDraftLabel('')
+    toast(t('admin.tags.customColumns.addedToast'))
+  }
+
+  const remove = (key: string) => {
+    updateCustomMemberColumns(customMemberColumns.filter((c) => c.key !== key))
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>{t('admin.tags.customColumns.title')}</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">{t('admin.tags.customColumns.desc')}</p>
+      <div className="mt-3 flex flex-col gap-1.5">
+        {customMemberColumns.length === 0 ? (
+          <span className="text-sm text-muted-foreground">{t('admin.tags.noOptions')}</span>
+        ) : (
+          customMemberColumns.map((col) => (
+            <div
+              key={col.key}
+              className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs"
+            >
+              <span className="font-medium">{col.label}</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{col.key}</span>
+              <button
+                onClick={() => remove(col.key)}
+                className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                aria-label={t('admin.tags.customColumns.removeAriaLabel')}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <input
+          value={draftKey}
+          onChange={(e) => setDraftKey(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+          placeholder={t('admin.tags.customColumns.keyPlaceholder')}
+          className="h-8 w-32 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        />
+        <input
+          value={draftLabel}
+          onChange={(e) => setDraftLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+            if (e.key === 'Enter') { e.preventDefault(); add() }
+          }}
+          placeholder={t('admin.tags.customColumns.labelPlaceholder')}
+          className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        />
+        <Button variant="outline" className="h-8 text-xs" disabled={!draftKey.trim() || !draftLabel.trim()} onClick={add}>
+          <Plus className="size-3.5" />
+          {t('common.add')}
+        </Button>
       </div>
     </div>
   )
