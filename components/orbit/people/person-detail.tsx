@@ -12,6 +12,7 @@ import { CareerTab } from '@/components/orbit/people/career-tab'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
 import { formatDeadlineFull, formatTenure, memberSkillFieldProgress } from '@/lib/orbit/utils'
+import { exportTasksToExcel } from '@/lib/orbit/export-excel'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
 import { useI18n, SUPPORTED_LOCALES, type TranslationKey } from '@/lib/orbit/i18n'
@@ -35,6 +36,7 @@ import {
   Link2,
   RefreshCw,
   Download,
+  FileSpreadsheet,
 } from 'lucide-react'
 import {
   isGoogleOAuthConfigured,
@@ -926,6 +928,17 @@ export function PersonDetail({ id }: { id: string }) {
                 {v === 'list' ? t('person.tasks.view.list') : v === 'board' ? t('person.tasks.view.board') : t('person.tasks.view.calendar')}
               </button>
             ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1.5"
+              disabled={mine.length === 0}
+              onClick={() => exportTasksToExcel(mine, projects, members)}
+            >
+              <FileSpreadsheet className="size-4" />
+              {t('person.tasks.exportExcel')}
+            </Button>
           </div>
 
           {/* リスト表示 */}

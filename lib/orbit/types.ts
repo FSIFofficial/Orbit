@@ -232,6 +232,10 @@ export interface Member {
   // 既存のdepartmentPath（組織所属パス）と紛らわしいため departmentName とする
   departmentName?: string
   gradeYear?: string
+
+  // 団体ごとにAdmin > Tagsで追加できるカスタム列（人材DB）の値。
+  // 列定義自体はSettingsのcustomMemberColumnsに持ち、ここは値のみ。
+  customFields?: Record<string, string>
 }
 
 /** 採用支援（入会前の候補者）— Candidatesシート */
@@ -353,6 +357,8 @@ export interface Project {
   // アーカイブ — 終了したプロジェクトを一覧から隠す（削除とは異なり、
   // タスク履歴などのデータは残したまま非表示にするだけ）
   archived?: boolean
+  // 目標 — descriptionは概要欄として維持しつつ、目標専用の欄を別に持つ
+  goal?: string
 }
 
 // A template task an admin defines for a Project type (store.tsx's
@@ -450,6 +456,17 @@ export interface QuizDefinition {
 export interface RadarAxis {
   skill: string
   label?: string // 表示名（省略時は skill をそのまま使う）
+}
+
+/**
+ * 人材DBのカスタム列定義 (Settings キー: "custom_member_columns_json")。
+ * typeはまず'text'のみ対応（number等への拡張は将来対応）。
+ * 実際の値はMember.customFields[key]に保持する。
+ */
+export interface CustomMemberColumn {
+  key: string
+  label: string
+  type: 'text'
 }
 
 export interface RecurringTaskRule {

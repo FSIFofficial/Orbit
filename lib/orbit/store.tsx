@@ -17,6 +17,7 @@ import type {
   Competency,
   CustomFormDef,
   CustomFormSubmission,
+  CustomMemberColumn,
   Department,
   DevelopmentPlanEntry,
   EvaluationRecord,
@@ -207,6 +208,8 @@ interface OrbitContextValue extends OrbitState {
   setOrgName: (name: string) => void
   orgLogoUrl: string
   setOrgLogoUrl: (url: string) => void
+  themeColor: string
+  setThemeColor: (color: string) => void
   setDiscordWebhookUrl: (url: string) => void
   addRecurringRule: (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   removeRecurringRule: (ruleId: string) => void
@@ -264,7 +267,7 @@ interface OrbitContextValue extends OrbitState {
   removeProject: (projectId: string) => void
   updateProjectMembers: (projectId: string, memberIds: string[]) => void
   updateProjectOwner: (projectId: string, ownerId: string | null) => void
-  updateProjectDetails: (projectId: string, description: string, type?: string) => void
+  updateProjectDetails: (projectId: string, description: string, type?: string, goal?: string) => void
   activeProjects: Project[]
   setProjectArchived: (projectId: string, archived: boolean) => void
   setProjectOrder: (orderedIds: string[]) => void
@@ -293,6 +296,10 @@ interface OrbitContextValue extends OrbitState {
   updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
   updateRadarAxes: (axes: RadarAxis[]) => void
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
+  // 人材DBのカスタム列（団体ごとに追加可能）
+  customMemberColumns: import('./types').CustomMemberColumn[]
+  updateCustomMemberColumns: (columns: import('./types').CustomMemberColumn[]) => void
+  updateCustomField: (memberId: string, key: string, value: string) => void
   updateMentor: (memberId: string, mentorId: string | null) => void
   // ---- タレントマネジメント ----
   updateSearchProfile: (
@@ -429,6 +436,7 @@ const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
 const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
 const ORG_NAME_STORAGE_KEY = 'orbit-org-name'
 const ORG_LOGO_URL_STORAGE_KEY = 'orbit-org-logo-url'
+const THEME_COLOR_STORAGE_KEY = 'orbit-theme-color'
 
 function loadState(): Partial<OrbitState> | null {
   if (typeof window === 'undefined') return null
@@ -657,6 +665,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [orgLogoUrl, setOrgLogoUrlState] = useState<string>(() => {
     try { return typeof window !== 'undefined' ? (window.localStorage.getItem(ORG_LOGO_URL_STORAGE_KEY) ?? '') : '' } catch { return '' }
   })
+  // テーマカラー（プライマリカラー、16進コード）— 未設定時はデフォルトのまま
+  const [themeColor, setThemeColorState] = useState<string>(() => {
+    try { return typeof window !== 'undefined' ? (window.localStorage.getItem(THEME_COLOR_STORAGE_KEY) ?? '') : '' } catch { return '' }
+  })
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定する、org全体で共有の表示順
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
@@ -676,6 +688,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
+  const [customMemberColumns, setCustomMemberColumns] = useState<CustomMemberColumn[]>([])
   // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
   const [slackWebhookUrl, setSlackWebhookUrlState] = useState<string>('')
   // Settingsシートから取得した初期タスク定義（initial_tasks_json）
@@ -805,10 +818,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSurveyInvitedIds(s.surveyInvitedIds)
         if (s.orgName) { setOrgNameState(s.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, s.orgName) } catch {} }
         if (s.orgLogoUrl) { setOrgLogoUrlState(s.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, s.orgLogoUrl) } catch {} }
+        if (s.themeColor) { setThemeColorState(s.themeColor); try { localStorage.setItem(THEME_COLOR_STORAGE_KEY, s.themeColor) } catch {} }
         setProjectOrderState(s.projectOrder)
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
         if (s.radarAxes) setRadarAxes(s.radarAxes)
+        if (s.customMemberColumns) setCustomMemberColumns(s.customMemberColumns)
         if (s.expenseCategories) setExpenseCategories(s.expenseCategories)
         if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
         if (s.oneOnOneQuestions.length) setOneOnOneQuestionsState(s.oneOnOneQuestions)
@@ -868,10 +883,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSurveyInvitedIds(settings.surveyInvitedIds)
           if (settings.orgName) { setOrgNameState(settings.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, settings.orgName) } catch {} }
           if (settings.orgLogoUrl) { setOrgLogoUrlState(settings.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, settings.orgLogoUrl) } catch {} }
+          if (settings.themeColor) { setThemeColorState(settings.themeColor); try { localStorage.setItem(THEME_COLOR_STORAGE_KEY, settings.themeColor) } catch {} }
           setProjectOrderState(settings.projectOrder)
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
           if (settings.radarAxes) setRadarAxes(settings.radarAxes)
+          if (settings.customMemberColumns) setCustomMemberColumns(settings.customMemberColumns)
           if (settings.expenseCategories) setExpenseCategories(settings.expenseCategories)
           if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
           if (settings.oneOnOneQuestions.length) setOneOnOneQuestionsState(settings.oneOnOneQuestions)
@@ -1229,6 +1246,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     },
     [runRemote],
   )
+  // テーマカラー — 有効な16進カラーコード（#rgb/#rrggbb）以外は無視する
+  const setThemeColor = useCallback(
+    (color: string) => {
+      const trimmed = color.trim()
+      if (trimmed && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) return
+      setThemeColorState(trimmed)
+      try {
+        if (trimmed) localStorage.setItem(THEME_COLOR_STORAGE_KEY, trimmed)
+        else localStorage.removeItem(THEME_COLOR_STORAGE_KEY)
+      } catch {}
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('theme_color', trimmed))
+    },
+    [runRemote],
+  )
   const uploadOrgLogo = useCallback(
     (dataUrl: string, filename: string): Promise<void> => {
       if (!isDriveConfigured) return Promise.resolve()
@@ -1315,6 +1346,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isSettingsConfigured) runRemote(remoteApi.updateRadarAxes(axes))
     },
     [runRemote],
+  )
+
+  // 人材DBのカスタム列定義の更新（Admin > Tags）
+  const updateCustomMemberColumns = useCallback(
+    (columns: CustomMemberColumn[]) => {
+      setCustomMemberColumns(columns)
+      if (isSettingsConfigured) runRemote(remoteApi.updateCustomMemberColumns(columns))
+    },
+    [runRemote],
+  )
+
+  // 人材DBのカスタム列の値を1件更新する。既存のcustomFieldsとマージした
+  // 完全なオブジェクトを送る（updateCareerGoals等と同じ「まとめて送る」方式）
+  const updateCustomField = useCallback(
+    (memberId: string, key: string, value: string) => {
+      const member = members.find((m) => m.id === memberId)
+      const merged = { ...(member?.customFields ?? {}), [key]: value }
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, customFields: merged } : m)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateCustomFields(memberId, merged))
+    },
+    [members, runRemote],
   )
 
   // 検定を受験する（メンバー）— remote がある場合はサーバーで採点、なければ
@@ -2464,11 +2516,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 概要・種類は作成後も編集できる（種類を変えても、既存タスクやテンプレートの
   // 自動追加には影響しない — あくまで新規作成時の初期タスク生成に使われるだけ）
   const updateProjectDetails = useCallback(
-    (projectId: string, description: string, type?: string) => {
+    (projectId: string, description: string, type?: string, goal?: string) => {
       setProjects((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, description, type: type || undefined } : p)),
+        prev.map((p) => (p.id === projectId ? { ...p, description, type: type || undefined, goal: goal || undefined } : p)),
       )
-      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, description, type))
+      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, description, type, goal))
     },
     [runRemote],
   )
@@ -3730,6 +3782,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setOrgName,
     orgLogoUrl,
     setOrgLogoUrl,
+    themeColor,
+    setThemeColor,
     setDiscordWebhookUrl,
     addRecurringRule,
     removeRecurringRule,
@@ -3792,6 +3846,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateQuizDefinitions,
     updateRadarAxes,
     submitQuizResult,
+    customMemberColumns,
+    updateCustomMemberColumns,
+    updateCustomField,
     updateMentor,
     updateSearchProfile,
     updateCareerHistory,

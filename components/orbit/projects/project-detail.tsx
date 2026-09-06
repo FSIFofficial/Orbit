@@ -10,7 +10,7 @@ import { Avatar } from '@/components/orbit/primitives'
 import { isOverdue } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { cn } from '@/lib/utils'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Target } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
 
 type Tab = 'overview' | 'workflow' | 'calendar'
@@ -57,7 +57,15 @@ export function ProjectDetail({ id }: { id: string }) {
               <span className="size-2.5 rounded-full bg-primary/60" />
               <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
             </div>
-            <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{project.description}</p>
+            {project.goal && (
+              <div className="mt-2 flex items-start gap-1.5 rounded-md bg-primary-muted px-2.5 py-1.5 text-sm text-primary">
+                <Target className="mt-0.5 size-3.5 shrink-0" />
+                <span className="max-w-xl">{project.goal}</span>
+              </div>
+            )}
+            {project.description && (
+              <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{project.description}</p>
+            )}
             {owner && (
               <button
                 onClick={() => go({ name: 'person', id: owner.id })}

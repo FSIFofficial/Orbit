@@ -81,6 +81,39 @@ function SkillCertifiedWatcher() {
   return null
 }
 
+// 団体設定（org-settings-screen.tsx）で選択したテーマカラーを、Tailwindの
+// CSS変数（--primary等、app/globals.cssではプレーンな16進色）に動的に
+// 反映する。未設定時はglobals.cssのデフォルト色のまま（何もしない）。
+function hexToForeground(hex: string): string {
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex)
+  if (!m) return '#ffffff'
+  const full = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1]
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  // 相対輝度が高い（明るい）色には黒文字、それ以外は白文字
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? '#0d0d0f' : '#ffffff'
+}
+
+function ThemeColorWatcher() {
+  const { themeColor } = useOrbit()
+
+  useEffect(() => {
+    const root = document.documentElement
+    const valid = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(themeColor)
+    if (!valid) {
+      root.style.removeProperty('--primary')
+      root.style.removeProperty('--primary-foreground')
+      return
+    }
+    root.style.setProperty('--primary', themeColor)
+    root.style.setProperty('--primary-foreground', hexToForeground(themeColor))
+  }, [themeColor])
+
+  return null
+}
+
 // currentUser.locale（スプレッドシート保存済みの言語設定）が分かった時点で
 // I18nの表示言語に反映する。ブラウザのlocalStorage（ログイン前のデフォルト、
 // 未ログイン状態でも機能する）より、ログイン後はこちらを優先する。
@@ -158,6 +191,7 @@ export function OrbitApp() {
           <ToastProvider>
             <SkillCertifiedWatcher />
             <LocaleSyncWatcher />
+            <ThemeColorWatcher />
             <NavProvider>
               <TaskDrawerProvider>
                 <Router />
