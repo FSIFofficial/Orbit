@@ -416,6 +416,8 @@ export interface RemoteSettings {
   // 団体名・ロゴ — Settings キー "org_name" / "org_logo_url"
   orgName: string
   orgLogoUrl: string
+  // プライマリカラー（16進カラーコード）— Settings キー "theme_color"
+  themeColor: string
   // 1on1ワークシート質問項目 — Settings キー "one_on_one_questions"
   oneOnOneQuestions: string[]
   // 初ログイン時付与タスク — Settings キー "initial_tasks_json"
@@ -489,6 +491,7 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     surveyInvitedIds: splitTags(byKey.get('survey_invited_ids')),
     orgName: byKey.get('org_name') ?? '',
     orgLogoUrl: byKey.get('org_logo_url') ?? '',
+    themeColor: byKey.get('theme_color') ?? '',
     projectOrder: splitTags(byKey.get('project_order')),
     restrictedRoles: splitTags(byKey.get('restricted_roles')),
     skillLevelThresholds: (() => {

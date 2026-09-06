@@ -208,6 +208,8 @@ interface OrbitContextValue extends OrbitState {
   setOrgName: (name: string) => void
   orgLogoUrl: string
   setOrgLogoUrl: (url: string) => void
+  themeColor: string
+  setThemeColor: (color: string) => void
   setDiscordWebhookUrl: (url: string) => void
   addRecurringRule: (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   removeRecurringRule: (ruleId: string) => void
@@ -434,6 +436,7 @@ const SEEN_MENTIONS_STORAGE_KEY = 'orbit-seen-mention-ids'
 const DISMISSED_NOTIFICATIONS_STORAGE_KEY = 'orbit-dismissed-notifications'
 const ORG_NAME_STORAGE_KEY = 'orbit-org-name'
 const ORG_LOGO_URL_STORAGE_KEY = 'orbit-org-logo-url'
+const THEME_COLOR_STORAGE_KEY = 'orbit-theme-color'
 
 function loadState(): Partial<OrbitState> | null {
   if (typeof window === 'undefined') return null
@@ -662,6 +665,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [orgLogoUrl, setOrgLogoUrlState] = useState<string>(() => {
     try { return typeof window !== 'undefined' ? (window.localStorage.getItem(ORG_LOGO_URL_STORAGE_KEY) ?? '') : '' } catch { return '' }
   })
+  // テーマカラー（プライマリカラー、16進コード）— 未設定時はデフォルトのまま
+  const [themeColor, setThemeColorState] = useState<string>(() => {
+    try { return typeof window !== 'undefined' ? (window.localStorage.getItem(THEME_COLOR_STORAGE_KEY) ?? '') : '' } catch { return '' }
+  })
   // プロジェクトの表示順（プロジェクトIDの配列）— Admin > Projectsのドラッグ
   // 並び替えで設定する、org全体で共有の表示順
   const [projectOrder, setProjectOrderState] = useState<string[]>([])
@@ -811,6 +818,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         setSurveyInvitedIds(s.surveyInvitedIds)
         if (s.orgName) { setOrgNameState(s.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, s.orgName) } catch {} }
         if (s.orgLogoUrl) { setOrgLogoUrlState(s.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, s.orgLogoUrl) } catch {} }
+        if (s.themeColor) { setThemeColorState(s.themeColor); try { localStorage.setItem(THEME_COLOR_STORAGE_KEY, s.themeColor) } catch {} }
         setProjectOrderState(s.projectOrder)
         if (s.skillLevelThresholds) setSkillLevelThresholds(s.skillLevelThresholds)
         if (s.quizDefinitions) setQuizDefinitions(s.quizDefinitions)
@@ -875,6 +883,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           setSurveyInvitedIds(settings.surveyInvitedIds)
           if (settings.orgName) { setOrgNameState(settings.orgName); try { localStorage.setItem(ORG_NAME_STORAGE_KEY, settings.orgName) } catch {} }
           if (settings.orgLogoUrl) { setOrgLogoUrlState(settings.orgLogoUrl); try { localStorage.setItem(ORG_LOGO_URL_STORAGE_KEY, settings.orgLogoUrl) } catch {} }
+          if (settings.themeColor) { setThemeColorState(settings.themeColor); try { localStorage.setItem(THEME_COLOR_STORAGE_KEY, settings.themeColor) } catch {} }
           setProjectOrderState(settings.projectOrder)
           if (settings.skillLevelThresholds) setSkillLevelThresholds(settings.skillLevelThresholds)
           if (settings.quizDefinitions) setQuizDefinitions(settings.quizDefinitions)
@@ -1234,6 +1243,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         else localStorage.removeItem(ORG_LOGO_URL_STORAGE_KEY)
       } catch {}
       if (isSettingsConfigured) runRemote(remoteApi.updateSetting('org_logo_url', url))
+    },
+    [runRemote],
+  )
+  // テーマカラー — 有効な16進カラーコード（#rgb/#rrggbb）以外は無視する
+  const setThemeColor = useCallback(
+    (color: string) => {
+      const trimmed = color.trim()
+      if (trimmed && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) return
+      setThemeColorState(trimmed)
+      try {
+        if (trimmed) localStorage.setItem(THEME_COLOR_STORAGE_KEY, trimmed)
+        else localStorage.removeItem(THEME_COLOR_STORAGE_KEY)
+      } catch {}
+      if (isSettingsConfigured) runRemote(remoteApi.updateSetting('theme_color', trimmed))
     },
     [runRemote],
   )
@@ -3759,6 +3782,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setOrgName,
     orgLogoUrl,
     setOrgLogoUrl,
+    themeColor,
+    setThemeColor,
     setDiscordWebhookUrl,
     addRecurringRule,
     removeRecurringRule,

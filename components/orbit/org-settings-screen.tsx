@@ -6,7 +6,7 @@ import { isRemoteConfigured as remoteConfigured } from '@/lib/orbit/remote'
 import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
-import { Building2, ImageUp, Loader2, Mail, MessageSquare, X, Plus } from 'lucide-react'
+import { Building2, ImageUp, Loader2, Mail, MessageSquare, X, Plus, Palette } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -32,6 +32,8 @@ export function OrgSettingsScreen() {
     setOrgName,
     orgLogoUrl,
     setOrgLogoUrl,
+    themeColor,
+    setThemeColor,
     uploadOrgLogo,
     driveEnabled,
     orgNotificationEmails,
@@ -45,6 +47,8 @@ export function OrgSettingsScreen() {
   const { t } = useI18n()
 
   const [orgNameDraft, setOrgNameDraft] = useState(orgName)
+  const [themeColorDraft, setThemeColorDraft] = useState(themeColor)
+  const themeColorValid = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(themeColorDraft)
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
   const [discordDraft, setDiscordDraft] = useState('')
   const [slackDraft, setSlackDraft] = useState('')
@@ -139,6 +143,49 @@ export function OrgSettingsScreen() {
               {t('orgSettings.nameLogo.hint')}
             </p>
           </div>
+        </Section>
+
+        <Section>
+          <div className="flex items-center gap-1.5">
+            <Palette className="size-4 text-muted-foreground" />
+            <SectionLabel>{t('orgSettings.themeColor.label')}</SectionLabel>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t('orgSettings.themeColor.desc')}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="color"
+              value={themeColorValid ? themeColorDraft : '#6366f1'}
+              onChange={(e) => setThemeColorDraft(e.target.value)}
+              className="h-9 w-12 cursor-pointer rounded-md border border-border bg-background p-0.5"
+            />
+            <input
+              value={themeColorDraft}
+              onChange={(e) => setThemeColorDraft(e.target.value)}
+              placeholder="#6366f1"
+              className="h-9 w-28 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            />
+            <Button
+              size="sm"
+              disabled={themeColorDraft.trim() !== '' && !themeColorValid}
+              onClick={() => { setThemeColor(themeColorDraft.trim()); toast(t('orgSettings.themeColor.savedToast')) }}
+            >
+              {t('orgSettings.nameLogo.save')}
+            </Button>
+            {themeColor && (
+              <button
+                type="button"
+                onClick={() => { setThemeColor(''); setThemeColorDraft('') }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-3.5" />{t('orgSettings.themeColor.reset')}
+              </button>
+            )}
+          </div>
+          {themeColorDraft.trim() !== '' && !themeColorValid && (
+            <p className="mt-1.5 text-xs text-destructive">{t('orgSettings.themeColor.invalidHint')}</p>
+          )}
         </Section>
 
         {isFullAdmin && (
