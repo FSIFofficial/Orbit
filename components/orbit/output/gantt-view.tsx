@@ -6,6 +6,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { Avatar } from '@/components/orbit/primitives'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/orbit/i18n'
+import { computeCriticalPath } from '@/lib/orbit/utils'
 
 // ガントチャート（item 12）— depends_on_ids と due_date/startDate から描画。
 // 1日 = DAY_PX px で水平スクロール。依存矢印は別途SVGでオーバーレイしていないが
@@ -31,7 +32,7 @@ export function GanttView({
   onOpenTask: (id: string) => void
 }) {
   const { members, getProject } = useOrbit()
-  const { t } = useI18n()
+  const { t: tr } = useI18n()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [today] = useState(() => new Date())
 
@@ -66,6 +67,11 @@ export function GanttView({
     return d
   }, [rows, today])
 
+  // クリティカルパスは表示中の全タスク（期限未設定のものも依存関係の
+  // 一部として含む）を対象に計算し、実際にバーが描画される行だけを
+  // ハイライトする
+  const criticalTaskIds = useMemo(() => computeCriticalPath(tasks), [tasks])
+
   const totalDays = diffDays(minDate, maxDate)
   const totalWidth = totalDays * DAY_PX
   const todayOffset = diffDays(minDate, today) * DAY_PX
@@ -81,23 +87,23 @@ export function GanttView({
       next.setMonth(next.getMonth() + 1)
       const end = Math.min(totalDays, diffDays(minDate, next)) * DAY_PX
       labels.push({
-        label: t('gantt.monthLabel', { year: cursor.getFullYear(), month: cursor.getMonth() + 1 }),
+        label: tr('gantt.monthLabel', { year: cursor.getFullYear(), month: cursor.getMonth() + 1 }),
         x: start,
         width: end - start,
       })
       cursor = next
     }
     return labels
-  }, [minDate, maxDate, totalDays, t])
+  }, [minDate, maxDate, totalDays, tr])
 
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-20 text-center">
         <p className="text-sm font-medium text-muted-foreground">
-          {t('gantt.noDeadline.title')}
+          {tr('gantt.noDeadline.title')}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {t('gantt.noDeadline.desc')}
+          {tr('gantt.noDeadline.desc')}
         </p>
       </div>
     )
@@ -105,11 +111,17 @@ export function GanttView({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {criticalTaskIds.size > 0 && (
+        <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          <span className="inline-block size-2.5 rounded-full ring-2 ring-offset-1 ring-amber-500 dark:ring-amber-400" />
+          {tr('gantt.criticalPath.legend')}
+        </div>
+      )}
       <div className="flex">
         {/* 左ペイン: タスク名 */}
         <div className="w-60 shrink-0 border-r border-border">
           <div className="h-12 border-b border-border bg-secondary/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-            {t('gantt.taskColumnHeader')}
+            {tr('gantt.taskColumnHeader')}
           </div>
           {rows.map(({ task: t }) => {
             const assignees = t.assigneeIds
@@ -170,6 +182,7 @@ export function GanttView({
                 const w = Math.max(DAY_PX, diffDays(start, end) * DAY_PX)
                 const isOverdue = end < today && t.status !== 'done'
                 const isDone = t.status === 'done'
+                const isCritical = criticalTaskIds.has(t.id)
                 return (
                   <div
                     key={t.id}
@@ -179,6 +192,7 @@ export function GanttView({
                     <button
                       onClick={() => onOpenTask(t.id)}
                       style={{ left: x, width: w }}
+                      title={isCritical ? tr('gantt.criticalPath.tooltip') : undefined}
                       className={cn(
                         'absolute flex h-7 items-center overflow-hidden rounded-md px-2 text-[11px] font-medium text-white transition-opacity hover:opacity-90',
                         isDone
@@ -186,6 +200,7 @@ export function GanttView({
                           : isOverdue
                             ? 'bg-destructive'
                             : 'bg-primary',
+                        isCritical && 'ring-2 ring-offset-1 ring-amber-500 dark:ring-amber-400',
                       )}
                     >
                       <span className="truncate">{t.name}</span>

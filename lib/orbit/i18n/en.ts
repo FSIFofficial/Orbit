@@ -1389,4 +1389,8 @@ export const en = {
   'calendar.gcal.synced': 'Synced with GCal',
   'calendar.gcal.connect': 'Connect Google Calendar',
   'calendar.absent.eventTitle': '[Orbit] Absent',
+
+  // ---- gantt: critical path -----------------------------------------
+  'gantt.criticalPath.legend': 'Critical path (the dependency chain with the biggest delay impact)',
+  'gantt.criticalPath.tooltip': 'This task is on the critical path',
 } satisfies Record<keyof typeof ja, string>

@@ -1392,4 +1392,8 @@ export const ja = {
   'calendar.gcal.synced': 'GCalと同期中',
   'calendar.gcal.connect': 'Googleカレンダーと連携',
   'calendar.absent.eventTitle': '[Orbit] 不在',
+
+  // ---- gantt: クリティカルパス -----------------------------------------
+  'gantt.criticalPath.legend': 'クリティカルパス（最も遅延の影響が大きい依存チェーン）',
+  'gantt.criticalPath.tooltip': 'クリティカルパス上のタスクです',
 } satisfies Record<string, string>
