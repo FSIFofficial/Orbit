@@ -273,6 +273,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     projectId: r.project_id,
     department: (r.department || '未分類') as Department,
     assigneeIds: splitTags(r.assignee_id),
+    assignType: r.assign_type || 'open_bid',
     startDate: r.start_date || null,
     deadline: r.due_date || null,
     dueTime: r.due_time || null,

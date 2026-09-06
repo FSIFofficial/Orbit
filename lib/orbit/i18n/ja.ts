@@ -259,6 +259,7 @@ export const ja = {
   'output.view.difficulty': '難易度',
   'output.view.dependency': '依存関係',
   'output.view.gantt': 'ガント',
+  'output.view.openbid': '公募',
   'output.fields.button': '表示項目',
   'output.fields.hint': 'カードに表示する項目（タスク名は常に表示）',
   'output.projectVisibility.button': 'プロジェクト表示',
@@ -1396,4 +1397,11 @@ export const ja = {
   // ---- gantt: クリティカルパス -----------------------------------------
   'gantt.criticalPath.legend': 'クリティカルパス（最も遅延の影響が大きい依存チェーン）',
   'gantt.criticalPath.tooltip': 'クリティカルパス上のタスクです',
+
+  // ---- open bid (公募タスク) ---------------------------------------------
+  'openBid.subtitle': '担当者が決まっていない公募タスクの一覧です。応募すると自分が担当者になります。',
+  'openBid.empty': '公募中のタスクはありません',
+  'openBid.apply': '応募する',
+  'openBid.appliedToast': '「{name}」に応募しました',
+  'openBid.deadlineLabel': '期限：{date}',
 } satisfies Record<string, string>

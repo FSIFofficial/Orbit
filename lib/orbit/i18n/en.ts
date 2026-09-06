@@ -259,6 +259,7 @@ export const en = {
   'output.view.difficulty': 'Difficulty',
   'output.view.dependency': 'Dependency',
   'output.view.gantt': 'Gantt',
+  'output.view.openbid': 'Open bid',
   'output.fields.button': 'Fields',
   'output.fields.hint': 'Fields shown on cards (task name is always shown)',
   'output.projectVisibility.button': 'Show projects',
@@ -1393,4 +1394,11 @@ export const en = {
   // ---- gantt: critical path -----------------------------------------
   'gantt.criticalPath.legend': 'Critical path (the dependency chain with the biggest delay impact)',
   'gantt.criticalPath.tooltip': 'This task is on the critical path',
+
+  // ---- open bid tasks ---------------------------------------------------
+  'openBid.subtitle': 'Tasks with no assignee yet, open for anyone to apply. Applying makes you the assignee.',
+  'openBid.empty': 'No open bid tasks',
+  'openBid.apply': 'Apply',
+  'openBid.appliedToast': 'Applied to "{name}"',
+  'openBid.deadlineLabel': 'Deadline: {date}',
 } satisfies Record<keyof typeof ja, string>
