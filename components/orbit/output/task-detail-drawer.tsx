@@ -35,7 +35,7 @@ import {
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, memberWorkloadCapacity, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
@@ -63,6 +63,19 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
+
+// 稼働余力バッジ（item 4）— 過去実績と現在の未完了タスク量から算出したmemberWorkloadCapacityの表示用マッピング
+const CAPACITY_RANK: Record<WorkloadCapacity, number> = { available: 0, normal: 1, full: 2 }
+const CAPACITY_LABEL_KEY: Record<WorkloadCapacity, TranslationKey> = {
+  available: 'taskDrawer.assign.capacity.available',
+  normal: 'taskDrawer.assign.capacity.normal',
+  full: 'taskDrawer.assign.capacity.full',
+}
+const CAPACITY_BADGE_CLASS: Record<WorkloadCapacity, string> = {
+  available: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
+  normal: 'bg-secondary text-muted-foreground',
+  full: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+}
 
 const HISTORY_FIELD_KEY: Record<TaskHistoryEntry['field'], TranslationKey> = {
   assignee: 'taskDrawer.row.assignee',
@@ -383,10 +396,11 @@ export function TaskDetailDrawer({
                 .filter((m) => !topIds.has(m.id) && !m.inactive)
                 .map((m) => {
                   const activeCount = tasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done').length
-                  return { m, activeCount }
+                  const capacity = memberWorkloadCapacity(m.id, tasks)
+                  return { m, activeCount, capacity }
                 })
-                .sort((a, b) => a.activeCount - b.activeCount)
-                .map(({ m, activeCount }) => {
+                .sort((a, b) => CAPACITY_RANK[a.capacity] - CAPACITY_RANK[b.capacity] || a.activeCount - b.activeCount)
+                .map(({ m, activeCount, capacity }) => {
                   const checked = !!task?.assigneeIds.includes(m.id)
                   return (
                     <button
@@ -408,6 +422,12 @@ export function TaskDetailDrawer({
                         <div className="font-medium">{m.displayName || m.name}</div>
                         <div className="text-xs text-muted-foreground">{m.affiliation}</div>
                       </div>
+                      <span className={cn(
+                        'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+                        CAPACITY_BADGE_CLASS[capacity],
+                      )}>
+                        {tr(CAPACITY_LABEL_KEY[capacity])}
+                      </span>
                       <span className={cn(
                         'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
                         activeCount === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : activeCount <= 2 ? 'bg-secondary text-muted-foreground' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',

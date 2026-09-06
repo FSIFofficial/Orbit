@@ -490,6 +490,9 @@ export const en = {
   'taskDrawer.assign.unassignedToast': 'Assignee has been unset',
   'taskDrawer.assign.unassignAll': 'Unassign all',
   'taskDrawer.assign.activeCount': '{count}',
+  'taskDrawer.assign.capacity.available': 'Available',
+  'taskDrawer.assign.capacity.normal': 'Normal',
+  'taskDrawer.assign.capacity.full': 'Full',
 
   // ---- task-detail-drawer: handoff (引き継ぎ) -----------------------------
   'taskDrawer.handoff.title': 'Hand off task',

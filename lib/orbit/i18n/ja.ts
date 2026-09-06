@@ -490,6 +490,9 @@ export const ja = {
   'taskDrawer.assign.unassignedToast': '担当者を未アサインにしました',
   'taskDrawer.assign.unassignAll': '全員はずす',
   'taskDrawer.assign.activeCount': '{count}件',
+  'taskDrawer.assign.capacity.available': '余力あり',
+  'taskDrawer.assign.capacity.normal': '普通',
+  'taskDrawer.assign.capacity.full': '余力なし',
 
   // ---- task-detail-drawer: handoff (引き継ぎ) -----------------------------
   'taskDrawer.handoff.title': 'タスクを引き継ぐ',
