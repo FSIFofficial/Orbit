@@ -407,6 +407,22 @@ function authorizeAction(acting, action, body) {
     'updateCompetencies',        // コンピテンシー評価（班長は担当メンバーのみ）
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
+    // 一般ロールでも、未アサインのタスクに自分だけを追加する「自己アサイン」
+    // （taskDrawerの「このタスクを担当する」／公募タブの「応募する」）に限り許可する。
+    // 既存の担当者変更・他人の追加・複数人同時追加は引き続き代表/管理者限定のまま。
+    if (action === 'assignTask' && !isLeader) {
+      var atTask = null
+      try { atTask = findRow(SHEET_TASKS, String(body.taskId || '')) } catch (e) {}
+      var atCurrentAssignees = atTask
+        ? String(atTask.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+        : []
+      var atRequested = (body.assigneeIds || []).map(String)
+      var isSelfClaim =
+        atCurrentAssignees.length === 0 &&
+        atRequested.length === 1 &&
+        atRequested[0] === acting.id
+      if (isSelfClaim) return
+    }
     if (!isLeader) {
       // ロールで弾かれた場合でも permission_overrides_json に該当する例外があれば許可（OR条件）
       if (checkPermissionOverride(acting, action, body)) return
