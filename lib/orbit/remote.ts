@@ -26,6 +26,7 @@ import type {
   Role,
   SkillLevel,
   SkillLevelThresholds,
+  SkillLevelValue,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -314,6 +315,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     requiredApprovals: r.required_approvals
       ? r.required_approvals === 'all' ? 'all' : Number(r.required_approvals)
       : undefined,
+    requiredSkillLevels: parseJsonObject<Partial<Record<string, SkillLevelValue>>>(r.required_skill_levels_json),
   }
 }
 
@@ -613,6 +615,7 @@ export const remoteApi = {
       priority: Priority
       visibility: 'all' | '幹部'
       importance: TaskImportance
+      requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
     },
   ) =>
     postToGas('updateTaskDetails', {
@@ -627,6 +630,7 @@ export const remoteApi = {
       priority: details.priority,
       visibility: details.visibility,
       importance: details.importance,
+      requiredSkillLevels: details.requiredSkillLevels,
     }),
   updateProgress: (taskId: string, text: string, progressHistory: ProgressEntry[]) =>
     postToGas('updateProgress', { taskId, text, progressHistory }),

@@ -30,6 +30,8 @@ export type Screen =
   | { name: 'survey' }
   // 団体設定（Admin権限者向け）
   | { name: 'org-settings' }
+  // item 10/11: スキル表グリッド（縦軸=メンバー、横軸=スキル）
+  | { name: 'skillgrid' }
 
 interface NavValue {
   screen: Screen

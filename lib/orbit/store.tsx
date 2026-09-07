@@ -253,6 +253,7 @@ interface OrbitContextValue extends OrbitState {
       priority: Priority
       visibility: 'all' | '幹部'
       importance: TaskImportance
+      requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
     },
   ) => void
   updateProgress: (id: string, text: string) => void
@@ -2141,6 +2142,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         priority: Priority
         visibility: 'all' | '幹部'
         importance: TaskImportance
+        requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
       },
     ) => {
       setTasks((prev) =>
@@ -2158,6 +2160,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
             priority: details.priority,
             visibility: details.visibility,
             importance: details.importance,
+            requiredSkillLevels: details.requiredSkillLevels,
           }
           next = appendHistory(next, 'title', t.name, details.name)
           next = appendHistory(next, 'project', t.projectId, details.projectId)

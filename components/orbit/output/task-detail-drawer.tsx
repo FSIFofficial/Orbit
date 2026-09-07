@@ -28,6 +28,7 @@ import {
   type Priority,
   type Project,
   type ScheduleResponseValue,
+  type SkillLevelValue,
   type SkillPoints,
   type Task,
   type TaskHistoryEntry,
@@ -1081,6 +1082,7 @@ function EditTaskModal({
     priority: Priority
     visibility: 'all' | '幹部'
     importance: TaskImportance
+    requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
   }) => void
 }) {
   const { t } = useI18n()
@@ -1093,6 +1095,8 @@ function EditTaskModal({
   const [categoryDraft, setCategoryDraft] = useState('')
   const [skills, setSkills] = useState<string[]>([])
   const [skillDraft, setSkillDraft] = useState('')
+  // item 10/11: このタスクをこなすのに必要なスキルレベルの目安（任意入力）
+  const [requiredSkillLevels, setRequiredSkillLevels] = useState<Partial<Record<string, SkillLevelValue>>>({})
   const [difficulty, setDifficulty] = useState<Difficulty>(DIFFICULTY_LABEL[0])
   const [priority, setPriority] = useState<Priority>('中')
   const [visibility, setVisibility] = useState<'all' | '幹部'>('all')
@@ -1108,6 +1112,7 @@ function EditTaskModal({
     setDepartment(task.department)
     setCategory(task.category)
     setSkills(task.skills)
+    setRequiredSkillLevels(task.requiredSkillLevels ?? {})
     setDifficulty(task.difficulty)
     setPriority(task.priority)
     setVisibility(task.visibility ?? 'all')
@@ -1294,7 +1299,17 @@ function EditTaskModal({
           <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.skills')}</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {skills.map((s) => (
-              <Tag key={s} onRemove={() => setSkills(skills.filter((x) => x !== s))}>
+              <Tag
+                key={s}
+                onRemove={() => {
+                  setSkills(skills.filter((x) => x !== s))
+                  setRequiredSkillLevels((prev) => {
+                    const next = { ...prev }
+                    delete next[s]
+                    return next
+                  })
+                }}
+              >
                 {s}
               </Tag>
             ))}
@@ -1339,6 +1354,36 @@ function EditTaskModal({
             </span>
           </div>
         </label>
+        {skills.length > 0 && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.requiredSkillLevelsLabel')}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {skills.map((s) => (
+                <span key={s} className="flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-1 text-xs">
+                  {s}
+                  <select
+                    value={requiredSkillLevels[s] ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setRequiredSkillLevels((prev) => {
+                        const next = { ...prev }
+                        if (!v) delete next[s]
+                        else next[s] = Number(v) as SkillLevelValue
+                        return next
+                      })
+                    }}
+                    className="cursor-pointer rounded border border-border bg-background px-1 py-0.5 text-xs outline-none focus:border-primary"
+                  >
+                    <option value="">{t('common.notSet')}</option>
+                    {([1, 2, 3, 4, 5] as SkillLevelValue[]).map((lv) => (
+                      <option key={lv} value={lv}>{lv}</option>
+                    ))}
+                  </select>
+                </span>
+              ))}
+            </div>
+          </label>
+        )}
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" className="h-9" onClick={onClose}>
@@ -1359,6 +1404,7 @@ function EditTaskModal({
               priority,
               visibility,
               importance,
+              requiredSkillLevels,
             })
           }}
         >
