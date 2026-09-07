@@ -30,6 +30,7 @@ import {
   User,
   X,
   Activity,
+  Grid3x3,
 } from 'lucide-react'
 
 
@@ -386,6 +387,15 @@ export function Header() {
                 >
                   <BookOpen className="size-4" />
                   {t('header.menu.dailyreport')}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'skillgrid' })
+                  }}
+                >
+                  <Grid3x3 className="size-4" />
+                  {t('header.menu.skillGrid')}
                 </MenuItem>
                 {canAccessSurvey && (
                   <MenuItem
