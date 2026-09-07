@@ -91,6 +91,8 @@ export function OrgSettingsScreen() {
                 {t('orgSettings.nameLogo.save')}
               </Button>
             </div>
+            {/* setOrgNameはupdateSetting経由・isActingFullAdmin基準 */}
+            <AdminAccessNote level="fullAdmin" className="mt-1.5" />
           </div>
 
           <div className="mt-4">
@@ -190,6 +192,8 @@ export function OrgSettingsScreen() {
           {themeColorDraft.trim() !== '' && !themeColorValid && (
             <p className="mt-1.5 text-xs text-destructive">{t('orgSettings.themeColor.invalidHint')}</p>
           )}
+          {/* setThemeColorはupdateSetting経由・isActingFullAdmin基準 */}
+          <AdminAccessNote level="fullAdmin" className="mt-1.5" />
         </Section>
 
         {isFullAdmin && (
@@ -252,6 +256,8 @@ export function OrgSettingsScreen() {
               {t('orgSettings.nameLogo.save')}
             </Button>
           </div>
+          {/* setDiscordWebhookUrlはupdateSetting相当・isActingFullAdmin基準 */}
+          <AdminAccessNote level="fullAdmin" className="mt-1.5" />
         </Section>
 
         <Section>
@@ -276,6 +282,8 @@ export function OrgSettingsScreen() {
               {t('orgSettings.nameLogo.save')}
             </Button>
           </div>
+          {/* setSlackWebhookUrlはupdateSetting相当・isActingFullAdmin基準 */}
+          <AdminAccessNote level="fullAdmin" className="mt-1.5" />
         </Section>
       </div>
     </div>

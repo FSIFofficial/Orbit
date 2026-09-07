@@ -90,9 +90,12 @@ export function AdminProjects() {
     setProjectArchived,
     setProjectOrder,
     isFullAdmin,
+    currentUser,
   } = useOrbit()
   const toast = useToast()
   const { t } = useI18n()
+  // removeProjectはGAS側で常にisDaihyo固定（isFullAdminとは無関係）
+  const isDaihyo = currentUser?.role === '代表'
   const [removing, setRemoving] = useState<Project | null>(null)
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null)
   const [applyingTo, setApplyingTo] = useState<Project | null>(null)
@@ -772,6 +775,7 @@ export function AdminProjects() {
           <Button
             variant="destructive"
             className="h-9"
+            disabled={!isDaihyo}
             onClick={() => {
               if (removing) {
                 removeProject(removing.id)
