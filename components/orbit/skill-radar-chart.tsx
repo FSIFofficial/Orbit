@@ -1,11 +1,14 @@
 'use client'
 
-import type { RadarAxis, SkillLevel } from '@/lib/orbit/types'
+import type { RadarAxis } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
 
 interface Props {
   axes: RadarAxis[]
-  skillLevels: SkillLevel[]
+  // SkillLevel[]（level: 1-5の整数）に加え、チームレーダーチャート
+  // (computeTeamRadarValues)が返す平均値（小数を含む）も受け取れるよう、
+  // levelの型をnumberに緩めている（SkillLevel自体はこれと構造的に互換）
+  skillLevels: { skill: string; level: number }[]
   size?: number
   maxLevel?: number
   color?: string
