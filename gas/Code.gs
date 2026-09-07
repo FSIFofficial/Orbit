@@ -350,9 +350,8 @@ function authorizeAction(acting, action, body) {
     'updateRole',              // ロール変更は代表のみ
     'removeMember',            // メンバー削除は代表のみ
     'removeProject',           // プロジェクト削除は代表のみ
-    'updateDiscordWebhookUrl', // システム設定は代表のみ
-    'updateSlackWebhookUrl',   // システム設定は代表のみ
-    'updateSetting',           // システム設定は代表のみ
+    // updateDiscordWebhookUrl/updateSlackWebhookUrl/updateSetting は
+    // isActingFullAdmin基準の分岐（下記）に移動した
     'uploadOrgLogo',           // 団体ロゴアップロードは代表のみ
     'addMember',               // メンバー追加は代表のみ
     'updateEmail',             // 他人のメールアドレス変更は代表のみ
@@ -376,6 +375,16 @@ function authorizeAction(acting, action, body) {
   if (daihyoOnly.indexOf(action) >= 0) {
     if (checkPermissionOverride(acting, action, body)) return
     throw new Error('この操作は代表のみ実行できます。')
+  }
+
+  // --- updateSetting / Webhook URL設定: 団体ごとに isActingFullAdmin (=
+  // restricted_roles に含まれないロール) であれば許可。「事業責任者を代表と
+  // 同格にするか」は団体ごとのrestricted_roles設定で選べるようにするため、
+  // daihyoOnly固定ではなくこちらを使う。
+  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl') {
+    if (isActingFullAdmin(acting)) return
+    if (checkPermissionOverride(acting, action, body)) return
+    throw new Error('この操作は代表または全権管理者のみ実行できます。')
   }
 
   // --- 代表 or 班長 (任意の管理者ロール) ---
