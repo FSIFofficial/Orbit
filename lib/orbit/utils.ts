@@ -1,4 +1,4 @@
-import type { Member, Task } from './types'
+import type { Member, RadarAxis, Task } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
 export function parseDepartmentPath(path: string): string[] {
@@ -370,6 +370,26 @@ export function memberWorkloadCapacity(
   if (ratio < CAPACITY_AVAILABLE_RATIO) return 'available'
   if (ratio < CAPACITY_FULL_RATIO) return 'normal'
   return 'full'
+}
+
+// チームレーダーチャート（item 8）— 各軸(スキル)ごとに、skillLevelsで
+// そのスキルを設定しているメンバーだけを対象に平均値を算出する。
+// 誰も設定していない軸はvalue: 0（グラフ上は0として描画される）。
+// membersは呼び出し側で対象範囲（プロジェクト/団体全体/個別選択）に
+// 絞り込み済みのものを渡す想定。
+export function computeTeamRadarValues(
+  axes: RadarAxis[],
+  members: Member[],
+): { skill: string; label: string; value: number }[] {
+  return axes.map((axis) => {
+    const levels = members
+      .map((m) => m.skillLevels?.find((sl) => sl.skill === axis.skill)?.level)
+      .filter((lv): lv is NonNullable<typeof lv> => lv !== undefined)
+    const value = levels.length > 0
+      ? Math.round((levels.reduce((sum, lv) => sum + lv, 0) / levels.length) * 10) / 10
+      : 0
+    return { skill: axis.skill, label: axis.label ?? axis.skill, value }
+  })
 }
 
 // Builds a Google Calendar "quick add" URL pre-filled with a task's title,
