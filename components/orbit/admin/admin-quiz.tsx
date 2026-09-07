@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
 import { Modal } from '@/components/orbit/modal'
+import { AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { Plus, Pencil, Trash2, GraduationCap } from 'lucide-react'
 import type { QuizDefinition, QuizQuestion, SkillLevelValue } from '@/lib/orbit/types'
@@ -248,6 +249,7 @@ export function AdminQuiz() {
           <p className="text-xs text-muted-foreground">
             {t('admin.quiz.subtitle')}
           </p>
+          <AdminAccessNote level="fullAdmin" className="mt-1" />
         </div>
         <Button onClick={openNew} size="sm">
           <Plus className="mr-1.5 size-4" /> {t('admin.quiz.create')}

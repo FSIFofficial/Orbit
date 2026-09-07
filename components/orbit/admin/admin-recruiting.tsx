@@ -5,7 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { SectionLabel } from '@/components/orbit/primitives'
+import { SectionLabel, AdminAccessNote } from '@/components/orbit/primitives'
 import { Plus, Trash2, UserPlus2, Briefcase } from 'lucide-react'
 import type { Candidate } from '@/lib/orbit/types'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
@@ -42,9 +42,14 @@ function CandidateEditor({
   candidate: Candidate | null
   onClose: () => void
 }) {
-  const { addCandidate, updateCandidate } = useOrbit()
+  const { addCandidate, updateCandidate, currentUser } = useOrbit()
   const toast = useToast()
   const { t } = useI18n()
+  const isDaihyo = currentUser?.role === '代表'
+  const hasRecruitingOverride = (currentUser?.permissionOverrides ?? []).some(
+    (ov) => ov.targetType === 'recruiting' && (ov.access === 'edit' || ov.access === 'approve'),
+  )
+  const showDaihyoNote = !isDaihyo && !hasRecruitingOverride
   const [name, setName] = useState(candidate?.name ?? '')
   const [email, setEmail] = useState(candidate?.email ?? '')
   const [phone, setPhone] = useState(candidate?.phone ?? '')
@@ -124,9 +129,10 @@ function CandidateEditor({
           </select>
         </label>
       )}
+      {showDaihyoNote && <AdminAccessNote level="daihyo" />}
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-        <Button onClick={save} disabled={!name.trim()}>{t('admin.recruiting.save')}</Button>
+        <Button onClick={save} disabled={!name.trim() || showDaihyoNote}>{t('admin.recruiting.save')}</Button>
       </div>
     </div>
   )
@@ -134,11 +140,22 @@ function CandidateEditor({
 
 export function AdminRecruiting() {
   const canAccess = useCanAccessRecruiting()
-  const { candidates, removeCandidate, convertCandidateToMember } = useOrbit()
+  const { candidates, removeCandidate, convertCandidateToMember, currentUser } = useOrbit()
   const toast = useToast()
   const { t } = useI18n()
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Candidate | null>(null)
+
+  // 採用関連4アクション(add/update/remove/convert)はGAS側でdaihyoOnly、
+  // ただしpermission_overrides(targetType:'recruiting')を持つメンバーは
+  // checkPermissionOverride経由で許可される。そのため単純にrole!=='代表'
+  // では判定しきれない — 代表でもrecruitingの override 保持者でもない
+  // （＝isFullAdmin経由でこの画面に到達しただけの）場合にのみ警告する。
+  const isDaihyo = currentUser?.role === '代表'
+  const hasRecruitingOverride = (currentUser?.permissionOverrides ?? []).some(
+    (ov) => ov.targetType === 'recruiting' && (ov.access === 'edit' || ov.access === 'approve'),
+  )
+  const showDaihyoNote = !isDaihyo && !hasRecruitingOverride
 
   if (!canAccess) {
     return (
@@ -169,8 +186,9 @@ export function AdminRecruiting() {
         <div>
           <SectionLabel>{t('admin.recruiting.title')}</SectionLabel>
           <p className="mt-1 text-xs text-muted-foreground">{t('admin.recruiting.desc')}</p>
+          {showDaihyoNote && <AdminAccessNote level="daihyo" className="mt-1" />}
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={openNew} disabled={showDaihyoNote}>
           <Plus className="size-4" />
           {t('admin.recruiting.addButton')}
         </Button>
@@ -207,8 +225,9 @@ export function AdminRecruiting() {
                 {c.status !== 'hired' && (
                   <button
                     onClick={() => convert(c)}
-                    title={t('admin.recruiting.convertButton')}
-                    className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    disabled={showDaihyoNote}
+                    title={showDaihyoNote ? t('admin.accessNote.daihyo') : t('admin.recruiting.convertButton')}
+                    className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <UserPlus2 className="size-4" />
                     {t('admin.recruiting.convertButton')}
@@ -216,7 +235,9 @@ export function AdminRecruiting() {
                 )}
                 <button
                   onClick={() => remove(c)}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  disabled={showDaihyoNote}
+                  title={showDaihyoNote ? t('admin.accessNote.daihyo') : undefined}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Trash2 className="size-4" />
                 </button>

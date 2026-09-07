@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
-import { Tag, SectionLabel, Avatar } from '@/components/orbit/primitives'
+import { Tag, SectionLabel, Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection, CustomMemberColumn } from '@/lib/orbit/types'
@@ -53,6 +53,9 @@ export function AdminTags() {
       <p className="mt-1 text-sm text-muted-foreground">
         {t('admin.tags.subtitle')}
       </p>
+      {/* このページの設定はすべてupdateSetting経由（isActingFullAdmin基準）
+          なので、ページ単位で1つ出せば十分（個々のセクション毎に重複させない） */}
+      <AdminAccessNote level="fullAdmin" className="mt-2" />
 
       <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <TagGroup

@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useToast } from '@/components/orbit/toast'
-import { Avatar, StatusBadge, DifficultyBadge, SectionLabel } from '@/components/orbit/primitives'
+import { Avatar, StatusBadge, DifficultyBadge, SectionLabel, AdminAccessNote } from '@/components/orbit/primitives'
 import { CalendarView } from '@/components/orbit/output/calendar-view'
 import { TaskDetailDrawer } from '@/components/orbit/output/task-detail-drawer'
 import { EditableTags } from '@/components/orbit/editable-tags'
@@ -487,6 +487,8 @@ export function PersonDetail({ id }: { id: string }) {
                 onClick={() => setEditingJoinedAt(true)}
                 className="rounded-md p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
                 aria-label={t('person.avatar.editJoinedAt')}
+                // updateJoinedAtはGAS側で常にisDaihyo固定（本人による編集も含む）
+                title={currentUser?.role !== '代表' ? t('admin.accessNote.daihyo') : undefined}
               >
                 <Pencil className="size-3" />
               </button>
@@ -506,6 +508,8 @@ export function PersonDetail({ id }: { id: string }) {
           <p className="mt-0.5 text-xs text-muted-foreground">
             {t('person.account.emailDesc')}
           </p>
+          {/* updateEmailはGAS側で本人による変更も含めて常にisDaihyo固定 */}
+          <AdminAccessNote level="daihyo" className="mb-1" />
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Mail className="size-4 shrink-0 text-muted-foreground" />
             {emails.map((e) => (
@@ -771,6 +775,8 @@ export function PersonDetail({ id }: { id: string }) {
                 <select
                   value={member.mentorId ?? ''}
                   onChange={(e) => updateMentor(member.id, e.target.value || null)}
+                  // updateMentorはGAS側で常にisDaihyo固定
+                  title={currentUser?.role !== '代表' ? t('admin.accessNote.daihyo') : undefined}
                   className="h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
                 >
                   <option value="">{t('person.growth.mentor.unsetOption')}</option>

@@ -118,12 +118,21 @@ export function AdminMemberDb() {
   // true for any admin role (代表・班長 etc.), false for 一般
   const isAnyAdmin = !!(currentUser?.role) && currentUser.role !== BASE_ROLE
 
+  // updateJoinedAtはGAS側で常にisDaihyo固定。このテーブルはisAnyAdmin
+  // （代表以外の管理者ロールも含む）に編集可能な列として見えるため、
+  // セルクリックで編集を試みると代表以外は保存時にエラーになる
+  const isDaihyo = currentUser?.role === '代表'
+
   // Columns the current viewer is allowed to see/export — fixed cols +
   // dynamically-defined custom cols (Admin > Tags「カスタム項目」)
-  const allCols = useMemo(
-    () => [...buildBaseCols(t), ...buildCustomCols(customMemberColumns)],
-    [t, customMemberColumns],
-  )
+  const allCols = useMemo(() => {
+    const cols = [...buildBaseCols(t), ...buildCustomCols(customMemberColumns)]
+    if (!isDaihyo) {
+      const joinedAtCol = cols.find((c) => c.key === 'joinedAt')
+      if (joinedAtCol) joinedAtCol.tooltip = t('admin.accessNote.daihyo')
+    }
+    return cols
+  }, [t, customMemberColumns, isDaihyo])
   const allowedCols = useMemo(() => filterColsForViewer(allCols, isAnyAdmin), [allCols, isAnyAdmin])
 
   // Members scoped to this viewer's access:
