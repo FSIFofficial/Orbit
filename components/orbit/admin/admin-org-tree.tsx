@@ -5,7 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { Avatar } from '@/components/orbit/primitives'
 import { parseDepartmentPath, formatDepartmentPath, getDepartmentTops } from '@/lib/orbit/utils'
-import { ChevronRight, Users } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import type { Member } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
 
@@ -90,9 +90,20 @@ function TreeNodeRow({
         )}
         <span className="truncate">{node.label}</span>
         {deptMembers.length > 0 && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-            <Users className="size-3" />
-            {deptMembers.length}
+          // item 6: 開かなくても直下メンバーが一目で分かるよう常時表示。
+          // 重なりアバターに残数（+N）が出るため、別枠の人数バッジは
+          // 冗長になるので置き換えた（admin-projects.tsxの一覧行と同じ見た目）
+          <span className="ml-auto flex -space-x-1.5">
+            {deptMembers.slice(0, 4).map((m) => (
+              <span key={m.id} className="rounded-full ring-2 ring-card" title={m.displayName || m.name}>
+                <Avatar member={m} size={18} />
+              </span>
+            ))}
+            {deptMembers.length > 4 && (
+              <span className="flex size-[18px] items-center justify-center rounded-full bg-secondary text-[9px] font-medium text-muted-foreground ring-2 ring-card">
+                +{deptMembers.length - 4}
+              </span>
+            )}
           </span>
         )}
       </button>
