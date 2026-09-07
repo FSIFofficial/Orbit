@@ -376,6 +376,8 @@ export const en = {
   'admin.nav.forms': 'Forms',
   'admin.nav.memberdb': 'Talent DB',
   'admin.nav.recruiting': 'Recruiting',
+  'admin.accessNote.fullAdmin': 'Only the top admin or a full admin can change this setting',
+  'admin.accessNote.daihyo': 'Only the top admin can perform this action',
   'admin.nav.section': 'ADMIN',
   'admin.orgTree.noPaths': 'No members have a department_path set. Set an org path on the member page.',
   'admin.orgTree.subtitle': 'Select a department to see its members.',

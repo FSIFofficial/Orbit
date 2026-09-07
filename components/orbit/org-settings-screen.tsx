@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { isRemoteConfigured as remoteConfigured } from '@/lib/orbit/remote'
 import { useToast } from '@/components/orbit/toast'
-import { Tag, SectionLabel } from '@/components/orbit/primitives'
+import { Tag, SectionLabel, AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { Building2, ImageUp, Loader2, Mail, MessageSquare, X, Plus, Palette } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
@@ -142,6 +142,10 @@ export function OrgSettingsScreen() {
             <p className="mt-1 text-xs text-muted-foreground">
               {t('orgSettings.nameLogo.hint')}
             </p>
+            {/* uploadOrgLogoはGAS側で常にisDaihyo固定（このページ自体は
+                header.tsxでisFullAdmin配下にのみ表示されるため、代表以外の
+                全権管理者にもボタンが見えてしまう） */}
+            {driveEnabled && <AdminAccessNote level="daihyo" className="mt-1.5" />}
           </div>
         </Section>
 

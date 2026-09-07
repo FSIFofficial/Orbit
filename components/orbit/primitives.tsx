@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { TriangleAlert } from 'lucide-react'
 import {
   STATUS_COLOR,
   PRIORITY_LINE,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/orbit/types'
 import type { Member, Department } from '@/lib/orbit/types'
 import { useI18n, STATUS_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY, PRIORITY_KEY } from '@/lib/orbit/i18n'
+import { useOrbit } from '@/lib/orbit/store'
 
 export function Avatar({
   member,
@@ -226,6 +228,27 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
     <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </h3>
+  )
+}
+
+// 権限モデル整理（gas/Code.gsのauthorizeAction）に合わせたUI注記。
+// 「画面は見えるが実行するとGAS側で拒否される」ケースを事前に示す。
+// - fullAdmin: updateSetting系(スキル/カテゴリ/役職レベル/団体名・ロゴURL
+//   テキスト入力/テーマカラー/Webhook URL等)。isActingFullAdmin基準なので
+//   restricted_rolesの設定次第でロールが変わる — 必ずisFullAdminを使う
+//   （role==='代表'固定にしないこと。事業責任者等もtrueになりうる）。
+// - daihyo: 常にisDaihyo固定のアクション（メンバー削除・ロール変更・
+//   権限例外編集・採用管理など）。isFullAdminとは無関係に代表のみ。
+export function AdminAccessNote({ level, className }: { level: 'fullAdmin' | 'daihyo'; className?: string }) {
+  const { isFullAdmin, currentUser } = useOrbit()
+  const { t } = useI18n()
+  const blocked = level === 'fullAdmin' ? !isFullAdmin : currentUser?.role !== '代表'
+  if (!blocked) return null
+  return (
+    <p className={cn('flex items-start gap-1.5 text-xs text-warning', className)}>
+      <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+      {level === 'fullAdmin' ? t('admin.accessNote.fullAdmin') : t('admin.accessNote.daihyo')}
+    </p>
   )
 }
 

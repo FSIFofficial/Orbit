@@ -5,7 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { Avatar } from '@/components/orbit/primitives'
+import { Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { Trash2, Plus, ShieldCheck } from 'lucide-react'
 import type { Member, PermissionOverride } from '@/lib/orbit/types'
 import { DEPARTMENTS } from '@/lib/orbit/types'
@@ -30,9 +30,13 @@ interface OverrideEditorProps {
 }
 
 function OverrideEditor({ member, onClose }: OverrideEditorProps) {
-  const { updatePermissionOverrides, visibleTasks: tasks, projects } = useOrbit()
+  const { updatePermissionOverrides, visibleTasks: tasks, projects, currentUser } = useOrbit()
   const toast = useToast()
   const { t: tr } = useI18n()
+  // updatePermissionOverridesはGAS側で常にisDaihyo固定（人事機密のため）。
+  // このボタンはisFullAdmin配下（admin-members.tsx）に表示されるため、
+  // 代表以外の全権管理者にも見えてしまう
+  const isDaihyo = currentUser?.role === '代表'
 
   const [overrides, setOverrides] = useState<PermissionOverride[]>(
     member.permissionOverrides ?? [],
@@ -163,9 +167,10 @@ function OverrideEditor({ member, onClose }: OverrideEditorProps) {
         </div>
       </div>
 
+      <AdminAccessNote level="daihyo" className="mt-3" />
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>{tr('common.cancel')}</Button>
-        <Button onClick={save}>{tr('common.save')}</Button>
+        <Button onClick={save} disabled={!isDaihyo}>{tr('common.save')}</Button>
       </div>
     </>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Button } from '@/components/ui/button'
@@ -851,6 +852,11 @@ function TrainingHistorySection({
   onDecide: CareerTabProps['notifyTrainingDecision']
   rid: () => string
 }) {
+  const { currentUser } = useOrbit()
+  const { t: trHint } = useI18n()
+  // notifyTrainingDecisionはGAS側で常にisDaihyo固定（研修承認の記録自体
+  // =updateTrainingHistoryはselfOrAdminで成功するが、通知メールだけ失敗する）
+  const notifyDecisionHint = currentUser?.role !== '代表' ? trHint('admin.accessNote.daihyo') : undefined
   const items = member.trainingHistory ?? []
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
@@ -902,14 +908,21 @@ function TrainingHistorySection({
                 )}
                 {isAdmin && status === 'pending' && (
                   <div className="flex items-center gap-1">
+                    {/* 承認/却下自体（updateTrainingHistory）はselfOrAdminで
+                        代表以外でも成功するが、その後のメール通知
+                        （notifyTrainingDecision）はGAS側で常にisDaihyo固定
+                        のため代表以外では通知だけ失敗する。ボタン自体は
+                        無効化しない（承認処理は正しく完了するため） */}
                     <button
                       onClick={() => decide(t, true)}
+                      title={notifyDecisionHint}
                       className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
                     >
                       {tr('admin.expenses.approve')}
                     </button>
                     <button
                       onClick={() => decide(t, false)}
+                      title={notifyDecisionHint}
                       className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
                     >
                       {tr('admin.expenses.reject')}

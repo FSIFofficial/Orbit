@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useToast } from '@/components/orbit/toast'
-import { Avatar } from '@/components/orbit/primitives'
+import { Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,11 @@ export function AdminMembers() {
     addMember,
     isFullAdmin,
     toggleMemberInactive,
+    currentUser,
   } = useOrbit()
+  // updateRole/removeMember/addMember/updateReportsTo/updateMemberProjectsは
+  // GAS側で常にisDaihyo固定（isFullAdminとは無関係）
+  const isDaihyo = currentUser?.role === '代表'
   const { go } = useNav()
   const toast = useToast()
   const { t } = useI18n()
@@ -153,6 +157,11 @@ export function AdminMembers() {
       <p className="mt-1 text-sm text-muted-foreground">
         {t('admin.members.subtitle')}
       </p>
+      {/* addMember/updateRole/removeMember/updateReportsTo/updateMemberProjects
+          はいずれもGAS側で常にisDaihyo固定。このページの各種操作UIは
+          isFullAdmin配下に表示されるため、代表以外の全権管理者にも見えて
+          しまう — 実行時エラーになる前にまとめて示す */}
+      <AdminAccessNote level="daihyo" className="mt-2" />
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
         <div className="text-sm font-medium">{t('admin.members.register.title')}</div>
@@ -189,7 +198,7 @@ export function AdminMembers() {
               </option>
             ))}
           </select>
-          <Button className="h-9" disabled={!newName.trim()} onClick={handleAddMember}>
+          <Button className="h-9" disabled={!newName.trim() || !isDaihyo} onClick={handleAddMember}>
             <UserPlus className="size-4" />
             {t('admin.members.register.submit')}
           </Button>
@@ -232,7 +241,7 @@ export function AdminMembers() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCsvPreview(null)}>{t('admin.members.csv.cancel')}</Button>
-              <Button onClick={handleBulkAdd}>
+              <Button onClick={handleBulkAdd} disabled={!isDaihyo}>
                 <UserPlus className="size-4" />
                 {t('admin.members.csv.submit', { count: csvPreview.length })}
               </Button>
@@ -323,8 +332,10 @@ export function AdminMembers() {
                       {isFullAdmin ? (
                         <select
                           value={m.role}
+                          disabled={!isDaihyo}
+                          title={!isDaihyo ? t('admin.accessNote.daihyo') : undefined}
                           onChange={(e) => updateRole(m.id, e.target.value as Role)}
-                          className="h-8 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
+                          className="h-8 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>
@@ -340,8 +351,10 @@ export function AdminMembers() {
                       {isFullAdmin ? (
                         <select
                           value={m.reportsToId ?? ''}
+                          disabled={!isDaihyo}
+                          title={!isDaihyo ? t('admin.accessNote.daihyo') : undefined}
                           onChange={(e) => updateReportsTo(m.id, e.target.value || null)}
-                          className="h-8 w-32 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary"
+                          className="h-8 w-32 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <option value="">{t('admin.members.reportsToDefault')}</option>
                           {members
@@ -365,7 +378,9 @@ export function AdminMembers() {
                         {m.role !== BASE_ROLE && restrictedRoles.includes(m.role) ? (
                           <button
                             onClick={() => setAssigningProjects(m)}
-                            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
+                            disabled={!isDaihyo}
+                            title={!isDaihyo ? t('admin.accessNote.daihyo') : undefined}
+                            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <FolderKanban className="size-3.5" />
                             {t('admin.members.projectsCount', { count: (m.projectIds ?? []).length })}
@@ -428,7 +443,9 @@ export function AdminMembers() {
                         {isFullAdmin && <PermissionOverridesButton member={m} />}
                         <button
                           onClick={() => setRemoving(m)}
-                          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                          disabled={!isDaihyo}
+                          title={!isDaihyo ? t('admin.accessNote.daihyo') : undefined}
+                          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <UserMinus className="size-3.5" />
                           {t('admin.members.remove')}
@@ -465,6 +482,7 @@ export function AdminMembers() {
           <Button
             variant="destructive"
             className="h-9"
+            disabled={!isDaihyo}
             onClick={() => {
               if (removing) {
                 removeMember(removing.id)

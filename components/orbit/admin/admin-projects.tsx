@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
-import { Avatar, SectionLabel, Tag } from '@/components/orbit/primitives'
+import { Avatar, SectionLabel, Tag, AdminAccessNote } from '@/components/orbit/primitives'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
 import { DEPARTMENTS, DIFFICULTY_LABEL, PRIORITIES } from '@/lib/orbit/types'
@@ -761,6 +761,10 @@ export function AdminProjects() {
             count: removing ? visibleTasks.filter((task) => task.projectId === removing.id).length : 0,
           })}
         </p>
+        {/* removeProjectはGAS側で常にisDaihyo固定（isFullAdminとは無関係）。
+            このボタン自体はisFullAdmin配下に表示されるため、代表以外の
+            全権管理者には見えるが実行するとGASに拒否される — 事前に示す */}
+        <AdminAccessNote level="daihyo" className="mt-2" />
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setRemoving(null)}>
             {t('common.cancel')}

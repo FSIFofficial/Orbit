@@ -5,6 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import type { ApprovalStep, ExpenseApplication, ExpenseCategory } from '@/lib/orbit/types'
 import { Plus, Trash2, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Modal } from '@/components/orbit/modal'
+import { AdminAccessNote } from '@/components/orbit/primitives'
 import { useI18n } from '@/lib/orbit/i18n'
 
 // ---- ApprovalStepEditor ----
@@ -411,6 +412,7 @@ export function AdminExpenses() {
 
       {tab === 'categories' && (
         <div className="space-y-3">
+          <AdminAccessNote level="fullAdmin" />
           <button
             onClick={() => setEditingCategory('new')}
             className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"

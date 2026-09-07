@@ -376,6 +376,8 @@ export const ja = {
   'admin.nav.forms': 'フォーム',
   'admin.nav.memberdb': '人材DB',
   'admin.nav.recruiting': '採用',
+  'admin.accessNote.fullAdmin': 'この設定は代表または全権管理者のみ変更できます',
+  'admin.accessNote.daihyo': 'この操作は代表のみ実行できます',
   'admin.nav.section': 'ADMIN',
   'admin.orgTree.noPaths': 'department_path が設定されているメンバーがいません。メンバーページで組織パスを設定してください。',
   'admin.orgTree.subtitle': '部署を選択してメンバーを確認できます。',

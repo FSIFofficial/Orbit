@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Plus, Trash2, Radar } from 'lucide-react'
 import type { RadarAxis } from '@/lib/orbit/types'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
+import { AdminAccessNote } from '@/components/orbit/primitives'
 import { useI18n } from '@/lib/orbit/i18n'
 
 export function AdminRadarAxes() {
@@ -53,6 +54,7 @@ export function AdminRadarAxes() {
         <p className="text-xs text-muted-foreground">
           {t('admin.radarAxes.subtitle')}
         </p>
+        <AdminAccessNote level="fullAdmin" className="mt-1" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
