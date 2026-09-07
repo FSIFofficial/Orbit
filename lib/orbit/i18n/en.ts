@@ -540,6 +540,7 @@ export const en = {
   'taskDrawer.edit.visibilityLabel': 'Visibility',
   'taskDrawer.edit.importanceLabel': 'Importance',
   'taskDrawer.edit.addSkillAria': 'Add skill',
+  'taskDrawer.edit.requiredSkillLevelsLabel': 'Required level (optional)',
 
   // ---- task-detail-drawer: depends-on modal -------------------------------
   'taskDrawer.depends.title': 'Set prerequisite tasks',

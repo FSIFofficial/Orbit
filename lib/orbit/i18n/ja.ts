@@ -540,6 +540,7 @@ export const ja = {
   'taskDrawer.edit.visibilityLabel': '公開範囲',
   'taskDrawer.edit.importanceLabel': '重要度',
   'taskDrawer.edit.addSkillAria': 'スキルを追加',
+  'taskDrawer.edit.requiredSkillLevelsLabel': '必要レベル（任意）',
 
   // ---- task-detail-drawer: depends-on modal -------------------------------
   'taskDrawer.depends.title': '前提タスクを設定',

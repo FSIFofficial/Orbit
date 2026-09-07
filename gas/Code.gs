@@ -750,6 +750,7 @@ function doPost(e) {
           priority: body.priority,
           visibility: body.visibility === '幹部' ? '幹部' : '全員',
           importance: body.importance || '一般',
+          required_skill_levels_json: JSON.stringify(body.requiredSkillLevels || {}),
         })
         break
       case 'updateProgress':
@@ -2672,6 +2673,7 @@ function setupOrbit() {
     'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
     'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
     'required_approvals',  // 承認に必要な確認者数 (数値 or "all")
+    'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 

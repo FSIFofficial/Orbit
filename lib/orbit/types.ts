@@ -568,6 +568,10 @@ export interface Task {
   form?: TaskForm
   // 完了時に付与されたスキルポイント（skill → points）— 推奨値の計算に使用
   awardedPoints?: SkillPoints
+  // スキル表グリッド(item 10/11)での「このタスクをこなすにはこのスキルの
+  // このレベルが必要」という目安。キーはskillOptionsのスキル名、値は1-5。
+  // 未設定のスキルはグリッド上で通常表示(ハイライトなし)。
+  requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
 }
 
 export interface TaskRetrospective {
