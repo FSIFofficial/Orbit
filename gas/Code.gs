@@ -381,7 +381,7 @@ function authorizeAction(acting, action, body) {
   // restricted_roles に含まれないロール) であれば許可。「事業責任者を代表と
   // 同格にするか」は団体ごとのrestricted_roles設定で選べるようにするため、
   // daihyoOnly固定ではなくこちらを使う。
-  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl') {
+  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'updateProjectHealth') {
     if (isActingFullAdmin(acting)) return
     if (checkPermissionOverride(acting, action, body)) return
     throw new Error('この操作は代表または全権管理者のみ実行できます。')
@@ -410,6 +410,7 @@ function authorizeAction(acting, action, body) {
     'updateDependsOn',      // 依存関係設定
     'setBlocker',           // ブロッカー設定（班長が管理）
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
+    'notifyProjectHealth',  // item 26: プロジェクト健康状態の自動判定変化通知
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
     'awardSkillPoints',     // スキルポイント付与（管理者操作）
     'approveExpenseStep',   // 経費承認（管理者操作）
@@ -953,6 +954,12 @@ function doPost(e) {
           archived: body.archived ? 'TRUE' : 'FALSE',
         })
         break
+      case 'updateProjectHealth':
+        result = updateProjectHealthOverride(body.projectId, body.healthOverride)
+        break
+      case 'notifyProjectHealth':
+        result = notifyProjectHealth(body.projectId, body.health)
+        break
       case 'updateAvatar':
         // choosing a color+initials avatar supersedes any uploaded picture
         result = updateMemberFields(body.memberId, {
@@ -1222,6 +1229,45 @@ function updateTaskFields(taskId, fields) {
 
 function updateProjectFields(projectId, fields) {
   return updateRowFields(SHEET_PROJECTS, projectId, fields)
+}
+
+// item 26: 幹部による健康状態の手動上書き。healthOverrideが空/nullなら
+// 上書き解除（自動判定に戻す）— この場合はlast_notified_healthは据え置き、
+// 通知も送らない。値が指定された場合は、その値が実効的な健康状態になる
+// ため、last_notified_healthも更新し、必ず通知を送る（「変更した」という
+// 行為自体を都度知らせるため、結果がgoodでも送る）。
+function updateProjectHealthOverride(projectId, healthOverride) {
+  var value = healthOverride || ''
+  var fields = { health_override: value }
+  if (value) fields.last_notified_health = value
+  var result = updateProjectFields(projectId, fields)
+  if (value) {
+    notifyProjectHealthChanged(projectId, value, 'に手動で変更されました')
+  }
+  return result
+}
+
+// item 26: 自動判定が変化した（前回通知時と異なる状態になった）際の通知。
+// フロント側（store.tsx）が重複防止の判定を行った上でのみ呼ぶ想定。
+function notifyProjectHealth(projectId, health) {
+  var result = updateProjectFields(projectId, { last_notified_health: health })
+  notifyProjectHealthChanged(projectId, health, 'に変化しました（自動判定）')
+  return result
+}
+
+function notifyProjectHealthChanged(projectId, health, note) {
+  try {
+    var project = findRow(SHEET_PROJECTS, projectId)
+    if (!project) return
+    var healthLabel = { good: '良好', watch: '要注意', attention: '要対応' }[health] || health
+    var subject = '[Orbit] プロジェクト「' + project.name + '」の健康状態: ' + healthLabel
+    var body = 'プロジェクト「' + project.name + '」の健康状態が「' + healthLabel + '」' +
+      (note || '') + '\n\nOrbitのダッシュボードで確認してください。'
+    notifyAdmins(subject, body)
+    notifyChat('❤️‍🩹 「' + project.name + '」の健康状態: ' + healthLabel)
+  } catch (err) {
+    console.error('notifyProjectHealthChanged failed: ' + err)
+  }
 }
 
 // Emails whoever is flagged notify_new_task=TRUE on Members, falling back
@@ -2660,6 +2706,8 @@ function setupOrbit() {
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
     'goal', // 目標（概要=descriptionとは別枠）
+    'health_override',       // item 26: 幹部による健康状態の手動上書き
+    'last_notified_health',  // item 26: 直近に通知した実効健康状態（重複通知防止）
   ]
   var TASKS_HEADERS = [
     'id', 'project_id', 'title', 'description', 'status', 'assign_type',

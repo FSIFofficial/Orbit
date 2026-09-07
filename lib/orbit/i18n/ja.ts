@@ -1074,6 +1074,8 @@ export const ja = {
   'admin.dashboard.health.good': '良好',
   'admin.dashboard.health.watch': '注意',
   'admin.dashboard.health.attention': '要対応',
+  'admin.dashboard.health.overriddenSuffix': '手動設定',
+  'admin.dashboard.health.overrideAuto': '自動判定に戻す',
   'admin.dashboard.noneFound': '該当なし',
   'admin.tags.subtitle': 'INPUT画面の「要求スキル」「カテゴリ」や、Membersの「役職」で選べる選択肢です。ここで消すまで残り続けます。',
   'admin.tags.requiredSkills': '要求スキル',

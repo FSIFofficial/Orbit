@@ -3,7 +3,7 @@
 import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { Avatar, ProjectTag } from '@/components/orbit/primitives'
-import { isOverdue, daysSince, formatDeadline } from '@/lib/orbit/utils'
+import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { STATUS_LABEL } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
@@ -31,6 +31,7 @@ export function AdminDashboard() {
     isFullAdmin,
     getProject,
     currentUser,
+    updateProjectHealth,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
   const { t: tr } = useI18n()
@@ -53,18 +54,13 @@ export function AdminDashboard() {
 
   // item 18: プロジェクト健全性の説明型ダッシュボード — per-project rollup
   // of the same signals above (期限超過/確認待ち/Blocked/負荷), so an admin
-  // can see which project needs attention without opening every task
+  // can see which project needs attention without opening every task.
+  // item 26: 幹部による手動上書き(healthOverride)があれば自動判定より優先する。
   const projectHealth = adminProjects
     .map((p) => {
-      const pt = tasks.filter((t) => t.projectId === p.id)
-      const pOverdue = pt.filter((t) => isOverdue(t, tz)).length
-      const pWaiting = pt.filter((t) => t.status === 'review').length
-      const pBlocked = pt.filter((t) => !!t.blocker && t.status !== 'done').length
-      const pLoad = pt.filter((t) => t.status !== 'done').length
-      const issues = pOverdue + pWaiting + pBlocked
-      const health: 'good' | 'watch' | 'attention' =
-        issues === 0 ? 'good' : issues <= 2 ? 'watch' : 'attention'
-      return { project: p, pOverdue, pWaiting, pBlocked, pLoad, issues, health }
+      const stats = computeProjectAutoHealth(p, tasks, tz)
+      const health = p.healthOverride ?? stats.health
+      return { project: p, ...stats, autoHealth: stats.health, health, isOverridden: !!p.healthOverride }
     })
     .filter((h) => h.pLoad > 0)
     .sort((a, b) => b.issues - a.issues)
@@ -262,17 +258,35 @@ export function AdminDashboard() {
                   <tr key={h.project.id}>
                     <td className="px-4 py-3 font-medium">{h.project.name}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
-                          h.health === 'good'
-                            ? 'bg-primary-muted text-accent-foreground'
-                            : h.health === 'watch'
-                              ? 'bg-warning-muted text-warning'
-                              : 'bg-destructive/10 text-destructive'
-                        }`}
-                      >
-                        {h.health === 'good' ? tr('admin.dashboard.health.good') : h.health === 'watch' ? tr('admin.dashboard.health.watch') : tr('admin.dashboard.health.attention')}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                            h.health === 'good'
+                              ? 'bg-primary-muted text-accent-foreground'
+                              : h.health === 'watch'
+                                ? 'bg-warning-muted text-warning'
+                                : 'bg-destructive/10 text-destructive'
+                          }`}
+                        >
+                          {h.health === 'good' ? tr('admin.dashboard.health.good') : h.health === 'watch' ? tr('admin.dashboard.health.watch') : tr('admin.dashboard.health.attention')}
+                          {h.isOverridden && ` (${tr('admin.dashboard.health.overriddenSuffix')})`}
+                        </span>
+                        {isFullAdmin && (
+                          <select
+                            value={h.project.healthOverride ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              updateProjectHealth(h.project.id, v ? (v as 'good' | 'watch' | 'attention') : null)
+                            }}
+                            className="h-6 cursor-pointer rounded-md border border-border bg-background px-1 text-[11px] outline-none focus:border-primary"
+                          >
+                            <option value="">{tr('admin.dashboard.health.overrideAuto')}</option>
+                            <option value="good">{tr('admin.dashboard.health.good')}</option>
+                            <option value="watch">{tr('admin.dashboard.health.watch')}</option>
+                            <option value="attention">{tr('admin.dashboard.health.attention')}</option>
+                          </select>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">{h.pOverdue}</td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">{h.pWaiting}</td>

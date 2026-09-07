@@ -260,6 +260,8 @@ function mapProjectRow(r: Record<string, string>): Project {
     parentId: r.parent_id || undefined,
     archived: r.archived === 'TRUE',
     goal: r.goal || undefined,
+    healthOverride: (r.health_override || undefined) as Project['healthOverride'],
+    lastNotifiedHealth: (r.last_notified_health || undefined) as Project['lastNotifiedHealth'],
   }
 }
 
@@ -760,6 +762,10 @@ export const remoteApi = {
     postToGas('updateProjectDetails', { projectId, description, type, goal }),
   updateProjectArchived: (projectId: string, archived: boolean) =>
     postToGas('updateProjectArchived', { projectId, archived }),
+  updateProjectHealth: (projectId: string, healthOverride: import('./types').ProjectHealthLevel | null) =>
+    postToGas('updateProjectHealth', { projectId, healthOverride }),
+  notifyProjectHealth: (projectId: string, health: import('./types').ProjectHealthLevel) =>
+    postToGas('notifyProjectHealth', { projectId, health }),
   updateComments: (taskId: string, comments: TaskComment[]) =>
     postToGas('updateComments', { taskId, comments }),
   notifyMention: (taskId: string, commentText: string, memberIds: string[]) =>

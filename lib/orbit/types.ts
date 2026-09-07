@@ -359,7 +359,15 @@ export interface Project {
   archived?: boolean
   // 目標 — descriptionは概要欄として維持しつつ、目標専用の欄を別に持つ
   goal?: string
+  // item 26: 幹部による手動上書き。未設定なら自動判定
+  // (lib/orbit/utils.tsのcomputeProjectAutoHealth)に従う。
+  healthOverride?: ProjectHealthLevel
+  // item 26: 直近に通知を送った時点の実効的な健康状態。自動判定が同じ
+  // 'attention'状態を維持している間の重複通知を防ぐために使う。
+  lastNotifiedHealth?: ProjectHealthLevel
 }
+
+export type ProjectHealthLevel = 'good' | 'watch' | 'attention'
 
 // A template task an admin defines for a Project type (store.tsx's
 // projectTemplates), auto-created whenever a new project of that type
