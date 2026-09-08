@@ -650,6 +650,7 @@ function authorizeAction(acting, action, body) {
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
+    'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -1127,6 +1128,10 @@ function doPost(e) {
         break
       case 'updateLastLogin':
         result = updateMemberFields(body.memberId, { last_login: new Date().toISOString() })
+        break
+      case 'submitSurveyResponse':
+        // actingMember.id を使うことでクライアントの自己申告値(body.memberId)による偽装を防ぐ
+        result = saveSurveyResponse(actingMember.id, body.answers || {})
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2676,11 +2681,13 @@ function setupOrbit() {
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
   ]
   var SETTINGS_HEADERS = ['key', 'value']
+  var SURVEY_RESPONSES_HEADERS = ['id', 'member_id', 'submitted_at', 'answers_json']
 
   ensureSheetHeaders(ss, SHEET_MEMBERS,  MEMBERS_HEADERS)
   ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
   ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
   ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_SURVEY_RESPONSES, SURVEY_RESPONSES_HEADERS)
 
   // --- Settings の初期キーを確保（上書きはしない）---
   var DEFAULT_SETTINGS = [
@@ -2778,6 +2785,7 @@ function debugAvatarWrite() {
 
 var SHEET_EXPENSES = 'Expenses'
 var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
+var SHEET_SURVEY_RESPONSES = 'SurveyResponses'
 
 function ensureExpensesSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet()
@@ -2797,6 +2805,31 @@ function ensureFormSubmissionsSheet() {
     sheet.appendRow(['id', 'form_id', 'submitter_id', 'answers_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
   }
   return sheet
+}
+
+function ensureSurveyResponsesSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getSheetByName(SHEET_SURVEY_RESPONSES)
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_SURVEY_RESPONSES)
+    sheet.appendRow(['id', 'member_id', 'submitted_at', 'answers_json'])
+  }
+  return sheet
+}
+
+// item 30: アンケート回答を団体全体で共有するため、SurveyResponsesシートに
+// 永続化する（従来はlocalStorageのみで、他端末からは見えなかった）。
+// idはここで採番する（クライアント側の仮idと一致させる必要はない）。
+function saveSurveyResponse(memberId, answers) {
+  var sheet = ensureSurveyResponsesSheet()
+  var responseId = Utilities.getUuid()
+  sheet.appendRow([
+    responseId,
+    memberId,
+    new Date().toISOString(),
+    JSON.stringify(answers || {}),
+  ])
+  return { id: responseId }
 }
 
 function saveExpenseApplication(application, acting) {

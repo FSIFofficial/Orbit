@@ -40,6 +40,7 @@ import type {
   SkillLevelThresholds,
   SkillLevelValue,
   SkillPoints,
+  SurveyResponse,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -69,10 +70,12 @@ import {
   colorForId,
   fetchRemoteData,
   fetchSettings,
+  fetchSurveyResponses,
   initialsForName,
   isDriveConfigured,
   isRemoteConfigured,
   isSettingsConfigured,
+  isSurveyConfigured,
   remoteApi,
   toCreatePayload,
 } from './remote'
@@ -398,6 +401,9 @@ interface OrbitContextValue extends OrbitState {
   ) => void
   removeCandidate: (candidateId: string) => void
   convertCandidateToMember: (candidateId: string, role?: string) => void
+  // ---- アンケート（item 22/30） -------------------------------------------
+  surveyResponses: import('./types').SurveyResponse[]
+  submitSurveyResponse: (answers: Record<string, number | string>) => void
   // ---- 学歴情報 --------------------------------------------------------
   updateEducationInfo: (
     memberId: string,
@@ -713,6 +719,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 採用支援（候補者）— Expenses/FormSubmissionsと同じくローカルstateのみで
   // 管理し、書き込みはGASへfire-and-forget。読み取り専用の一覧取得APIは無い。
   const [candidates, setCandidates] = useState<Candidate[]>([])
+  // アンケート回答（item 22/30）— Members/Projects/Tasks/Settingsと同じく、
+  // 書き込みはGAS経由・読み取りは公開CSV（SurveyResponses）で団体全体同期する
+  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([])
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
@@ -840,6 +849,19 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       })
   }, [reportRemoteError])
 
+  // アンケート回答（SurveyResponsesシート）を初回取得する。Settingsと同様の
+  // 独立フェッチで、失敗してもdataReady/settingsReadyはブロックしない
+  // （アンケートは補助機能であり、他のデータ取得を妨げるべきではない）
+  useEffect(() => {
+    if (!isSurveyConfigured) return
+    fetchSurveyResponses()
+      .then((responses) => {
+        setSurveyResponses(responses)
+        setRemoteError(null)
+      })
+      .catch(reportRemoteError)
+  }, [reportRemoteError])
+
   // manual refresh for the header's 情報更新 button. Deliberately doesn't
   // touch remoteStatus/settingsReady (those flipping to non-ready is what
   // gates the Router/AdminScreen loading screens) — a refresh the user asks
@@ -847,18 +869,20 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // them to a loading screen or off the page they're on.
   const [refreshing, setRefreshing] = useState(false)
   const refreshAll = useCallback(() => {
-    if (!isRemoteConfigured && !isSettingsConfigured) return
+    if (!isRemoteConfigured && !isSettingsConfigured && !isSurveyConfigured) return
     setRefreshing(true)
     Promise.all([
       isRemoteConfigured ? fetchRemoteData() : null,
       isSettingsConfigured ? fetchSettings() : null,
+      isSurveyConfigured ? fetchSurveyResponses() : null,
     ])
-      .then(([remote, settings]) => {
+      .then(([remote, settings, surveys]) => {
         if (remote) {
           setMembers(remote.members)
           setProjects(remote.projects)
           setTasks(remote.tasks)
         }
+        if (surveys) setSurveyResponses(surveys)
         if (settings) {
           setSkillOptions(settings.skillOptions.length ? uniq(settings.skillOptions) : DEFAULT_SKILL_OPTIONS)
           setCategoryOptions(
@@ -1508,6 +1532,24 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.withdrawExpense(applicationId))
     },
     [runRemote],
+  )
+
+  // アンケート回答（item 22/30）— submitExpenseApplicationと同じく、クライアント
+  // 側で仮生成したidをそのままローカルstateで使い続ける（GAS側は別途idを採番
+  // するが、公開CSVを再取得するまでは一致させる必要がない）
+  const submitSurveyResponse = useCallback(
+    (answers: Record<string, number | string>) => {
+      if (!currentUserId) return
+      const response: SurveyResponse = {
+        id: crypto.randomUUID(),
+        memberId: currentUserId,
+        submittedAt: new Date().toISOString(),
+        answers,
+      }
+      setSurveyResponses((prev) => [...prev, response])
+      if (isRemoteConfigured) runRemote(remoteApi.submitSurveyResponse(answers))
+    },
+    [currentUserId, runRemote],
   )
 
   const updateCustomFormDefs = useCallback(
@@ -3917,6 +3959,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     removeCandidate,
     convertCandidateToMember,
     updateEducationInfo,
+    surveyResponses,
+    submitSurveyResponse,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>

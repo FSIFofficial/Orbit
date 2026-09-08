@@ -845,3 +845,12 @@ export interface CustomFormSubmission {
   createdAt: string
   rejectionReason?: string
 }
+
+// ---- アンケート回答（item 22の団体全体同期、item 30の組み合わせ分析）----
+
+export interface SurveyResponse {
+  id: string
+  memberId: string
+  submittedAt: string // ISO datetime
+  answers: Record<string, number | string>
+}

@@ -1,10 +1,12 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
-import { useI18n } from '@/lib/orbit/i18n'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+import { memberWorkloadCapacity, tenureYears, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { SURVEY_SCALE_QUESTION_IDS } from '@/components/orbit/survey-screen'
 
 function BarRow({
   label,
@@ -44,8 +46,16 @@ function sortedCounts(map: Map<string, number>): [string, number][] {
 // 全体の統計を見るべきではないので、他の組織全体設定（Members/Tags）と
 // 同様に DEFAULT_NON_TOP_SECTIONS には含めていない（Admin → Tagsから
 // 個別に許可することは可能）。
+type SurveyComboAxis = 'workload' | 'role' | 'affiliation' | 'tenure'
+
+const WORKLOAD_LABEL_KEY: Record<WorkloadCapacity, TranslationKey> = {
+  available: 'admin.analytics.surveyCombo.workload.available',
+  normal: 'admin.analytics.surveyCombo.workload.normal',
+  full: 'admin.analytics.surveyCombo.workload.full',
+}
+
 export function AdminAnalytics() {
-  const { members, visibleTasks, archivedTasks } = useOrbit()
+  const { members, visibleTasks, archivedTasks, surveyResponses } = useOrbit()
   const { t } = useI18n()
 
   const roleCounts = new Map<string, number>()
@@ -134,6 +144,64 @@ export function AdminAnalytics() {
   )
   const maxSkillCount = Math.max(1, ...scatterPoints.map((p) => p.skillCount))
   const maxTaskCount = Math.max(1, ...scatterPoints.map((p) => p.activeTaskCount))
+
+  // item 30: アンケート×人材データ組み合わせ分析 — 各メンバーの全アンケート
+  // 回答からscale形式の設問(SURVEY_SCALE_QUESTION_IDS)の回答をプールした
+  // 平均値をそのメンバーの「スコア」とする。回答が1件も無いメンバーは
+  // マップに含めない（0点として平均を下げないようにするため）。
+  const [surveyComboAxis, setSurveyComboAxis] = useState<SurveyComboAxis>('workload')
+  const memberScores = useMemo(() => {
+    const map = new Map<string, number>()
+    members.forEach((m) => {
+      const vals: number[] = []
+      surveyResponses
+        .filter((r) => r.memberId === m.id)
+        .forEach((r) => {
+          SURVEY_SCALE_QUESTION_IDS.forEach((qid) => {
+            const v = r.answers[qid]
+            if (typeof v === 'number') vals.push(v)
+          })
+        })
+      if (vals.length > 0) map.set(m.id, vals.reduce((a, b) => a + b, 0) / vals.length)
+    })
+    return map
+  }, [members, surveyResponses])
+
+  const surveyComboRows = useMemo(() => {
+    const groups = new Map<string, number[]>()
+    members.forEach((m) => {
+      const score = memberScores.get(m.id)
+      if (score === undefined) return
+      let key: string | null = null
+      if (surveyComboAxis === 'workload') {
+        key = t(WORKLOAD_LABEL_KEY[memberWorkloadCapacity(m.id, allTasks)])
+      } else if (surveyComboAxis === 'role') {
+        key = m.role
+      } else if (surveyComboAxis === 'affiliation') {
+        key = m.affiliation || t('admin.analytics.unset')
+      } else if (surveyComboAxis === 'tenure') {
+        if (!m.joinedAt) return
+        const years = tenureYears(m.joinedAt)
+        key =
+          years < 1
+            ? t('admin.analytics.surveyCombo.tenure.under1')
+            : years < 3
+              ? t('admin.analytics.surveyCombo.tenure.oneToThree')
+              : t('admin.analytics.surveyCombo.tenure.overThree')
+      }
+      if (!key) return
+      const arr = groups.get(key) ?? []
+      arr.push(score)
+      groups.set(key, arr)
+    })
+    return Array.from(groups.entries())
+      .map(([label, scores]) => ({
+        label,
+        avg: scores.reduce((a, b) => a + b, 0) / scores.length,
+        count: scores.length,
+      }))
+      .sort((a, b) => b.avg - a.avg)
+  }, [members, memberScores, surveyComboAxis, allTasks, t])
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -270,6 +338,38 @@ export function AdminAnalytics() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionLabel>{t('admin.analytics.surveyCombo.title')}</SectionLabel>
+          <select
+            value={surveyComboAxis}
+            onChange={(e) => setSurveyComboAxis(e.target.value as SurveyComboAxis)}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+          >
+            <option value="workload">{t('admin.analytics.surveyCombo.axis.workload')}</option>
+            <option value="role">{t('admin.analytics.surveyCombo.axis.role')}</option>
+            <option value="affiliation">{t('admin.analytics.surveyCombo.axis.affiliation')}</option>
+            <option value="tenure">{t('admin.analytics.surveyCombo.axis.tenure')}</option>
+          </select>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.surveyCombo.desc')}</p>
+        {surveyComboRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.surveyCombo.empty')}</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {surveyComboRows.map((row) => (
+              <BarRow
+                key={row.label}
+                label={row.label}
+                count={row.avg}
+                max={5}
+                suffix={t('admin.analytics.surveyCombo.suffix', { avg: row.avg.toFixed(1), count: row.count })}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
