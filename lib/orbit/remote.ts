@@ -870,6 +870,15 @@ export const remoteApi = {
   // と同様、クライアント生成idをそのままローカルstateで使い続ける）。
   submitSurveyResponse: (answers: Record<string, number | string>) =>
     postToGas('submitSurveyResponse', { answers }),
+  // item 2/TSK-051: 定期タスクの生成要否判定・実際の生成はGAS側の
+  // LockService付き関数(generateRecurringTasksLocked)に一本化されている。
+  // クライアントはこれを呼ぶだけで、日付判定・期限計算・二重生成防止は
+  // すべてサーバー側で行われる。
+  checkAndGenerateRecurringTasks: () =>
+    postToGas<{ generated: { tempId: string; id: string }[] }>(
+      'checkAndGenerateRecurringTasks',
+      {},
+    ),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to
