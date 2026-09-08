@@ -381,7 +381,7 @@ function authorizeAction(acting, action, body) {
   // restricted_roles に含まれないロール) であれば許可。「事業責任者を代表と
   // 同格にするか」は団体ごとのrestricted_roles設定で選べるようにするため、
   // daihyoOnly固定ではなくこちらを使う。
-  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl') {
+  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'updateProjectHealth') {
     if (isActingFullAdmin(acting)) return
     if (checkPermissionOverride(acting, action, body)) return
     throw new Error('この操作は代表または全権管理者のみ実行できます。')
@@ -410,6 +410,8 @@ function authorizeAction(acting, action, body) {
     'updateDependsOn',      // 依存関係設定
     'setBlocker',           // ブロッカー設定（班長が管理）
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
+    'notifyProjectHealth',  // item 26: プロジェクト健康状態の自動判定変化通知
+    'updateProjectHealthRecord', // item 26(追補): attention回復時の記録更新（通知なし）
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
     'awardSkillPoints',     // スキルポイント付与（管理者操作）
     'approveExpenseStep',   // 経費承認（管理者操作）
@@ -650,6 +652,7 @@ function authorizeAction(acting, action, body) {
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
+    'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -953,6 +956,17 @@ function doPost(e) {
           archived: body.archived ? 'TRUE' : 'FALSE',
         })
         break
+      case 'updateProjectHealth':
+        result = updateProjectHealthOverride(body.projectId, body.healthOverride)
+        break
+      case 'notifyProjectHealth':
+        result = notifyProjectHealth(body.projectId, body.health)
+        break
+      case 'updateProjectHealthRecord':
+        // item 26(追補): 通知なしでlast_notified_health列だけを更新する
+        // （attentionから回復した際、次回の再悪化を確実に再通知するため）
+        result = updateProjectFields(body.projectId, { last_notified_health: body.health })
+        break
       case 'updateAvatar':
         // choosing a color+initials avatar supersedes any uploaded picture
         result = updateMemberFields(body.memberId, {
@@ -1128,6 +1142,10 @@ function doPost(e) {
       case 'updateLastLogin':
         result = updateMemberFields(body.memberId, { last_login: new Date().toISOString() })
         break
+      case 'submitSurveyResponse':
+        // actingMember.id を使うことでクライアントの自己申告値(body.memberId)による偽装を防ぐ
+        result = saveSurveyResponse(actingMember.id, body.answers || {})
+        break
       default:
         throw new Error('Unknown action: ' + body.action)
     }
@@ -1222,6 +1240,45 @@ function updateTaskFields(taskId, fields) {
 
 function updateProjectFields(projectId, fields) {
   return updateRowFields(SHEET_PROJECTS, projectId, fields)
+}
+
+// item 26: 幹部による健康状態の手動上書き。healthOverrideが空/nullなら
+// 上書き解除（自動判定に戻す）— この場合はlast_notified_healthは据え置き、
+// 通知も送らない。値が指定された場合は、その値が実効的な健康状態になる
+// ため、last_notified_healthも更新し、必ず通知を送る（「変更した」という
+// 行為自体を都度知らせるため、結果がgoodでも送る）。
+function updateProjectHealthOverride(projectId, healthOverride) {
+  var value = healthOverride || ''
+  var fields = { health_override: value }
+  if (value) fields.last_notified_health = value
+  var result = updateProjectFields(projectId, fields)
+  if (value) {
+    notifyProjectHealthChanged(projectId, value, 'に手動で変更されました')
+  }
+  return result
+}
+
+// item 26: 自動判定が変化した（前回通知時と異なる状態になった）際の通知。
+// フロント側（store.tsx）が重複防止の判定を行った上でのみ呼ぶ想定。
+function notifyProjectHealth(projectId, health) {
+  var result = updateProjectFields(projectId, { last_notified_health: health })
+  notifyProjectHealthChanged(projectId, health, 'に変化しました（自動判定）')
+  return result
+}
+
+function notifyProjectHealthChanged(projectId, health, note) {
+  try {
+    var project = findRow(SHEET_PROJECTS, projectId)
+    if (!project) return
+    var healthLabel = { good: '良好', watch: '要注意', attention: '要対応' }[health] || health
+    var subject = '[Orbit] プロジェクト「' + project.name + '」の健康状態: ' + healthLabel
+    var body = 'プロジェクト「' + project.name + '」の健康状態が「' + healthLabel + '」' +
+      (note || '') + '\n\nOrbitのダッシュボードで確認してください。'
+    notifyAdmins(subject, body)
+    notifyChat('❤️‍🩹 「' + project.name + '」の健康状態: ' + healthLabel)
+  } catch (err) {
+    console.error('notifyProjectHealthChanged failed: ' + err)
+  }
 }
 
 // Emails whoever is flagged notify_new_task=TRUE on Members, falling back
@@ -2656,10 +2713,13 @@ function setupOrbit() {
     'department_name',         // 学科（department_pathと紛らわしいので department_name とする）
     'grade_year',              // 学年
     'custom_fields_json',      // 団体ごとのカスタム列（人材DB）の値 {"key":"value"}
+    'survey_responses_json',   // item 22/30: このメンバー自身の全アンケート回答履歴 [{"id","submittedAt","answers"}]
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
     'goal', // 目標（概要=descriptionとは別枠）
+    'health_override',       // item 26: 幹部による健康状態の手動上書き
+    'last_notified_health',  // item 26: 直近に通知した実効健康状態（重複通知防止）
   ]
   var TASKS_HEADERS = [
     'id', 'project_id', 'title', 'description', 'status', 'assign_type',
@@ -2797,6 +2857,25 @@ function ensureFormSubmissionsSheet() {
     sheet.appendRow(['id', 'form_id', 'submitter_id', 'answers_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
   }
   return sheet
+}
+
+// item 22/30: アンケート回答をMembersシートのsurvey_responses_json列に
+// 配列として追記する。新規シートを増やさず、既存の公開CSV(Members)だけで
+// 完結させるため。読み込み→配列に追加→書き戻し、という一般的な
+// read-modify-writeパターンで、custom_fields_json等の既存列と同じ設計。
+function saveSurveyResponse(memberId, answers) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  var existing = []
+  try { existing = JSON.parse(memberRow.survey_responses_json || '[]') } catch (_) {}
+  var responseId = Utilities.getUuid()
+  existing.push({
+    id: responseId,
+    submittedAt: new Date().toISOString(),
+    answers: answers || {},
+  })
+  updateMemberFields(memberId, { survey_responses_json: JSON.stringify(existing) })
+  return { id: responseId }
 }
 
 function saveExpenseApplication(application, acting) {

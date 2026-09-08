@@ -245,6 +245,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     departmentName: r.department_name || undefined,
     gradeYear: r.grade_year || undefined,
     customFields: parseJsonObject<Record<string, string>>(r.custom_fields_json),
+    surveyResponses:
+      parseJsonArray<{ id: string; submittedAt: string; answers: Record<string, number | string> }>(
+        r.survey_responses_json,
+      ) ?? [],
   }
 }
 
@@ -260,6 +264,8 @@ function mapProjectRow(r: Record<string, string>): Project {
     parentId: r.parent_id || undefined,
     archived: r.archived === 'TRUE',
     goal: r.goal || undefined,
+    healthOverride: (r.health_override || undefined) as Project['healthOverride'],
+    lastNotifiedHealth: (r.last_notified_health || undefined) as Project['lastNotifiedHealth'],
   }
 }
 
@@ -760,6 +766,15 @@ export const remoteApi = {
     postToGas('updateProjectDetails', { projectId, description, type, goal }),
   updateProjectArchived: (projectId: string, archived: boolean) =>
     postToGas('updateProjectArchived', { projectId, archived }),
+  updateProjectHealth: (projectId: string, healthOverride: import('./types').ProjectHealthLevel | null) =>
+    postToGas('updateProjectHealth', { projectId, healthOverride }),
+  notifyProjectHealth: (projectId: string, health: import('./types').ProjectHealthLevel) =>
+    postToGas('notifyProjectHealth', { projectId, health }),
+  // item 26(追補): attentionから回復した際、通知は送らずlast_notified_health
+  // 列だけを最新化する（updateProjectHealth=上書き+必ず通知、
+  // notifyProjectHealth=自動悪化検知+必ず通知、とは役割が異なる）
+  updateProjectHealthRecord: (projectId: string, health: import('./types').ProjectHealthLevel) =>
+    postToGas('updateProjectHealthRecord', { projectId, health }),
   updateComments: (taskId: string, comments: TaskComment[]) =>
     postToGas('updateComments', { taskId, comments }),
   notifyMention: (taskId: string, commentText: string, memberIds: string[]) =>
@@ -847,6 +862,12 @@ export const remoteApi = {
     postToGas('updateAbsentDates', { memberId, dates }),
   updateLastLogin: (memberId: string) =>
     postToGas('updateLastLogin', { memberId }),
+  // ---- アンケート ----
+  // GAS側でid(Utilities.getUuid())を採番するので、送信するのはanswersのみ。
+  // クライアント側で仮生成したidと一致させる必要はない（submitExpenseApplication
+  // と同様、クライアント生成idをそのままローカルstateで使い続ける）。
+  submitSurveyResponse: (answers: Record<string, number | string>) =>
+    postToGas('submitSurveyResponse', { answers }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to
