@@ -3699,78 +3699,85 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     const items: import('./types').NotificationItem[] = []
     const isAdmin = currentUser.role !== '一般'
     if (isAdmin) {
-      adminPendingTasks.forEach((t) => {
+      adminPendingTasks.forEach((task) => {
         items.push({
-          id: `approval-${t.id}`,
+          id: `approval-${task.id}`,
           kind: 'approval',
-          title: `承認依頼: ${t.name}`,
-          detail: '新しいタスクが承認待ちです',
-          taskId: t.id,
+          title: t('notification.approval.title', { name: task.name }),
+          detail: t('notification.approval.detail'),
+          taskId: task.id,
         })
       })
       adminTasks
-        .filter((t) => t.status === 'review')
-        .forEach((t) => {
+        .filter((task) => task.status === 'review')
+        .forEach((task) => {
           items.push({
-            id: `review-${t.id}`,
+            id: `review-${task.id}`,
             kind: 'review',
-            title: `確認待ち: ${t.name}`,
-            detail: '完了の確認が必要です',
-            taskId: t.id,
+            title: t('notification.review.title', { name: task.name }),
+            detail: t('notification.review.detail'),
+            taskId: task.id,
           })
         })
       // item 10: SLA/放置アラート — 確認待ちが3日、進行中タスクの更新が
       // 7日ないと通知。lastActivity は既存の「放置検知」用フィールド
       // (types.ts) をそのまま流用
-      adminTasks.forEach((t) => {
-        const idle = daysSince(t.lastActivity)
+      adminTasks.forEach((task) => {
+        const idle = daysSince(task.lastActivity)
         if (idle === null) return
-        if (t.status === 'review' && idle >= 3) {
+        if (task.status === 'review' && idle >= 3) {
           items.push({
-            id: `stale-review-${t.id}`,
+            id: `stale-review-${task.id}`,
             kind: 'stale',
-            title: `確認待ちが${idle}日経過: ${t.name}`,
-            detail: '対応が滞っていないか確認してください',
-            taskId: t.id,
+            title: t('notification.staleReview.title', { days: idle, name: task.name }),
+            detail: t('notification.staleReview.detail'),
+            taskId: task.id,
           })
-        } else if (t.status !== 'done' && t.status !== 'review' && idle >= 7) {
+        } else if (task.status !== 'done' && task.status !== 'review' && idle >= 7) {
           items.push({
-            id: `stale-progress-${t.id}`,
+            id: `stale-progress-${task.id}`,
             kind: 'stale',
-            title: `${idle}日間更新なし: ${t.name}`,
-            detail: '進捗を確認してください',
-            taskId: t.id,
+            title: t('notification.staleProgress.title', { days: idle, name: task.name }),
+            detail: t('notification.staleProgress.detail'),
+            taskId: task.id,
           })
         }
       })
     }
     visibleTasks
-      .filter((t) => t.assigneeIds.includes(currentUser.id) && t.status !== 'done')
-      .forEach((t) => {
-        const dl = deadlineLevel(t, currentUser.timezone ?? DEFAULT_TIMEZONE)
-        if (dl.level === 'overdue' || dl.level === 'today' || dl.level === 'soon' || dl.level === 'near') {
+      .filter((task) => task.assigneeIds.includes(currentUser.id) && task.status !== 'done')
+      .forEach((task) => {
+        const dl = deadlineLevel(task, currentUser.timezone ?? DEFAULT_TIMEZONE)
+        const deadlineDetailKey: Partial<Record<import('./utils').DeadlineLevel, import('./i18n').TranslationKey>> = {
+          overdue: 'notification.deadline.overdue',
+          today: 'notification.deadline.today',
+          soon: 'notification.deadline.soon',
+          near: 'notification.deadline.near',
+        }
+        const detailKey = deadlineDetailKey[dl.level]
+        if (detailKey) {
           items.push({
-            id: `deadline-${t.id}`,
+            id: `deadline-${task.id}`,
             kind: 'deadline',
-            title: t.name,
-            detail: dl.label,
-            taskId: t.id,
+            title: task.name,
+            detail: t(detailKey, { days: dl.days ?? 0 }),
+            taskId: task.id,
           })
         }
       })
     // コメントの@メンション — 自分がメンションされていて、まだ既読にしていない
     // ものだけ表示（既読管理は端末ローカルの seenMentionIds/markMentionSeen）
     const seenHere = seenMentionIds[currentUser.id] ?? []
-    visibleTasks.forEach((t) => {
-      t.comments?.forEach((c) => {
+    visibleTasks.forEach((task) => {
+      task.comments?.forEach((c) => {
         if (!c.mentionedIds?.includes(currentUser.id)) return
         if (seenHere.includes(c.id)) return
         items.push({
           id: `mention-${c.id}`,
           kind: 'mention',
-          title: `メンション: ${t.name}`,
+          title: t('notification.mention.title', { name: task.name }),
           detail: c.text.length > 40 ? `${c.text.slice(0, 40)}…` : c.text,
-          taskId: t.id,
+          taskId: task.id,
           commentId: c.id,
         })
       })
@@ -3788,8 +3795,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
             items.push({
               id: `inactive-${m.id}`,
               kind: 'stale',
-              title: `${m.displayName || m.name}が${days}日間未ログイン`,
-              detail: 'Orbitにアクセスがない可能性があります',
+              title: t('notification.inactive.title', { name: m.displayName || m.name, days }),
+              detail: t('notification.inactive.detail'),
               taskId: '',
             })
           }
@@ -3820,8 +3827,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     items.push({
       id: 'calendar-scope-notice',
       kind: 'info' as const,
-      title: 'Googleカレンダー連携が追加されました',
-      detail: 'カレンダー画面から「Googleカレンダーと連携」ボタンで接続できます',
+      title: t('notification.calendarScope.title'),
+      detail: t('notification.calendarScope.detail'),
       taskId: '',
     })
     const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []

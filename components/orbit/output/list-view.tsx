@@ -220,7 +220,7 @@ export function ListView({
                       <span className="text-xs text-muted-foreground">{tr(STATUS_KEY[t.status])}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{t.category}</td>
+                  <td className="px-4 py-3 text-muted-foreground"><TranslatedText text={t.category} /></td>
                   <td className="px-4 py-3">
                     <DifficultyBadge difficulty={t.difficulty} />
                   </td>

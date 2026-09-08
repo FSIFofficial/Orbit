@@ -95,21 +95,25 @@ export function computeProjectAutoHealth(
 export type DeadlineLevel = 'overdue' | 'today' | 'soon' | 'near' | 'none'
 
 // Classify how close a task's deadline is, for color-coded warnings.
+// Deliberately doesn't return a display label — this is used both by UI
+// components that only need `level` (kanban-card.tsx, dependency-view.tsx,
+// admin-leadership.tsx) and by store.tsx's notifications, which need the
+// label localized via t(); the caller renders its own label from `level`
+// (and `days` for the 'near' case) so this stays locale-agnostic.
 export function deadlineLevel(task: Task, tz: string = DEFAULT_TIMEZONE): {
   level: DeadlineLevel
-  label: string
   days: number | null
 } {
   if (!task.deadline || task.status === 'done')
-    return { level: 'none', label: '', days: null }
+    return { level: 'none', days: null }
   const today = new Date(todayStrInTz(tz)).getTime()
   const due = new Date(task.deadline).getTime()
   const days = Math.round((due - today) / (1000 * 60 * 60 * 24))
-  if (days < 0) return { level: 'overdue', label: '期限超過', days }
-  if (days === 0) return { level: 'today', label: '本日期限', days }
-  if (days <= 1) return { level: 'soon', label: '期限まで1日', days }
-  if (days <= 3) return { level: 'near', label: `期限まで${days}日`, days }
-  return { level: 'none', label: '', days }
+  if (days < 0) return { level: 'overdue', days }
+  if (days === 0) return { level: 'today', days }
+  if (days <= 1) return { level: 'soon', days }
+  if (days <= 3) return { level: 'near', days }
+  return { level: 'none', days }
 }
 
 // YYYY-MM と YYYY-MM-DD の両形式を安全にパースする（YYYY-MM は UTCの1日として扱う）

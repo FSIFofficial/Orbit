@@ -1310,12 +1310,28 @@ function notifyProjectHealthChanged(projectId, health, note) {
   try {
     var project = findRow(SHEET_PROJECTS, projectId)
     if (!project) return
-    var healthLabel = { good: '良好', watch: '要注意', attention: '要対応' }[health] || health
-    var subject = '[Orbit] プロジェクト「' + project.name + '」の健康状態: ' + healthLabel
-    var body = 'プロジェクト「' + project.name + '」の健康状態が「' + healthLabel + '」' +
-      (note || '') + '\n\nOrbitのダッシュボードで確認してください。'
-    notifyAdmins(subject, body)
-    notifyChat('❤️‍🩹 「' + project.name + '」の健康状態: ' + healthLabel)
+    var healthLabelJa = { good: '良好', watch: '要注意', attention: '要対応' }[health] || health
+    var healthLabelEn = { good: 'Good', watch: 'Needs attention', attention: 'Needs action' }[health] || health
+    var noteEn = note === 'に手動で変更されました'
+      ? ' (changed manually)'
+      : note === 'に変化しました（自動判定）'
+        ? ' (changed automatically)'
+        : ''
+    notifyAdmins(
+      {
+        ja: {
+          subject: '[Orbit] プロジェクト「' + project.name + '」の健康状態: ' + healthLabelJa,
+          body: 'プロジェクト「' + project.name + '」の健康状態が「' + healthLabelJa + '」' +
+            (note || '') + '\n\nOrbitのダッシュボードで確認してください。',
+        },
+        en: {
+          subject: '[Orbit] Project "' + project.name + '" health: ' + healthLabelEn,
+          body: 'The health of project "' + project.name + '" is now "' + healthLabelEn + '"' +
+            noteEn + '.\n\nCheck the Orbit dashboard for details.',
+        },
+      },
+    )
+    notifyChat('❤️‍🩹 「' + project.name + '」の健康状態: ' + healthLabelJa)
   } catch (err) {
     console.error('notifyProjectHealthChanged failed: ' + err)
   }
@@ -1325,15 +1341,26 @@ function notifyProjectHealthChanged(projectId, health, note) {
 // to every 代表 if nobody opted in (a notification must always go out
 // somewhere). Best-effort: a mail failure never fails task creation.
 function notifyNewTasks(tasks) {
-  var titles = tasks.map(function (t) {
+  var titlesJa = tasks.map(function (t) {
     return '・' + t.title
   })
-  notifyAdmins(
-    '[Orbit] 新しいタスクが承認待ちです（' + tasks.length + '件）',
-    '以下のタスクが登録され、承認待ちです。\n\n' +
-      titles.join('\n') +
-      '\n\nOrbitの管理画面 > 承認 から確認してください。',
-  )
+  var titlesEn = tasks.map(function (t) {
+    return '- ' + t.title
+  })
+  notifyAdmins({
+    ja: {
+      subject: '[Orbit] 新しいタスクが承認待ちです（' + tasks.length + '件）',
+      body: '以下のタスクが登録され、承認待ちです。\n\n' +
+        titlesJa.join('\n') +
+        '\n\nOrbitの管理画面 > 承認 から確認してください。',
+    },
+    en: {
+      subject: '[Orbit] New tasks awaiting approval (' + tasks.length + ')',
+      body: 'The following tasks were submitted and are awaiting approval.\n\n' +
+        titlesEn.join('\n') +
+        '\n\nCheck Orbit Admin > Approvals for details.',
+    },
+  })
 }
 
 // Emails the task's designated reviewer(s) (reviewer_ids/reviewer_id) when an
@@ -1359,8 +1386,16 @@ function notifyReview(taskId) {
       preferredEmails = reportsToEmails(assigneeIds)
     }
     notifyAdmins(
-      '[Orbit] タスクの確認をお願いします',
-      '「' + task.title + '」が確認待ちになりました。\n\nOrbitで確認し、問題なければ「完了」にしてください。',
+      {
+        ja: {
+          subject: '[Orbit] タスクの確認をお願いします',
+          body: '「' + task.title + '」が確認待ちになりました。\n\nOrbitで確認し、問題なければ「完了」にしてください。',
+        },
+        en: {
+          subject: '[Orbit] Task ready for your review',
+          body: '"' + task.title + '" is now awaiting review.\n\nPlease check it in Orbit and mark it "Done" if everything looks good.',
+        },
+      },
       preferredEmails,
     )
     notifyChat('🔔 「' + task.title + '」が確認待ちになりました。')
@@ -1460,13 +1495,15 @@ function getNotifyFrequency(memberId, kind) {
 
 // Queues a notification for batch delivery. kind is one of:
 // 'new_task' | 'review' | 'mention' | 'rejected' | 'deadline'
-function queueNotification(memberId, kind, subject, body) {
+// templates: { ja: {subject, body}, en: {subject, body} } — 送信時に受信者の
+// localeに応じて出し分ける(sendLocalizedEmail/sendBatchNotifications参照)。
+function queueNotification(memberId, kind, templates) {
   var freq = getNotifyFrequency(memberId, kind)
   if (freq === 'none') return
   if (freq === 'immediate') {
     var emails = memberEmailsByIds([memberId])
     if (emails.length > 0) {
-      MailApp.sendEmail({ to: emails.join(','), subject: subject, body: body })
+      sendLocalizedEmail(emails, templates)
     }
     return
   }
@@ -1474,7 +1511,7 @@ function queueNotification(memberId, kind, subject, body) {
   var props = PropertiesService.getScriptProperties()
   var existing = props.getProperty(key)
   var queue = existing ? JSON.parse(existing) : []
-  queue.push({ kind: kind, subject: subject, body: body, ts: new Date().toISOString() })
+  queue.push({ kind: kind, templates: templates, ts: new Date().toISOString() })
   props.setProperty(key, JSON.stringify(queue))
 }
 
@@ -1495,6 +1532,9 @@ function sendBatchNotifications() {
       props.deleteProperty(key)
       return
     }
+    // このキューは1メンバー分なので、locale判定も1回で済む
+    var locales = localesByEmails(emails)
+    var loc = locales[emails[0]] || 'ja'
 
     // Filter by whether enough time has passed for each item based on member frequency
     var toSend = []
@@ -1510,8 +1550,16 @@ function sendBatchNotifications() {
     })
 
     if (toSend.length > 0) {
-      var combined = toSend.map(function(i) { return '【' + i.subject + '】\n' + i.body }).join('\n\n---\n\n')
-      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit 通知まとめ (' + toSend.length + '件)', body: combined })
+      var combined = toSend
+        .map(function(i) {
+          var tpl = i.templates[loc] || i.templates.ja
+          return '【' + tpl.subject + '】\n' + tpl.body
+        })
+        .join('\n\n---\n\n')
+      var subject = loc === 'en'
+        ? 'Orbit Notification Summary (' + toSend.length + ')'
+        : 'Orbit 通知まとめ (' + toSend.length + '件)'
+      MailApp.sendEmail({ to: emails.join(','), subject: subject, body: combined })
     }
     if (toKeep.length > 0) {
       props.setProperty(key, JSON.stringify(toKeep))
@@ -1521,13 +1569,25 @@ function sendBatchNotifications() {
   })
 }
 
+// 呼び出し方は2通り:
+//   - 新パターン(多言語対応): notifyAdmins({ ja: {subject, body}, en: {subject, body} }, preferredEmails)
+//   - 旧パターン(後方互換、常に日本語): notifyAdmins(subject, body, preferredEmails)
+// 第1引数がオブジェクトかどうかで判別する。宛先解決ロジック(opted/reps/
+// orgEmailsのフォールバック)自体はどちらのパターンでも共通。
 function notifyAdmins(subject, body, preferredEmails) {
   try {
+    var templates
+    if (subject && typeof subject === 'object') {
+      templates = subject
+      preferredEmails = body
+    } else {
+      templates = { ja: { subject: subject, body: body } }
+    }
     var orgEmails = orgNotificationEmails()
 
     if (preferredEmails && preferredEmails.length > 0) {
       var to = uniqueEmails(preferredEmails.concat(orgEmails))
-      MailApp.sendEmail({ to: to.join(','), subject: subject, body: body })
+      sendLocalizedEmail(to, templates)
       console.log('notifyAdmins: sent to preferredEmails+org ' + to.join(','))
       return
     }
@@ -1564,7 +1624,7 @@ function notifyAdmins(subject, body, preferredEmails) {
       return
     }
 
-    MailApp.sendEmail({ to: recipients.join(','), subject: subject, body: body })
+    sendLocalizedEmail(recipients, templates)
     console.log('notifyAdmins: sent to ' + recipients.join(','))
   } catch (err) {
     // a mail error shouldn't roll back the caller's action, but log it so
@@ -1637,6 +1697,55 @@ function memberEmailsByIds(memberIds) {
   }
 }
 
+// メールアドレス一覧を受け取り、Membersシートを1回スキャンして
+// { email: locale } のマップを返す（'en'以外は全て'ja'扱い）。
+// 多言語メール送信（sendLocalizedEmail）で、宛先ごとに言語を
+// 出し分けるために使う。
+function localesByEmails(emails) {
+  var result = {}
+  if (!emails || emails.length === 0) return result
+  var wanted = {}
+  emails.forEach(function (e) { wanted[e.toLowerCase()] = true })
+  try {
+    var sheet = getSheet(SHEET_MEMBERS)
+    var headers = headerRow(sheet)
+    var emailCol = headers.indexOf('email')
+    var localeCol = headers.indexOf('locale')
+    if (emailCol === -1) return result
+    var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+    rows.forEach(function (r) {
+      String(r[emailCol] || '').split(',').map(function (e) { return e.trim() }).filter(Boolean).forEach(function (e) {
+        if (wanted[e.toLowerCase()]) {
+          result[e] = (localeCol !== -1 && r[localeCol] === 'en') ? 'en' : 'ja'
+        }
+      })
+    })
+  } catch (err) {
+    console.error('localesByEmails failed: ' + err)
+  }
+  return result
+}
+
+// 宛先をlocaleごとにグループ化し、localeごとに言語を出し分けたメールを
+// 送信する。templates は { ja: {subject, body}, en: {subject, body} } の形。
+// localeが判明しない宛先は'ja'扱い（既存の全メール日本語固定という
+// 挙動からの後方互換のため）。
+function sendLocalizedEmail(emails, templates) {
+  if (!emails || emails.length === 0) return
+  var locales = localesByEmails(emails)
+  var groups = { ja: [], en: [] }
+  emails.forEach(function (e) {
+    var loc = locales[e] || 'ja'
+    groups[templates[loc] ? loc : 'ja'].push(e)
+  })
+  Object.keys(groups).forEach(function (loc) {
+    var list = groups[loc]
+    if (list.length === 0) return
+    var tpl = templates[loc] || templates.ja
+    MailApp.sendEmail({ to: list.join(','), subject: tpl.subject, body: tpl.body })
+  })
+}
+
 // Emails members who were @mentioned in a task comment. commentText is
 // passed straight from the client (not re-read from the sheet) since the
 // comment was just appended in the same request.
@@ -1646,13 +1755,22 @@ function notifyMention(taskId, commentText, memberIds) {
     var task = findRow(SHEET_TASKS, taskId)
     if (!task) return
     if (!memberIds || memberIds.length === 0) return
-    var subject = '[Orbit] コメントでメンションされました'
-    var body =
-      'タスク「' + task.title + '」のコメントであなたがメンションされました。\n\n' +
-      (commentText || '') +
-      '\n\nOrbitで確認してください。'
+    var templates = {
+      ja: {
+        subject: '[Orbit] コメントでメンションされました',
+        body: 'タスク「' + task.title + '」のコメントであなたがメンションされました。\n\n' +
+          (commentText || '') +
+          '\n\nOrbitで確認してください。',
+      },
+      en: {
+        subject: '[Orbit] You were mentioned in a comment',
+        body: 'You were mentioned in a comment on task "' + task.title + '".\n\n' +
+          (commentText || '') +
+          '\n\nPlease check Orbit for details.',
+      },
+    }
     memberIds.forEach(function(mid) {
-      queueNotification(mid, 'mention', subject, body)
+      queueNotification(mid, 'mention', templates)
     })
     console.log('notifyMention: queued for memberIds ' + memberIds.join(','))
   } catch (err) {
@@ -1669,8 +1787,16 @@ function notifyTrainingRequest(memberId, trainingName) {
     if (!member) return
     var name = member.display_name || member.name || '不明'
     notifyAdmins(
-      '[Orbit] 研修申請の承認をお願いします',
-      name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。\n\nOrbitの人材育成タブから承認/却下してください。',
+      {
+        ja: {
+          subject: '[Orbit] 研修申請の承認をお願いします',
+          body: name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。\n\nOrbitの人材育成タブから承認/却下してください。',
+        },
+        en: {
+          subject: '[Orbit] Training request awaiting approval',
+          body: name + ' has requested training "' + (trainingName || '') + '".\n\nPlease approve or reject it from the Orbit Training tab.',
+        },
+      },
       reportsToEmails([memberId]),
     )
     notifyChat('📚 ' + name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。')
@@ -1690,13 +1816,21 @@ function notifyTaskRejected(creatorId, taskName, reason) {
       console.warn('notifyTaskRejected: no email on file for creatorId ' + creatorId + ' — nothing sent')
       return
     }
-    MailApp.sendEmail({
-      to: emails.join(','),
-      subject: '[Orbit] タスクが承認されませんでした',
-      body:
-        '登録した「' + (taskName || '') + '」は承認されませんでした。\n\n' +
-        (reason ? '理由: ' + reason + '\n\n' : '') +
-        'Orbitで確認してください。',
+    sendLocalizedEmail(emails, {
+      ja: {
+        subject: '[Orbit] タスクが承認されませんでした',
+        body:
+          '登録した「' + (taskName || '') + '」は承認されませんでした。\n\n' +
+          (reason ? '理由: ' + reason + '\n\n' : '') +
+          'Orbitで確認してください。',
+      },
+      en: {
+        subject: '[Orbit] Your task was not approved',
+        body:
+          'The task "' + (taskName || '') + '" you submitted was not approved.\n\n' +
+          (reason ? 'Reason: ' + reason + '\n\n' : '') +
+          'Please check Orbit for details.',
+      },
     })
     console.log('notifyTaskRejected: sent to ' + emails.join(','))
   } catch (err) {
@@ -1712,11 +1846,17 @@ function notifyTrainingDecision(memberId, trainingName, approved) {
       console.warn('notifyTrainingDecision: no email on file for memberId ' + memberId + ' — nothing sent')
       return
     }
-    MailApp.sendEmail({
-      to: emails.join(','),
-      subject: '[Orbit] 研修申請が' + (approved ? '承認' : '却下') + 'されました',
-      body:
-        '研修「' + (trainingName || '') + '」の申請が' + (approved ? '承認' : '却下') + 'されました。\n\nOrbitで確認してください。',
+    sendLocalizedEmail(emails, {
+      ja: {
+        subject: '[Orbit] 研修申請が' + (approved ? '承認' : '却下') + 'されました',
+        body:
+          '研修「' + (trainingName || '') + '」の申請が' + (approved ? '承認' : '却下') + 'されました。\n\nOrbitで確認してください。',
+      },
+      en: {
+        subject: '[Orbit] Your training request was ' + (approved ? 'approved' : 'rejected'),
+        body:
+          'Your request for training "' + (trainingName || '') + '" was ' + (approved ? 'approved' : 'rejected') + '.\n\nPlease check Orbit for details.',
+      },
     })
     console.log('notifyTrainingDecision: sent to ' + emails.join(','))
   } catch (err) {
@@ -1743,7 +1883,8 @@ function notifyScheduleResult(taskId) {
       schedule = null
     }
 
-    var body = 'タスク「' + task.title + '」の日程調整で全員の回答が揃いました。\n\n'
+    var bodyJa = 'タスク「' + task.title + '」の日程調整で全員の回答が揃いました。\n\n'
+    var bodyEn = 'All responses are in for the schedule coordination on task "' + task.title + '".\n\n'
     if (schedule && schedule.candidates) {
       var sheet = getSheet(SHEET_MEMBERS)
       var headers = headerRow(sheet)
@@ -1757,16 +1898,22 @@ function notifyScheduleResult(taskId) {
         nameById[id] = (nameCol !== -1 && r[nameCol]) || (altNameCol !== -1 && r[altNameCol]) || id
       })
       schedule.candidates.forEach(function (c) {
-        body += '【' + c.label + '】\n'
+        bodyJa += '【' + c.label + '】\n'
+        bodyEn += '[' + c.label + ']\n'
         ;(schedule.invitedIds || []).forEach(function (mid) {
           var resp = schedule.responses && schedule.responses[mid] && schedule.responses[mid][c.id]
-          body += '  ' + (nameById[mid] || mid) + ': ' + (resp || '未回答') + '\n'
+          bodyJa += '  ' + (nameById[mid] || mid) + ': ' + (resp || '未回答') + '\n'
+          bodyEn += '  ' + (nameById[mid] || mid) + ': ' + (resp || 'No response') + '\n'
         })
       })
     }
-    body += '\nOrbitで確認してください。'
+    bodyJa += '\nOrbitで確認してください。'
+    bodyEn += '\nPlease check Orbit for details.'
 
-    MailApp.sendEmail({ to: emails.join(','), subject: '[Orbit] 日程調整の回答が揃いました', body: body })
+    sendLocalizedEmail(emails, {
+      ja: { subject: '[Orbit] 日程調整の回答が揃いました', body: bodyJa },
+      en: { subject: '[Orbit] Schedule coordination responses are complete', body: bodyEn },
+    })
     console.log('notifyScheduleResult: sent to ' + emails.join(','))
     notifyChat('🗓️ 「' + task.title + '」の日程調整で全員の回答が揃いました。')
   } catch (err) {
@@ -1793,7 +1940,8 @@ function notifyFormResult(taskId) {
       form = null
     }
 
-    var body = 'タスク「' + task.title + '」のフォームで全員の回答が揃いました。\n\n'
+    var bodyJa = 'タスク「' + task.title + '」のフォームで全員の回答が揃いました。\n\n'
+    var bodyEn = 'All responses are in for the form on task "' + task.title + '".\n\n'
     if (form && form.fields) {
       var sheet = getSheet(SHEET_MEMBERS)
       var headers = headerRow(sheet)
@@ -1807,19 +1955,27 @@ function notifyFormResult(taskId) {
         nameById[id] = (nameCol !== -1 && r[nameCol]) || (altNameCol !== -1 && r[altNameCol]) || id
       })
       ;(form.invitedIds || []).forEach(function (mid) {
-        body += '【' + (nameById[mid] || mid) + '】\n'
+        bodyJa += '【' + (nameById[mid] || mid) + '】\n'
+        bodyEn += '[' + (nameById[mid] || mid) + ']\n'
         var resp = (form.responses && form.responses[mid]) || {}
         form.fields.forEach(function (f) {
           var v = resp[f.id]
-          var text = Array.isArray(v) ? v.join('、') : v || '（未回答）'
-          body += '  ' + f.label + ': ' + text + '\n'
+          var textJa = Array.isArray(v) ? v.join('、') : v || '（未回答）'
+          var textEn = Array.isArray(v) ? v.join(', ') : v || '(No response)'
+          bodyJa += '  ' + f.label + ': ' + textJa + '\n'
+          bodyEn += '  ' + f.label + ': ' + textEn + '\n'
         })
-        body += '\n'
+        bodyJa += '\n'
+        bodyEn += '\n'
       })
     }
-    body += '\nOrbitで確認してください。'
+    bodyJa += '\nOrbitで確認してください。'
+    bodyEn += '\nPlease check Orbit for details.'
 
-    MailApp.sendEmail({ to: emails.join(','), subject: '[Orbit] フォームの回答が揃いました', body: body })
+    sendLocalizedEmail(emails, {
+      ja: { subject: '[Orbit] フォームの回答が揃いました', body: bodyJa },
+      en: { subject: '[Orbit] Form responses are complete', body: bodyEn },
+    })
     console.log('notifyFormResult: sent to ' + emails.join(','))
     notifyChat('📝 「' + task.title + '」のフォームで全員の回答が揃いました。')
   } catch (err) {
@@ -1841,12 +1997,24 @@ function notifyScheduleChange(taskId) {
       })
       .filter(Boolean)
     notifyAdmins(
-      '[Orbit] タスクの日程が変更されました',
-      '「' + task.title + '」の日程が変更されました。\n開始日: ' +
-        (task.start_date || '未設定') +
-        '\n期限: ' +
-        (task.due_date || '未設定') +
-        '\n\nOrbitで確認してください。',
+      {
+        ja: {
+          subject: '[Orbit] タスクの日程が変更されました',
+          body: '「' + task.title + '」の日程が変更されました。\n開始日: ' +
+            (task.start_date || '未設定') +
+            '\n期限: ' +
+            (task.due_date || '未設定') +
+            '\n\nOrbitで確認してください。',
+        },
+        en: {
+          subject: '[Orbit] Task schedule changed',
+          body: 'The schedule for "' + task.title + '" has changed.\nStart date: ' +
+            (task.start_date || 'Not set') +
+            '\nDue date: ' +
+            (task.due_date || 'Not set') +
+            '\n\nPlease check Orbit for details.',
+        },
+      },
       reportsToEmails(assigneeIds),
     )
   } catch (err) {
@@ -2480,12 +2648,22 @@ function notifyInactiveMembers() {
     })
   }
 
-  var lines = staleMembers.map(function(m) {
+  var linesJa = staleMembers.map(function(m) {
     return '・' + m.name + '（最終ログイン: ' + m.lastLogin.slice(0, 10) + '、' + m.days + '日経過）'
   })
-  var subject = 'Orbit: ' + staleMembers.length + '名のメンバーが' + threshold + '日以上未ログインです'
-  var body = '以下のメンバーが ' + threshold + ' 日以上 Orbit にログインしていません:\n\n' + lines.join('\n') + '\n\nOrbit管理画面から状況を確認してください。'
-  notifyAdmins(subject, body)
+  var linesEn = staleMembers.map(function(m) {
+    return '- ' + m.name + ' (last login: ' + m.lastLogin.slice(0, 10) + ', ' + m.days + ' days ago)'
+  })
+  notifyAdmins({
+    ja: {
+      subject: 'Orbit: ' + staleMembers.length + '名のメンバーが' + threshold + '日以上未ログインです',
+      body: '以下のメンバーが ' + threshold + ' 日以上 Orbit にログインしていません:\n\n' + linesJa.join('\n') + '\n\nOrbit管理画面から状況を確認してください。',
+    },
+    en: {
+      subject: 'Orbit: ' + staleMembers.length + ' member(s) inactive for ' + threshold + '+ days',
+      body: 'The following members have not logged in to Orbit for ' + threshold + '+ days:\n\n' + linesEn.join('\n') + '\n\nPlease check the Orbit admin screen for details.',
+    },
+  })
   notifyChat('⚠️ ' + staleMembers.length + '名のメンバーが' + threshold + '日以上未ログインです。Orbitで確認してください。')
 }
 
@@ -2531,15 +2709,26 @@ function notifyOverdueTasksToAssignees() {
     assigneeIds.forEach(function (aid) {
       try {
         var tasks = byAssignee[aid]
-        var lines = tasks.map(function (t) {
+        var linesJa = tasks.map(function (t) {
           return '・' + t.title + '（期限: ' + t.due + '）'
         })
-        var subject = '[Orbit] 期限超過タスクのお知らせ（' + tasks.length + '件）'
-        var body =
-          '担当しているタスクのうち、期限を超過しているものが' + tasks.length + '件あります。\n\n' +
-          lines.join('\n') +
-          '\n\nOrbitにログインして対応状況を更新してください。'
-        queueNotification(aid, 'deadline', subject, body)
+        var linesEn = tasks.map(function (t) {
+          return '- ' + t.title + ' (due: ' + t.due + ')'
+        })
+        queueNotification(aid, 'deadline', {
+          ja: {
+            subject: '[Orbit] 期限超過タスクのお知らせ（' + tasks.length + '件）',
+            body: '担当しているタスクのうち、期限を超過しているものが' + tasks.length + '件あります。\n\n' +
+              linesJa.join('\n') +
+              '\n\nOrbitにログインして対応状況を更新してください。',
+          },
+          en: {
+            subject: '[Orbit] Overdue task notice (' + tasks.length + ')',
+            body: 'You have ' + tasks.length + ' overdue task(s) assigned to you.\n\n' +
+              linesEn.join('\n') +
+              '\n\nPlease log in to Orbit and update their status.',
+          },
+        })
       } catch (err) {
         // メンバー1人の通知失敗は他のメンバーの処理に影響させない
         console.error('notifyOverdueTasksToAssignees: failed for memberId=' + aid + ': ' + err)
