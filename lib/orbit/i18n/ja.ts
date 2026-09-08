@@ -31,6 +31,8 @@ export const ja = {
   'header.notifications.empty': '新しい通知はありません',
   'header.notifications.dismiss': '通知を閉じる',
   'header.notifications.dismiss.title': '消す',
+  'notification.lowWorkload.title': '{name}さんのタスクが少ないようです',
+  'notification.lowWorkload.detail': '稼働に余裕があります。おすすめの公募タスクを確認してください',
   'header.refresh': '情報を更新',
   'header.search.placeholder': 'タスクを検索…',
   'header.search.clear': 'クリア',
@@ -768,6 +770,9 @@ export const ja = {
   'person.overview.count': '{count}件',
   'person.overview.noAchievements': 'まだ実績がありません',
 
+  'person.lowWorkload.title': '稼働に余裕があるようです',
+  'person.lowWorkload.desc': 'おすすめの公募タスクです。割り当てるとこのメンバーが担当者に追加されます。',
+  'person.lowWorkload.assign': '割り当てる',
   'person.overview.projects.title': '所属プロジェクト',
   'person.overview.projects.empty': '所属しているプロジェクトはありません。',
   'person.overview.projects.owner': '責任者',

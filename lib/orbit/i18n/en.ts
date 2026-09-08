@@ -31,6 +31,8 @@ export const en = {
   'header.notifications.empty': 'No new notifications',
   'header.notifications.dismiss': 'Dismiss notification',
   'header.notifications.dismiss.title': 'Dismiss',
+  'notification.lowWorkload.title': '{name} seems to have few tasks',
+  'notification.lowWorkload.detail': 'They have capacity to spare — check the recommended open tasks',
   'header.refresh': 'Refresh data',
   'header.search.placeholder': 'Search tasks…',
   'header.search.clear': 'Clear',
@@ -768,6 +770,9 @@ export const en = {
   'person.overview.count': '{count}',
   'person.overview.noAchievements': 'No achievements yet',
 
+  'person.lowWorkload.title': 'Capacity to spare',
+  'person.lowWorkload.desc': 'Recommended open tasks. Assigning adds this member as an assignee.',
+  'person.lowWorkload.assign': 'Assign',
   'person.overview.projects.title': 'Projects',
   'person.overview.projects.empty': 'Not part of any projects.',
   'person.overview.projects.owner': 'Owner',

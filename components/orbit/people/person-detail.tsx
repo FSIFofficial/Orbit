@@ -11,7 +11,7 @@ import { EditableTags } from '@/components/orbit/editable-tags'
 import { CareerTab } from '@/components/orbit/people/career-tab'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { formatDeadlineFull, formatTenure, memberSkillFieldProgress } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatTenure, memberSkillFieldProgress, isLowWorkloadMember, recommendedTasksForMember } from '@/lib/orbit/utils'
 import { exportTasksToExcel } from '@/lib/orbit/export-excel'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
@@ -37,6 +37,7 @@ import {
   RefreshCw,
   Download,
   FileSpreadsheet,
+  TrendingDown,
 } from 'lucide-react'
 import {
   isGoogleOAuthConfigured,
@@ -81,9 +82,12 @@ export function PersonDetail({ id }: { id: string }) {
   const {
     getMember,
     visibleTasks: tasks,
+    archivedTasks,
     members,
     projects,
     currentUser,
+    isFullAdmin,
+    assignTask,
     updateWill,
     updateJudgment,
     getProject,
@@ -267,6 +271,15 @@ export function PersonDetail({ id }: { id: string }) {
 
   const mine = tasks.filter((t) => t.assigneeIds.includes(member.id))
   const active = mine.filter((t) => t.status !== 'done').length
+  // P16: 稼働に余裕があるメンバーに公募タスクをおすすめする。閲覧者が
+  // 全権管理者、または本人の直属の上長のときだけ表示する
+  const allTasksForWorkload = [...tasks, ...archivedTasks]
+  const canSeeLowWorkloadSuggestions =
+    isFullAdmin || (!!currentUser && currentUser.id === member.reportsToId)
+  const lowWorkloadRecommendedTasks =
+    canSeeLowWorkloadSuggestions && isLowWorkloadMember(member.id, allTasksForWorkload)
+      ? recommendedTasksForMember(member, allTasksForWorkload)
+      : []
   const completed = mine.filter((t) => t.status === 'done')
   const history = mine
     .slice()
@@ -1159,6 +1172,36 @@ export function PersonDetail({ id }: { id: string }) {
           </div>
         )
       })()}
+
+      {/* P16: 稼働に余裕があるメンバーへの公募タスクおすすめ(上長/全権管理者のみ) */}
+      {lowWorkloadRecommendedTasks.length > 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <TrendingDown className="size-4 text-primary" />
+            <SectionLabel>{t('person.lowWorkload.title')}</SectionLabel>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{t('person.lowWorkload.desc')}</p>
+          <div className="mt-3 flex flex-col gap-2">
+            {lowWorkloadRecommendedTasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{task.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatDeadlineFull(task.deadline)}</p>
+                </div>
+                <Button
+                  className="h-8 shrink-0"
+                  onClick={() => assignTask(task.id, [...task.assigneeIds, member.id])}
+                >
+                  {t('person.lowWorkload.assign')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Talent sections */}
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">

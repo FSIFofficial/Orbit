@@ -77,7 +77,8 @@ import {
   remoteApi,
   toCreatePayload,
 } from './remote'
-import { computeProjectAutoHealth, daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
+import { computeProjectAutoHealth, daysSince, deadlineLevel, incompletePrerequisites, isLowWorkloadMember, parseMentions } from './utils'
+import { useI18n } from './i18n'
 import { cacheTimezone, DEFAULT_TIMEZONE } from './timezone'
 import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
 
@@ -623,6 +624,7 @@ function uniq(list: string[]): string[] {
 }
 
 export function OrbitProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n()
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   // when a remote spreadsheet is configured, the local seed data is never
   // actually correct (wrong ids, wrong org) — starting from it anyway just
@@ -3793,6 +3795,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           }
         })
     }
+    // P16: 直属の部下がタスク少なめ状態なら、その上長に通知する
+    // (isAdminである全管理者ではなく、その部下のreportsToIdが自分と一致
+    // する場合のみ — item 25の「25日間未アクセス」通知とは異なり、対象を
+    // 直属の上長に限定する)
+    {
+      const allTasksForWorkload = [...visibleTasks, ...archivedTasks]
+      members
+        .filter((m) => !m.inactive && m.reportsToId === currentUser.id)
+        .forEach((m) => {
+          if (isLowWorkloadMember(m.id, allTasksForWorkload)) {
+            items.push({
+              id: `low-workload-${m.id}`,
+              kind: 'lowWorkload',
+              title: t('notification.lowWorkload.title', { name: m.displayName || m.name }),
+              detail: t('notification.lowWorkload.detail'),
+              taskId: '',
+              memberId: m.id,
+            })
+          }
+        })
+    }
     // カレンダースコープ追加告知 — 一度「消す」まで表示する
     items.push({
       id: 'calendar-scope-notice',
@@ -3803,7 +3826,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     })
     const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []
     return items.filter((n) => !dismissedHere.includes(n.id))
-  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, seenMentionIds, dismissedNotificationIds, members])
+  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, archivedTasks, seenMentionIds, dismissedNotificationIds, members, t])
 
   const projectTypes = useMemo(
     () =>
