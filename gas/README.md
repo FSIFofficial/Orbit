@@ -81,6 +81,12 @@ Google スプレッドシート（データの保存場所）
 | last_inactive_notified | 未アクセス通知を最後に送った日（`YYYY-MM-DD`）。重複通知防止に使われます |
 | timezone | 本人のタイムゾーン（IANA名、例: `Asia/Tokyo`）。個人ページの「言語 / タイムゾーン」から本人が設定できます。未設定時はJST扱い |
 | locale | 本人の表示言語（例: `ja`, `en`）。個人ページの「言語 / タイムゾーン」から本人が設定できます。未設定時は日本語扱い |
+| university | 大学名（任意）。個人ページの学歴情報から本人が編集できます |
+| faculty | 学部（任意） |
+| department_name | 学科（任意、`department_path`＝組織階層パスとは別物） |
+| grade_year | 学年（任意） |
+| custom_fields_json | 団体ごとにAdmin → Tagsで追加できる人材DBカスタム列の値（JSON文字列） |
+| survey_responses_json | このメンバー自身のアンケート回答履歴（JSON配列。新規シートを増やさず、Membersシートの1列にJSON配列として持たせる設計） |
 
 > Admin → Membersの「メンバーを登録」フォームから新規メンバーを直接追加できます。
 > スプレッドシートに直接行を追加することもできます。
@@ -97,6 +103,9 @@ Google スプレッドシート（データの保存場所）
 | owner_id | 責任者のメンバーID（任意） |
 | parent_id | 上位プロジェクトのID（任意）。プロジェクトを入れ子にする場合に使います |
 | archived | `TRUE`/`FALSE`。アーカイブすると一覧から隠れます |
+| goal | 目標（`description`＝概要とは別枠の欄） |
+| health_override | 幹部による健康状態の手動上書き（`good`/`watch`/`attention`、空欄なら自動判定） |
+| last_notified_health | 直近に通知を送った時点の実効的な健康状態（重複通知防止用） |
 
 ### Tasks（タスク情報）
 
@@ -142,6 +151,8 @@ Google スプレッドシート（データの保存場所）
 | form_json | 汎用フォームの質問項目・招待メンバー・回答（JSON文字列） |
 | importance | `一般` / `重要` / `対外公開`（空欄は一般扱い） |
 | awarded_points_json | 完了時に付与するスキルポイント（JSON文字列、例: `{"デザイン":30}`、任意） |
+| required_skill_levels_json | このタスクをこなすのに必要なスキルレベルの目安（JSON、例: `{"デザイン":3}`、任意） |
+| review_approvals_json | 複数確認者の承認記録（JSON配列、`[{"memberId":"...","at":"..."}]`）。`required_approvals`で指定した人数分の承認が揃うと自動的に「完了」になります |
 
 > `accept_at` / `deliverable_url` / `feedback_comment` は現状のUIからは未使用ですが、
 > 列として残しておいて構いません。
@@ -373,6 +384,16 @@ INPUT画面からタスクが登録されると `approval_status` が「承認�
 
 タスクに「確認者」を複数設定でき、「n人承認が必要」「全員の承認が必要」のどちらかを選べます。
 
+**確認待ちの承認記録**: 確認者が「承認する」ボタンを押すと`review_approvals_json`に記録され、必要承認数に達すると自動的に「完了」になります。確認者が1人でも設定されているタスクは、確認者以外(全権管理者含む)がステータスを直接「完了」に変更することはできません(専用の承認フロー経由のみ)。
+
+### プロジェクト健康状態の通知
+
+Admin → Dashboard の「プロジェクト健全性」テーブルでは、期限超過/確認待ち/ブロック中タスクの件数から健康状態(良好/要注意/要対応)が自動判定されます。全権管理者は各プロジェクトの健康状態を手動で上書きできます(`health_override`)。手動で変更すると、結果に関わらず必ず幹部・管理者へ通知が飛びます。手動上書きしていないプロジェクトは、自動判定が新たに「要対応」になったタイミングで通知が飛びます(同じ「要対応」状態が続く間は重複通知しません。一度「要対応」以外に回復すると、次に悪化した際にまた通知されます)。
+
+### アンケート機能
+
+ヘッダーメニューの「体験アンケート」から、メンバーは定点アンケートに回答できます。回答は各メンバー自身のMembersシートの行(`survey_responses_json`)に保存され、団体全体で共有されます(新規シートは使いません)。Admin → Analytics の「アンケート×人材データ組み合わせ分析」で、稼働量/ロール別/部門別/在籍期間別に平均スコアを集計できます。
+
 ---
 
 ## 6. 定期タスクの自動生成（サーバー側トリガー）
@@ -421,11 +442,12 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 
 | アクション | 必要な権限 |
 |---|---|
-| updateRole, removeMember, removeProject, updateDiscordWebhookUrl, updateSlackWebhookUrl, updateSetting, uploadOrgLogo, addMember, updateEmail, updateJoinedAt, updateReportsTo, updateMentor, notifyTrainingDecision, updatePermissionOverrides, updateMemberProjects | 最上位ロール（代表）のみ |
-| approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies 等 | 任意の管理者ロール（代表 または 班長以上） |
+| updateRole, removeMember, removeProject, uploadOrgLogo, addMember, updateEmail, updateJoinedAt, updateReportsTo, updateMentor, notifyTrainingDecision, updatePermissionOverrides, updateMemberProjects | 最上位ロール（代表）のみ |
+| updateSetting, updateDiscordWebhookUrl, updateSlackWebhookUrl, updateProjectHealth | 代表 または 全権管理者（`restricted_roles`に含まれないロール。団体ごとにAdmin → Tagsで調整可能） |
+| approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies, notifyProjectHealth, updateProjectHealthRecord, approveTaskReview 等 | 任意の管理者ロール（代表 または 班長以上） |
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
 | updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates, updateTimezone, updateLocale | 本人のみ |
-| createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables 等 | ログイン済みなら誰でも |
+| createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables, submitSurveyResponse 等 | ログイン済みなら誰でも |
 
 ---
 
@@ -436,3 +458,4 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 - 定期タスクのサーバー側トリガーは `setupDailyTrigger` を一度手動実行しない限り動作しません
 - 通知メールは Apps Script を実行しているGoogleアカウントの MailApp 経由で送られます（1日の送信数に上限あり）
 - INPUT画面の選択肢プールは `SETTINGS_CSV` を設定していない場合、ブラウザのlocalStorageにのみ保存され他の人の画面には反映されません
+- スキルレベル・カスタム項目・アンケート回答など、メンバー1行にJSON配列を持たせている列は、データが増えるとセルサイズに近づく可能性があります(Googleスプレッドシートのセル上限は約5万文字)
