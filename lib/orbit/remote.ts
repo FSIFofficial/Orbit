@@ -27,7 +27,6 @@ import type {
   SkillLevel,
   SkillLevelThresholds,
   SkillLevelValue,
-  SurveyResponse,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -64,10 +63,6 @@ const DRIVE_FOLDER_ID = process.env.NEXT_PUBLIC_DRIVE_FOLDER_ID
 // templates across everyone's browser, instead of each browser keeping
 // its own localStorage-only copy (see gas/README.md).
 const SETTINGS_CSV_URL = process.env.NEXT_PUBLIC_SETTINGS_CSV
-// アンケート回答（item 22/30）— 従来はlocalStorageのみで団体全体で共有され
-// ていなかったため、Members/Projects/Tasks/Settingsと同じ「書き込みはGAS
-// 経由、読み取りは公開CSV」パターンに合わせて追加した5つ目の公開CSV
-const SURVEY_RESPONSES_CSV_URL = process.env.NEXT_PUBLIC_SURVEY_RESPONSES_CSV
 
 export const isRemoteConfigured = !!(
   MEMBERS_CSV_URL &&
@@ -78,7 +73,6 @@ export const isRemoteConfigured = !!(
 
 export const isDriveConfigured = isRemoteConfigured && !!DRIVE_FOLDER_ID
 export const isSettingsConfigured = isRemoteConfigured && !!SETTINGS_CSV_URL
-export const isSurveyConfigured = isRemoteConfigured && !!SURVEY_RESPONSES_CSV_URL
 
 // ---- CSV parsing ------------------------------------------------------
 
@@ -251,6 +245,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     departmentName: r.department_name || undefined,
     gradeYear: r.grade_year || undefined,
     customFields: parseJsonObject<Record<string, string>>(r.custom_fields_json),
+    surveyResponses:
+      parseJsonArray<{ id: string; submittedAt: string; answers: Record<string, number | string> }>(
+        r.survey_responses_json,
+      ) ?? [],
   }
 }
 
@@ -528,29 +526,6 @@ export async function fetchSettings(): Promise<RemoteSettings> {
       try { const r = byKey.get('initial_tasks_json'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
-}
-
-// アンケート回答シート（answers_jsonをパースするだけの単純なマッピング）
-function mapSurveyResponseRow(r: Record<string, string>): SurveyResponse {
-  let answers: Record<string, number | string> = {}
-  try {
-    const parsed = JSON.parse(r.answers_json || '{}')
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) answers = parsed
-  } catch {
-    // malformed JSON in the sheet — fall back to empty rather than throwing
-  }
-  return {
-    id: r.id,
-    memberId: r.member_id,
-    submittedAt: r.submitted_at,
-    answers,
-  }
-}
-
-export async function fetchSurveyResponses(): Promise<SurveyResponse[]> {
-  if (!SURVEY_RESPONSES_CSV_URL) throw new Error('Survey responses CSV URL is not configured')
-  const rows = await fetchCsvRecords(SURVEY_RESPONSES_CSV_URL)
-  return rows.map(mapSurveyResponseRow)
 }
 
 // ---- writes (Google Apps Script Web App) ---------------------------------

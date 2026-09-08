@@ -2661,6 +2661,7 @@ function setupOrbit() {
     'department_name',         // 学科（department_pathと紛らわしいので department_name とする）
     'grade_year',              // 学年
     'custom_fields_json',      // 団体ごとのカスタム列（人材DB）の値 {"key":"value"}
+    'survey_responses_json',   // item 22/30: このメンバー自身の全アンケート回答履歴 [{"id","submittedAt","answers"}]
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -2681,13 +2682,11 @@ function setupOrbit() {
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
   ]
   var SETTINGS_HEADERS = ['key', 'value']
-  var SURVEY_RESPONSES_HEADERS = ['id', 'member_id', 'submitted_at', 'answers_json']
 
   ensureSheetHeaders(ss, SHEET_MEMBERS,  MEMBERS_HEADERS)
   ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
   ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
   ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
-  ensureSheetHeaders(ss, SHEET_SURVEY_RESPONSES, SURVEY_RESPONSES_HEADERS)
 
   // --- Settings の初期キーを確保（上書きはしない）---
   var DEFAULT_SETTINGS = [
@@ -2785,7 +2784,6 @@ function debugAvatarWrite() {
 
 var SHEET_EXPENSES = 'Expenses'
 var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
-var SHEET_SURVEY_RESPONSES = 'SurveyResponses'
 
 function ensureExpensesSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet()
@@ -2807,28 +2805,22 @@ function ensureFormSubmissionsSheet() {
   return sheet
 }
 
-function ensureSurveyResponsesSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet()
-  var sheet = ss.getSheetByName(SHEET_SURVEY_RESPONSES)
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_SURVEY_RESPONSES)
-    sheet.appendRow(['id', 'member_id', 'submitted_at', 'answers_json'])
-  }
-  return sheet
-}
-
-// item 30: アンケート回答を団体全体で共有するため、SurveyResponsesシートに
-// 永続化する（従来はlocalStorageのみで、他端末からは見えなかった）。
-// idはここで採番する（クライアント側の仮idと一致させる必要はない）。
+// item 22/30: アンケート回答をMembersシートのsurvey_responses_json列に
+// 配列として追記する。新規シートを増やさず、既存の公開CSV(Members)だけで
+// 完結させるため。読み込み→配列に追加→書き戻し、という一般的な
+// read-modify-writeパターンで、custom_fields_json等の既存列と同じ設計。
 function saveSurveyResponse(memberId, answers) {
-  var sheet = ensureSurveyResponsesSheet()
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  var existing = []
+  try { existing = JSON.parse(memberRow.survey_responses_json || '[]') } catch (_) {}
   var responseId = Utilities.getUuid()
-  sheet.appendRow([
-    responseId,
-    memberId,
-    new Date().toISOString(),
-    JSON.stringify(answers || {}),
-  ])
+  existing.push({
+    id: responseId,
+    submittedAt: new Date().toISOString(),
+    answers: answers || {},
+  })
+  updateMemberFields(memberId, { survey_responses_json: JSON.stringify(existing) })
   return { id: responseId }
 }
 
