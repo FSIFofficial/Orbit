@@ -76,7 +76,7 @@ import {
   remoteApi,
   toCreatePayload,
 } from './remote'
-import { daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
+import { computeProjectAutoHealth, daysSince, deadlineLevel, incompletePrerequisites, parseMentions } from './utils'
 import { cacheTimezone, DEFAULT_TIMEZONE } from './timezone'
 import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
 
@@ -272,6 +272,7 @@ interface OrbitContextValue extends OrbitState {
   activeProjects: Project[]
   setProjectArchived: (projectId: string, archived: boolean) => void
   setProjectOrder: (orderedIds: string[]) => void
+  updateProjectHealth: (projectId: string, override: import('./types').ProjectHealthLevel | null) => void
   addMember: (name: string, email: string, affiliation: string, role: string) => Promise<void>
   removeMember: (memberId: string) => void
   updateNotify: (memberId: string, notify: boolean) => void
@@ -2538,6 +2539,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // item 26: 幹部による健康状態の手動上書き。overrideがnullなら解除
+  // （自動判定に戻す）。値がある場合はGAS側で必ず通知が飛ぶ（結果が
+  // goodでも「変更した」という行為自体を知らせるため）。
+  const updateProjectHealth = useCallback(
+    (projectId: string, override: import('./types').ProjectHealthLevel | null) => {
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId
+            ? {
+                ...p,
+                healthOverride: override ?? undefined,
+                lastNotifiedHealth: override ?? p.lastNotifiedHealth,
+              }
+            : p,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.updateProjectHealth(projectId, override))
+    },
+    [runRemote],
+  )
+
   const addMember = useCallback(
     (name: string, email: string, affiliation: string, role: string): Promise<void> => {
       const tempId = `m-${Math.random().toString(36).slice(2, 9)}`
@@ -3566,6 +3588,40 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     return pendingTasks.filter((t) => scope.has(t.projectId))
   }, [pendingTasks, isFullAdmin, currentUser])
 
+  // item 26: プロジェクト健康状態の自動判定変化通知 — 定期タスク生成チェック
+  // (上記)と同じく、サーバー側cronが無いためクライアント側で検知する。
+  // notifyProjectHealthはGAS側でdaihyoOrLeader認可のため、管理者ロールの
+  // 誰かのブラウザがOrbitを開いたタイミングでのみ検知・送信する
+  // （一般ロールの閲覧では実行しない＝GAS側の権限エラーを避ける）。
+  // 手動上書き中(healthOverride)のプロジェクトは対象外、かつ前回通知した
+  // 実効状態(lastNotifiedHealth)からattentionへ新たに変化したときのみ送る。
+  // (追補) attentionから回復した際にlastNotifiedHealthを更新しないと、
+  // 「attention→回復→再attention」で2回目以降の再通知が飛ばなくなる抜け穴が
+  // あったため、attention以外に回復したタイミングでも(通知はせず)記録だけ
+  // 最新化する。これにより次に再びattentionへ悪化した際に確実に再通知される。
+  useEffect(() => {
+    if (!hydrated || !isRemoteConfigured || !currentUser || currentUser.role === BASE_ROLE) return
+    const tz = currentUser.timezone ?? DEFAULT_TIMEZONE
+    adminProjects.forEach((p) => {
+      if (p.healthOverride) return
+      const { health } = computeProjectAutoHealth(p, adminTasks, tz)
+      if (health === 'attention' && p.lastNotifiedHealth !== 'attention') {
+        // 悪化 → attentionになった: 通知を送り、記録も更新する
+        setProjects((prev) =>
+          prev.map((proj) => (proj.id === p.id ? { ...proj, lastNotifiedHealth: 'attention' } : proj)),
+        )
+        runRemote(remoteApi.notifyProjectHealth(p.id, 'attention'))
+      } else if (health !== 'attention' && p.lastNotifiedHealth === 'attention') {
+        // 回復 → attention以外に戻った: 通知は送らず、記録だけ最新状態に
+        // 更新する（次に再びattentionへ悪化した際に確実に再通知されるようにする）
+        setProjects((prev) =>
+          prev.map((proj) => (proj.id === p.id ? { ...proj, lastNotifiedHealth: health } : proj)),
+        )
+        runRemote(remoteApi.updateProjectHealthRecord(p.id, health))
+      }
+    })
+  }, [hydrated, currentUser, adminProjects, adminTasks, runRemote])
+
   const notifications = useMemo(() => {
     if (!currentUser) return []
     const items: import('./types').NotificationItem[] = []
@@ -3829,6 +3885,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     activeProjects,
     setProjectArchived,
     setProjectOrder,
+    updateProjectHealth,
     addMember,
     removeMember,
     updateNotify,

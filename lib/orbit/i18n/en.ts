@@ -1071,6 +1071,8 @@ export const en = {
   'admin.dashboard.health.good': 'Good',
   'admin.dashboard.health.watch': 'Watch',
   'admin.dashboard.health.attention': 'Needs attention',
+  'admin.dashboard.health.overriddenSuffix': 'manually set',
+  'admin.dashboard.health.overrideAuto': 'Reset to automatic',
   'admin.dashboard.noneFound': 'None',
   'admin.tags.subtitle': 'These are the options available for "Required skills" and "Category" on the INPUT screen, and "Role" on Members. They persist until removed here.',
   'admin.tags.requiredSkills': 'Required skills',

@@ -1,4 +1,4 @@
-import type { Member, RadarAxis, Task } from './types'
+import type { Member, Project, ProjectHealthLevel, RadarAxis, Task } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
 export function parseDepartmentPath(path: string): string[] {
@@ -53,6 +53,24 @@ export function isOverdue(task: Task, tz: string = DEFAULT_TIMEZONE): boolean {
   if (!task.deadline) return false
   if (task.status === 'done') return false
   return task.deadline < todayStrInTz(tz)
+}
+
+// item 18/26: プロジェクト健全性の自動判定 — 期限超過/確認待ち/Blockedの
+// 合計件数から算出する。admin-dashboard.tsx（表示）とstore.tsx（item 26の
+// 通知検知）の両方から同じロジックを参照するため、ここに集約している。
+export function computeProjectAutoHealth(
+  project: Project,
+  tasks: Task[],
+  tz: string = DEFAULT_TIMEZONE,
+): { pOverdue: number; pWaiting: number; pBlocked: number; pLoad: number; issues: number; health: ProjectHealthLevel } {
+  const pt = tasks.filter((t) => t.projectId === project.id)
+  const pOverdue = pt.filter((t) => isOverdue(t, tz)).length
+  const pWaiting = pt.filter((t) => t.status === 'review').length
+  const pBlocked = pt.filter((t) => !!t.blocker && t.status !== 'done').length
+  const pLoad = pt.filter((t) => t.status !== 'done').length
+  const issues = pOverdue + pWaiting + pBlocked
+  const health: ProjectHealthLevel = issues === 0 ? 'good' : issues <= 2 ? 'watch' : 'attention'
+  return { pOverdue, pWaiting, pBlocked, pLoad, issues, health }
 }
 
 export type DeadlineLevel = 'overdue' | 'today' | 'soon' | 'near' | 'none'
