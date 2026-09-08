@@ -147,7 +147,11 @@ export function ListView({
               const isAssignee = currentUser ? t.assigneeIds.includes(currentUser.id) : false
               const taskReviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
               const isReviewer = currentUser ? taskReviewerIds.includes(currentUser.id) : false
-              const canChange = isFullAdmin || isAssignee || isReviewer
+              // isReviewerだけでは非'done'ステータスへの変更許可にならない
+              // (GAS側のupdateTaskStatusはisActingFullAdmin/担当者のみ許可) ため
+              // canChangeには含めない。確認者専用の操作(承認)はタスク詳細
+              // ドロワー側の専用ボタンで行う運用（item: 確認者権限判定の是正）
+              const canChange = isFullAdmin || isAssignee
               const hasReviewers = taskReviewerIds.length > 0
               const statusOptions = allowedStatusOptions(isFullAdmin, isReviewer, hasReviewers)
               return (

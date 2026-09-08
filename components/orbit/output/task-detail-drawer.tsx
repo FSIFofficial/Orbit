@@ -170,6 +170,7 @@ export function TaskDetailDrawer({
     addCategoryOption,
     members,
     awardSkillPoints,
+    isFullAdmin,
   } = useOrbit()
   const toast = useToast()
   const [confirmTake, setConfirmTake] = useState(false)
@@ -207,6 +208,7 @@ export function TaskDetailDrawer({
             task={task}
             currentUserId={currentUser?.id ?? null}
             isAdmin={isAdmin}
+            isFullAdmin={isFullAdmin}
             assignees={assignees}
             dependsOnTasks={dependsOnTasks}
             creator={getMember(task.createdById ?? null) ?? null}
@@ -1457,6 +1459,7 @@ function DrawerBody({
   task,
   currentUserId,
   isAdmin,
+  isFullAdmin,
   assignees,
   dependsOnTasks,
   creator,
@@ -1497,6 +1500,7 @@ function DrawerBody({
   task: Task
   currentUserId: string | null
   isAdmin: boolean
+  isFullAdmin: boolean
   assignees: Member[]
   dependsOnTasks: Task[]
   creator: Member | null
@@ -1544,7 +1548,7 @@ function DrawerBody({
     category: task.category,
   })
   const isAssignee = !!currentUserId && task.assigneeIds.includes(currentUserId)
-  const canChangeStatus = canChangeTaskStatus(isAdmin, isAssignee)
+  const canChangeStatus = canChangeTaskStatus(isFullAdmin, isAssignee)
   // 前提タスクが残っていると「完了」にはできない
   const incompleteDeps = dependsOnTasks.filter((d) => d.status !== 'done')
   const canUpdateProgress = isAdmin || isAssignee
@@ -1561,13 +1565,13 @@ function DrawerBody({
   const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
   const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
   const hasReviewers = reviewerIds.length > 0
-  const statusOptions = allowedStatusOptions(isAdmin, isReviewer, hasReviewers)
+  const statusOptions = allowedStatusOptions(isFullAdmin, isReviewer, hasReviewers)
   // 複数確認者の承認進捗（item: 確認フロー）— requiredApprovalsが'all'なら
   // 確認者全員、数値ならその数値が必要承認数
   const reviewApprovals = task.reviewApprovals ?? []
   const neededApprovals = task.requiredApprovals === 'all' ? reviewerIds.length : (task.requiredApprovals ?? 1)
   const alreadyApproved = !!currentUserId && reviewApprovals.some((a) => a.memberId === currentUserId)
-  const canApproveReview = isAdmin || isReviewer
+  const canApproveReview = isFullAdmin || isReviewer
 
   return (
     <div className="flex h-full flex-col">

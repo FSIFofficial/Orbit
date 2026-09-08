@@ -75,7 +75,7 @@ describe('resolveVisibleAdminSections', () => {
 })
 
 describe('canChangeTaskStatus', () => {
-  it('an admin can always change status', () => {
+  it('a full admin can always change status', () => {
     expect(canChangeTaskStatus(true, false)).toBe(true)
   })
 
@@ -83,21 +83,31 @@ describe('canChangeTaskStatus', () => {
     expect(canChangeTaskStatus(false, true)).toBe(true)
   })
 
-  it('neither admin nor assignee cannot change status', () => {
+  it('neither a full admin nor the assignee cannot change status — this also covers a restricted admin role (isAdminRole true but not isActingFullAdmin, e.g. a 班長 in restrictedRoles), since merely being a non-一般 admin role is not sufficient on its own, matching gas/Code.gs requiring isActingFullAdmin OR assignee', () => {
     expect(canChangeTaskStatus(false, false)).toBe(false)
   })
 })
 
 describe('allowedStatusOptions', () => {
-  it('a non-admin cannot set 完了 (done) directly', () => {
+  it('a non-full-admin cannot set 完了 (done) directly', () => {
     const options = allowedStatusOptions(false)
     expect(options).not.toContain('done')
     // every other status stays reachable
     expect(options).toEqual(STATUS_ORDER.filter((s) => s !== 'done'))
   })
 
-  it('an admin can set every status, including 完了', () => {
+  it('a full admin can set every status, including 完了', () => {
     expect(allowedStatusOptions(true)).toEqual(STATUS_ORDER)
+  })
+
+  it('when the task has reviewers, 完了 is excluded even for a full admin — only the dedicated approval flow can complete it', () => {
+    expect(allowedStatusOptions(true, false, true)).not.toContain('done')
+    expect(allowedStatusOptions(true, true, true)).not.toContain('done')
+  })
+
+  it('a reviewer (not full admin) can set 完了 only when the task has no reviewers list gating it via hasReviewers=false', () => {
+    expect(allowedStatusOptions(false, true, false)).toContain('done')
+    expect(allowedStatusOptions(false, false, false)).not.toContain('done')
   })
 })
 
