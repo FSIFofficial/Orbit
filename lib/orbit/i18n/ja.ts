@@ -471,6 +471,7 @@ export const ja = {
   'taskDrawer.noResponse': '未回答',
   'taskDrawer.allRespondedDone': '全員が回答し、タスクは完了になりました。',
   'taskDrawer.deptTopsRecommended': '部署トップ（おすすめ）',
+  'taskDrawer.roleTreeRecommended': '上長からのおすすめ',
   'taskDrawer.allMembers': '全メンバー',
   'taskDrawer.viewSourceInput': '元の入力内容を見る',
   'taskDrawer.addToMyGCal': '自分のGoogleカレンダーに追加',
