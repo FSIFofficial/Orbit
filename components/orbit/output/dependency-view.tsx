@@ -20,6 +20,7 @@ import type { Task } from '@/lib/orbit/types'
 import { STATUS_COLOR } from '@/lib/orbit/types'
 import { useI18n, STATUS_KEY } from '@/lib/orbit/i18n'
 import { Avatar, DifficultyBadge } from '../primitives'
+import { TranslatedText } from '../translated-text'
 import { formatDeadline, deadlineLevel } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { KANBAN_CARD_FIELDS, type KanbanCardField } from './kanban-card'
@@ -435,7 +436,7 @@ export function DependencyView({
                 {showBottomRow && (
                   <div className="flex items-center justify-between gap-2">
                     {showCategory && (
-                      <span className="truncate text-[11px] text-muted-foreground">{t.category}</span>
+                      <span className="truncate text-[11px] text-muted-foreground"><TranslatedText text={t.category} /></span>
                     )}
                     {showDifficulty && <DifficultyBadge difficulty={t.difficulty} />}
                   </div>

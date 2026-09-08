@@ -1633,7 +1633,7 @@ function DrawerBody({
         </div>
         {task.description && (
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {task.description}
+            <TranslatedText text={task.description} />
           </p>
         )}
 
@@ -1779,7 +1779,7 @@ function DrawerBody({
             </span>
           </Row>
           <Row label={t('taskDrawer.row.category')}>
-            <span className="text-sm">{task.category}</span>
+            <span className="text-sm"><TranslatedText text={task.category} /></span>
           </Row>
           <Row label={t('taskDrawer.row.difficulty')}>
             <DifficultyBadge difficulty={task.difficulty} />

@@ -174,7 +174,7 @@ export function KanbanCard({
       {showBottomRow && (
         <div className="mt-2 flex items-center justify-between gap-2">
           {showCategory && (
-            <span className="truncate text-[11px] text-muted-foreground">{task.category}</span>
+            <span className="truncate text-[11px] text-muted-foreground"><TranslatedText text={task.category} /></span>
           )}
           {showDifficulty && <DifficultyBadge difficulty={task.difficulty} />}
         </div>
