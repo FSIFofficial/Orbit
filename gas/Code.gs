@@ -653,6 +653,7 @@ function authorizeAction(acting, action, body) {
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
     'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
+    'approveTaskReview',       // 複数確認者の承認（本人が確認者かどうかは下記でチェック）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -679,6 +680,17 @@ function authorizeAction(acting, action, body) {
               throw new Error('このタスクの担当者のみステータスを変更できます。')
             }
           }
+        }
+      }
+    }
+    if (action === 'approveTaskReview') {
+      if (!isActingFullAdmin(acting)) {
+        var taskForApproval = findRow(SHEET_TASKS, String(body.taskId || ''))
+        var approvalReviewerIds = taskForApproval
+          ? String(taskForApproval.reviewer_ids || taskForApproval.reviewer_id || '').split(',').map(function(s){return s.trim()}).filter(Boolean)
+          : []
+        if (approvalReviewerIds.indexOf(acting.id) < 0) {
+          throw new Error('このタスクの確認者ではないため承認できません。')
         }
       }
     }
@@ -874,6 +886,9 @@ function doPost(e) {
           reviewer_id: (body.reviewerIds && body.reviewerIds[0]) || '',
           required_approvals: body.requiredApprovals != null ? String(body.requiredApprovals) : '',
         })
+        break
+      case 'approveTaskReview':
+        result = approveTaskReview(body.taskId, actingMember.id)
         break
       case 'setBlocker':
         result = updateTaskFields(body.taskId, {
@@ -1238,6 +1253,31 @@ function updateTaskFields(taskId, fields) {
   return updateRowFields(SHEET_TASKS, taskId, fields)
 }
 
+// 確認者ごとの承認を記録し、requiredApprovals(必要承認数、'all'なら
+// 確認者全員)に達したら自動的にstatus: '完了'にする。既に承認済みの
+// actorIdが再度呼んでも重複追加しない（冪等）。
+function approveTaskReview(taskId, actorId) {
+  var task = findRow(SHEET_TASKS, taskId)
+  if (!task) throw new Error('タスクが見つかりません: ' + taskId)
+  var approvals = []
+  try { approvals = JSON.parse(task.review_approvals_json || '[]') } catch (_) {}
+  var already = approvals.some(function (a) { return a.memberId === actorId })
+  if (!already) {
+    approvals.push({ memberId: actorId, at: new Date().toISOString() })
+  }
+  var reviewerIds = String(task.reviewer_ids || task.reviewer_id || '')
+    .split(',').map(function (s) { return s.trim() }).filter(Boolean)
+  var needed = task.required_approvals === 'all'
+    ? reviewerIds.length
+    : (Number(task.required_approvals) || 1)
+  var fields = { review_approvals_json: JSON.stringify(approvals), last_activity: todayStr() }
+  if (approvals.length >= needed) {
+    fields.status = '完了'
+    fields.completed_date = todayStr()
+  }
+  return updateRowFields(SHEET_TASKS, taskId, fields)
+}
+
 function updateProjectFields(projectId, fields) {
   return updateRowFields(SHEET_PROJECTS, projectId, fields)
 }
@@ -1296,22 +1336,32 @@ function notifyNewTasks(tasks) {
   )
 }
 
-// Emails admins when an assignee marks a task 確認待ち (their "I'm done,
-// please confirm" signal).
+// Emails the task's designated reviewer(s) (reviewer_ids/reviewer_id) when an
+// assignee marks a task 確認待ち (their "I'm done, please confirm" signal).
+// Falls back to reportsToEmails(assigneeIds) when no reviewer is set, same as
+// before this fix.
 function notifyReview(taskId) {
   try {
     var task = findRow(SHEET_TASKS, taskId)
     if (!task) return
-    var assigneeIds = String(task.assignee_id || '')
+    var reviewerIds = String(task.reviewer_ids || task.reviewer_id || '')
       .split(',')
-      .map(function (s) {
-        return s.trim()
-      })
+      .map(function (s) { return s.trim() })
       .filter(Boolean)
+    var preferredEmails
+    if (reviewerIds.length > 0) {
+      preferredEmails = memberEmailsByIds(reviewerIds)
+    } else {
+      var assigneeIds = String(task.assignee_id || '')
+        .split(',')
+        .map(function (s) { return s.trim() })
+        .filter(Boolean)
+      preferredEmails = reportsToEmails(assigneeIds)
+    }
     notifyAdmins(
       '[Orbit] タスクの確認をお願いします',
       '「' + task.title + '」が確認待ちになりました。\n\nOrbitで確認し、問題なければ「完了」にしてください。',
-      reportsToEmails(assigneeIds),
+      preferredEmails,
     )
     notifyChat('🔔 「' + task.title + '」が確認待ちになりました。')
   } catch (err) {
@@ -2734,6 +2784,7 @@ function setupOrbit() {
     'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
     'required_approvals',  // 承認に必要な確認者数 (数値 or "all")
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
+    'review_approvals_json', // 複数確認者の承認記録 [{"memberId","at"}]
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 

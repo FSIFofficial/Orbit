@@ -34,19 +34,35 @@ export function resolveVisibleAdminSections(
 
 // ---- タスクのステータス遷移 --------------------------------------------------
 
-// Only an admin or the task's own assignee may change its status at all.
-export function canChangeTaskStatus(isAdmin: boolean, isAssignee: boolean): boolean {
-  return isAdmin || isAssignee
+// Only a full admin (isActingFullAdmin) or the task's own assignee may
+// change its status at all — matches gas/Code.gs's updateTaskStatus,
+// which requires isActingFullAdmin OR assignee for any non-完了 change.
+// A merely non-一般 admin role (isAdminRole) is NOT sufficient on its own.
+export function canChangeTaskStatus(isFullAdmin: boolean, isAssignee: boolean): boolean {
+  return isFullAdmin || isAssignee
 }
 
-// Which status an assignee/admin/reviewer may set the task to. Every status
-// is reachable from every other status (no from-state restriction) except
-// 完了, which only an admin or reviewer can set — an assignee's own "I'm
-// done" signal is 確認待ち, which a reviewer/admin then confirms into 完了.
-// See task-detail-drawer.tsx's statusOptions and list-view.tsx's inline
-// status dropdown.
-export function allowedStatusOptions(isAdmin: boolean, isReviewer?: boolean): TaskStatus[] {
-  return STATUS_ORDER.filter((s) => s !== 'done' || isAdmin || isReviewer)
+// Which status an assignee/full-admin/reviewer may set the task to. Every
+// status is reachable from every other status (no from-state restriction)
+// except 完了, which only a full admin (isActingFullAdmin) or reviewer can
+// set — matches gas/Code.gs's updateTaskStatus. An assignee's own "I'm done"
+// signal is 確認待ち, which a reviewer/full-admin then confirms into 完了.
+// When the task has one or more reviewers assigned (hasReviewers), 完了 is
+// excluded entirely from this direct-status-change list — it can then only
+// be reached via the dedicated approval flow (approveTaskReview), which
+// tracks who has approved and enforces requiredApprovals. See
+// task-detail-drawer.tsx's statusOptions and list-view.tsx's inline status
+// dropdown.
+export function allowedStatusOptions(
+  isFullAdmin: boolean,
+  isReviewer?: boolean,
+  hasReviewers?: boolean,
+): TaskStatus[] {
+  return STATUS_ORDER.filter((s) => {
+    if (s !== 'done') return true
+    if (hasReviewers) return false
+    return isFullAdmin || isReviewer
+  })
 }
 
 // ---- 承認ルート（importanceに応じた承認者判定）------------------------------
