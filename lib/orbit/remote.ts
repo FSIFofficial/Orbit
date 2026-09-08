@@ -245,6 +245,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     departmentName: r.department_name || undefined,
     gradeYear: r.grade_year || undefined,
     customFields: parseJsonObject<Record<string, string>>(r.custom_fields_json),
+    surveyResponses:
+      parseJsonArray<{ id: string; submittedAt: string; answers: Record<string, number | string> }>(
+        r.survey_responses_json,
+      ) ?? [],
   }
 }
 
@@ -858,6 +862,12 @@ export const remoteApi = {
     postToGas('updateAbsentDates', { memberId, dates }),
   updateLastLogin: (memberId: string) =>
     postToGas('updateLastLogin', { memberId }),
+  // ---- アンケート ----
+  // GAS側でid(Utilities.getUuid())を採番するので、送信するのはanswersのみ。
+  // クライアント側で仮生成したidと一致させる必要はない（submitExpenseApplication
+  // と同様、クライアント生成idをそのままローカルstateで使い続ける）。
+  submitSurveyResponse: (answers: Record<string, number | string>) =>
+    postToGas('submitSurveyResponse', { answers }),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

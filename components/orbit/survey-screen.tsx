@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { ArrowLeft, ClipboardList, Check, ChevronRight } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
 
 // item 22: メンバー体験定点測定（簡易アンケートフォーム）
-// 回答はlocalStorageに保存し、管理者は記録を閲覧できる
+// 回答はSurveyResponsesシート(GAS経由)に保存し、団体全体で共有される。
+// 管理者は記録を閲覧できる。
 // 仮決め: 質問項目は6つ固定（団体ごとのカスタマイズはadmin-tags等で将来対応）
 
 interface SurveyQuestion {
@@ -17,6 +18,10 @@ interface SurveyQuestion {
   scaleMin?: string
   scaleMax?: string
 }
+
+// item 30のアンケート×人材データ組み合わせ分析（admin-analytics.tsx）が、
+// スコア集計対象をscale形式の設問のみに絞るために参照する
+export const SURVEY_SCALE_QUESTION_IDS = ['q1', 'q2', 'q3', 'q4', 'q5']
 
 function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKey) => string): SurveyQuestion[] {
   return [
@@ -29,64 +34,22 @@ function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKe
   ]
 }
 
-interface SurveyResponse {
-  id: string
-  memberId: string
-  at: string // ISO datetime
-  answers: Record<string, number | string>
-}
-
-const SURVEY_STORAGE_KEY = 'orbit-survey-responses'
-
-function loadResponses(memberId: string): SurveyResponse[] {
-  try {
-    const raw = localStorage.getItem(SURVEY_STORAGE_KEY)
-    const all: SurveyResponse[] = raw ? JSON.parse(raw) : []
-    return all.filter((r) => r.memberId === memberId)
-  } catch {
-    return []
-  }
-}
-
-function saveResponse(response: SurveyResponse) {
-  try {
-    const raw = localStorage.getItem(SURVEY_STORAGE_KEY)
-    const all: SurveyResponse[] = raw ? JSON.parse(raw) : []
-    all.push(response)
-    localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify(all))
-  } catch {}
-}
-
-function loadAllResponses(): SurveyResponse[] {
-  try {
-    const raw = localStorage.getItem(SURVEY_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
 export function SurveyScreen() {
-  const { currentUser, members, surveyInvitedIds } = useOrbit()
+  const { currentUser, members, surveyInvitedIds, surveyResponses, submitSurveyResponse } = useOrbit()
   const { go } = useNav()
   const { t } = useI18n()
   const DEFAULT_QUESTIONS = buildDefaultQuestions(t)
   const [mode, setMode] = useState<'form' | 'history' | 'admin'>('form')
   const [answers, setAnswers] = useState<Record<string, number | string>>({})
   const [submitted, setSubmitted] = useState(false)
-  const [myHistory, setMyHistory] = useState<SurveyResponse[]>([])
-  const [allResponses, setAllResponses] = useState<SurveyResponse[]>([])
 
   const isAdmin = !!currentUser && currentUser.role !== '一般'
   // 招待制アンケート: invitedIdsが空なら全員回答可。管理者は設定のため常にアクセス可
   const isInvited =
     surveyInvitedIds.length === 0 || isAdmin || (!!currentUser && surveyInvitedIds.includes(currentUser.id))
 
-  useEffect(() => {
-    if (!currentUser) return
-    setMyHistory(loadResponses(currentUser.id))
-    if (isAdmin) setAllResponses(loadAllResponses())
-  }, [currentUser, isAdmin])
+  const myHistory = currentUser ? surveyResponses.filter((r) => r.memberId === currentUser.id) : []
+  const allResponses = surveyResponses
 
   const canSubmit = DEFAULT_QUESTIONS
     .filter((q) => q.type === 'scale')
@@ -94,15 +57,7 @@ export function SurveyScreen() {
 
   const handleSubmit = () => {
     if (!currentUser || !canSubmit) return
-    const response: SurveyResponse = {
-      id: `survey-${Date.now()}`,
-      memberId: currentUser.id,
-      at: new Date().toISOString(),
-      answers,
-    }
-    saveResponse(response)
-    setMyHistory((prev) => [...prev, response])
-    if (isAdmin) setAllResponses((prev) => [...prev, response])
+    submitSurveyResponse(answers)
     setSubmitted(true)
     setAnswers({})
   }
@@ -244,7 +199,7 @@ export function SurveyScreen() {
               .map((r) => (
                 <div key={r.id} className="rounded-xl border border-border bg-card p-4">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    {new Date(r.at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    {new Date(r.submittedAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
                   <div className="space-y-2">
                     {DEFAULT_QUESTIONS.filter((q) => r.answers[q.id] !== undefined).map((q) => (
@@ -297,7 +252,7 @@ export function SurveyScreen() {
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-sm font-medium">{memberName(r.memberId)}</span>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(r.at).toLocaleDateString('ja-JP')}
+                        {new Date(r.submittedAt).toLocaleDateString('ja-JP')}
                       </span>
                     </div>
                     <div className="space-y-1.5">

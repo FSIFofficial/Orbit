@@ -40,6 +40,7 @@ import type {
   SkillLevelThresholds,
   SkillLevelValue,
   SkillPoints,
+  SurveyResponse,
   Task,
   TaskComment,
   TaskDeliverable,
@@ -399,6 +400,9 @@ interface OrbitContextValue extends OrbitState {
   ) => void
   removeCandidate: (candidateId: string) => void
   convertCandidateToMember: (candidateId: string, role?: string) => void
+  // ---- アンケート（item 22/30） -------------------------------------------
+  surveyResponses: import('./types').SurveyResponse[]
+  submitSurveyResponse: (answers: Record<string, number | string>) => void
   // ---- 学歴情報 --------------------------------------------------------
   updateEducationInfo: (
     memberId: string,
@@ -1509,6 +1513,43 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.withdrawExpense(applicationId))
     },
     [runRemote],
+  )
+
+  // アンケート回答（item 22/30）— Membersシートのsurvey_responses_json列
+  // (メンバーごとの回答履歴)からderiveする。新規シートを増やさず、既存の
+  // 公開CSV(Members)だけで完結させるため、独立したstate/fetchは持たない。
+  const surveyResponses = useMemo<SurveyResponse[]>(
+    () =>
+      members.flatMap((m) =>
+        (m.surveyResponses ?? []).map((r) => ({
+          id: r.id,
+          memberId: m.id,
+          submittedAt: r.submittedAt,
+          answers: r.answers,
+        })),
+      ),
+    [members],
+  )
+
+  // アンケート回答（item 22/30）— 新規シートを増やさず、Membersシートの
+  // survey_responses_json列(そのメンバー自身の回答履歴の配列)に保存する。
+  // submitExpenseApplicationと同じく、クライアント側で仮生成したidを
+  // そのままローカルstateで使い続ける（GAS側は別途idを採番するが、次回の
+  // 公開CSV再取得までは一致させる必要がない）
+  const submitSurveyResponse = useCallback(
+    (answers: Record<string, number | string>) => {
+      if (!currentUserId) return
+      const newEntry = { id: crypto.randomUUID(), submittedAt: new Date().toISOString(), answers }
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === currentUserId
+            ? { ...m, surveyResponses: [...(m.surveyResponses ?? []), newEntry] }
+            : m,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.submitSurveyResponse(answers))
+    },
+    [currentUserId, runRemote],
   )
 
   const updateCustomFormDefs = useCallback(
@@ -3974,6 +4015,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     removeCandidate,
     convertCandidateToMember,
     updateEducationInfo,
+    surveyResponses,
+    submitSurveyResponse,
   }
 
   return <OrbitContext.Provider value={value}>{children}</OrbitContext.Provider>

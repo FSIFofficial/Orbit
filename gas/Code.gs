@@ -652,6 +652,7 @@ function authorizeAction(acting, action, body) {
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
+    'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -1140,6 +1141,10 @@ function doPost(e) {
         break
       case 'updateLastLogin':
         result = updateMemberFields(body.memberId, { last_login: new Date().toISOString() })
+        break
+      case 'submitSurveyResponse':
+        // actingMember.id を使うことでクライアントの自己申告値(body.memberId)による偽装を防ぐ
+        result = saveSurveyResponse(actingMember.id, body.answers || {})
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2708,6 +2713,7 @@ function setupOrbit() {
     'department_name',         // 学科（department_pathと紛らわしいので department_name とする）
     'grade_year',              // 学年
     'custom_fields_json',      // 団体ごとのカスタム列（人材DB）の値 {"key":"value"}
+    'survey_responses_json',   // item 22/30: このメンバー自身の全アンケート回答履歴 [{"id","submittedAt","answers"}]
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
@@ -2851,6 +2857,25 @@ function ensureFormSubmissionsSheet() {
     sheet.appendRow(['id', 'form_id', 'submitter_id', 'answers_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
   }
   return sheet
+}
+
+// item 22/30: アンケート回答をMembersシートのsurvey_responses_json列に
+// 配列として追記する。新規シートを増やさず、既存の公開CSV(Members)だけで
+// 完結させるため。読み込み→配列に追加→書き戻し、という一般的な
+// read-modify-writeパターンで、custom_fields_json等の既存列と同じ設計。
+function saveSurveyResponse(memberId, answers) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  var existing = []
+  try { existing = JSON.parse(memberRow.survey_responses_json || '[]') } catch (_) {}
+  var responseId = Utilities.getUuid()
+  existing.push({
+    id: responseId,
+    submittedAt: new Date().toISOString(),
+    answers: answers || {},
+  })
+  updateMemberFields(memberId, { survey_responses_json: JSON.stringify(existing) })
+  return { id: responseId }
 }
 
 function saveExpenseApplication(application, acting) {

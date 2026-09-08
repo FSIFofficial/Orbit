@@ -236,6 +236,10 @@ export interface Member {
   // 団体ごとにAdmin > Tagsで追加できるカスタム列（人材DB）の値。
   // 列定義自体はSettingsのcustomMemberColumnsに持ち、ここは値のみ。
   customFields?: Record<string, string>
+
+  // item 22/30: このメンバー自身の全アンケート回答履歴。新規シートを
+  // 増やさず、Membersシートの1列にJSON配列として持たせている。
+  surveyResponses?: { id: string; submittedAt: string; answers: Record<string, number | string> }[]
 }
 
 /** 採用支援（入会前の候補者）— Candidatesシート */
@@ -852,4 +856,13 @@ export interface CustomFormSubmission {
   status: CustomFormSubmissionStatus
   createdAt: string
   rejectionReason?: string
+}
+
+// ---- アンケート回答（item 22の団体全体同期、item 30の組み合わせ分析）----
+
+export interface SurveyResponse {
+  id: string
+  memberId: string
+  submittedAt: string // ISO datetime
+  answers: Record<string, number | string>
 }
