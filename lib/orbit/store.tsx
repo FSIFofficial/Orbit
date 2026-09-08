@@ -389,6 +389,7 @@ interface OrbitContextValue extends OrbitState {
   rejectFormSubmission: (submissionId: string, reason: string) => void
   // タスク確認ターゲット更新
   updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
+  approveTaskReview: (taskId: string) => void
   // Phase 6: スキル一括更新
   bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) => void
   // ---- 採用支援（候補者） --------------------------------------------------
@@ -3009,6 +3010,34 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [appendHistory, runRemote],
   )
 
+  // 複数確認者の承認トラッキング — 経費申請のApprovalStep/ApprovalRecordと
+  // 同様、誰が・いつ承認したかを記録する。requiredApprovals(必要承認数、
+  // 'all'なら確認者全員)に達したらローカルでも楽観的にstatus: 'done'へ
+  // 進める。同じ確認者が重複して承認しても追加しない（冪等）。
+  const approveTaskReview = useCallback(
+    (taskId: string) => {
+      if (!currentUserId) return
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t
+          const already = (t.reviewApprovals ?? []).some((a) => a.memberId === currentUserId)
+          const nextApprovals = already
+            ? t.reviewApprovals!
+            : [...(t.reviewApprovals ?? []), { memberId: currentUserId, at: new Date().toISOString() }]
+          const reviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
+          const needed = t.requiredApprovals === 'all' ? reviewerIds.length : (t.requiredApprovals ?? 1)
+          if (nextApprovals.length >= needed) {
+            const today = new Date().toISOString().slice(0, 10)
+            return { ...t, reviewApprovals: nextApprovals, status: 'done', completedDate: today, lastActivity: today }
+          }
+          return { ...t, reviewApprovals: nextApprovals }
+        }),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.approveTaskReview(taskId))
+    },
+    [currentUserId, runRemote],
+  )
+
   const bulkUpdateSkills = useCallback(
     (updates: { memberId: string; skill: string; level: number }[]) => {
       setMembers((prev) =>
@@ -3973,6 +4002,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateDependsOn,
     updateReviewer,
     updateReviewers,
+    approveTaskReview,
     setBlocker,
     updateEstimatedHours,
     updateActualHours,

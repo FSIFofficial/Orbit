@@ -148,7 +148,8 @@ export function ListView({
               const taskReviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
               const isReviewer = currentUser ? taskReviewerIds.includes(currentUser.id) : false
               const canChange = isFullAdmin || isAssignee || isReviewer
-              const statusOptions = allowedStatusOptions(isFullAdmin, isReviewer)
+              const hasReviewers = taskReviewerIds.length > 0
+              const statusOptions = allowedStatusOptions(isFullAdmin, isReviewer, hasReviewers)
               return (
                 <tr
                   key={t.id}

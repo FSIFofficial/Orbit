@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Task } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { KanbanBoard } from './kanban-board'
@@ -203,7 +204,16 @@ export function OutputScreen() {
     if (!currentUser) return []
     const approved = visibleTasks.filter((t) => t.assigneeIds.includes(currentUser.id))
     const mySelfAssignedPending = pendingTasks.filter((t) => t.assigneeIds.includes(currentUser.id))
-    return [...approved, ...mySelfAssignedPending]
+    // 自分が確認者に指定されていて、実際に確認が必要な(確認待ちの)タスク。
+    // 担当者としても確認者としても対象になりうるので、下のMapで重複除去する。
+    const myReviewTasks = visibleTasks.filter((t) => {
+      if (t.status !== 'review') return false
+      const reviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
+      return reviewerIds.includes(currentUser.id)
+    })
+    const merged = new Map<string, Task>()
+    ;[...approved, ...mySelfAssignedPending, ...myReviewTasks].forEach((t) => merged.set(t.id, t))
+    return [...merged.values()]
   }, [visibleTasks, pendingTasks, currentUser])
 
   // choosing a 表示 (view) jumps to whichever of 自分/一覧 was last active,

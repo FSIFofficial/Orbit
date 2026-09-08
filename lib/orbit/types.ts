@@ -549,6 +549,9 @@ export interface Task {
   reviewerIds?: string[] // replaces reviewerId; multiple reviewers can all confirm
   // 確認待ちに必要な承認数: number = 指定人数, 'all' = 全員
   requiredApprovals?: number | 'all'
+  // 複数確認者(item: 確認フロー)— 誰が・いつ承認したかの記録。
+  // requiredApprovals(必要承認数)に達すると自動的にstatus: 'done'になる。
+  reviewApprovals?: { memberId: string; at: string }[]
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved

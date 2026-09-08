@@ -43,10 +43,22 @@ export function canChangeTaskStatus(isAdmin: boolean, isAssignee: boolean): bool
 // is reachable from every other status (no from-state restriction) except
 // 完了, which only an admin or reviewer can set — an assignee's own "I'm
 // done" signal is 確認待ち, which a reviewer/admin then confirms into 完了.
-// See task-detail-drawer.tsx's statusOptions and list-view.tsx's inline
-// status dropdown.
-export function allowedStatusOptions(isAdmin: boolean, isReviewer?: boolean): TaskStatus[] {
-  return STATUS_ORDER.filter((s) => s !== 'done' || isAdmin || isReviewer)
+// When the task has one or more reviewers assigned (hasReviewers), 完了 is
+// excluded entirely from this direct-status-change list — it can then only
+// be reached via the dedicated approval flow (approveTaskReview), which
+// tracks who has approved and enforces requiredApprovals. See
+// task-detail-drawer.tsx's statusOptions and list-view.tsx's inline status
+// dropdown.
+export function allowedStatusOptions(
+  isAdmin: boolean,
+  isReviewer?: boolean,
+  hasReviewers?: boolean,
+): TaskStatus[] {
+  return STATUS_ORDER.filter((s) => {
+    if (s !== 'done') return true
+    if (hasReviewers) return false
+    return isAdmin || isReviewer
+  })
 }
 
 // ---- 承認ルート（importanceに応じた承認者判定）------------------------------

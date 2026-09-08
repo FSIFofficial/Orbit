@@ -321,6 +321,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     requiredApprovals: r.required_approvals
       ? r.required_approvals === 'all' ? 'all' : Number(r.required_approvals)
       : undefined,
+    reviewApprovals: parseJsonArray<{ memberId: string; at: string }>(r.review_approvals_json),
     requiredSkillLevels: parseJsonObject<Partial<Record<string, SkillLevelValue>>>(r.required_skill_levels_json),
   }
 }
@@ -750,6 +751,7 @@ export const remoteApi = {
     postToGas('updateReviewer', { taskId, reviewerId }),
   updateReviewers: (taskId: string, reviewerIds: string[], requiredApprovals?: number | 'all') =>
     postToGas('updateReviewers', { taskId, reviewerIds, requiredApprovals }),
+  approveTaskReview: (taskId: string) => postToGas('approveTaskReview', { taskId }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>

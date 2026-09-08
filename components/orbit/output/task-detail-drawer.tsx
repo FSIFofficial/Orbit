@@ -6,6 +6,7 @@ import { createCalendarEvent } from '@/lib/orbit/google-calendar'
 import { Drawer, Modal } from '../modal'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
+import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { useToast } from '../toast'
 import {
   Avatar,
@@ -148,6 +149,7 @@ export function TaskDetailDrawer({
     updateDependsOn,
     updateReviewer,
     updateReviewers,
+    approveTaskReview,
     updateTaskDetails,
     setBlocker,
     addDeliverable,
@@ -224,6 +226,7 @@ export function TaskDetailDrawer({
             onOpenDelete={() => setConfirmDelete(true)}
             onOpenDepends={() => setDependsOpen(true)}
             onOpenReviewer={() => setReviewerOpen(true)}
+            onApproveReview={() => approveTaskReview(task.id)}
             onOpenBlocker={() => setBlockerOpen(true)}
             onClearBlocker={() => {
               setBlocker(task.id, null)
@@ -1471,6 +1474,7 @@ function DrawerBody({
   onOpenSchedule,
   onOpenDepends,
   onOpenReviewer,
+  onApproveReview,
   onOpenBlocker,
   onClearBlocker,
   onOpenHandoff,
@@ -1510,6 +1514,7 @@ function DrawerBody({
   onOpenSchedule: () => void
   onOpenDepends: () => void
   onOpenReviewer: () => void
+  onApproveReview: () => void
   onOpenBlocker: () => void
   onClearBlocker: () => void
   onOpenHandoff: () => void
@@ -1530,6 +1535,7 @@ function DrawerBody({
   onRespondForm: (responses: Record<string, FormAnswerValue>) => void
 }) {
   const { t } = useI18n()
+  const { openTask } = useTaskDrawer()
   const currentUserTz = members.find((m) => m.id === currentUserId)?.timezone ?? DEFAULT_TIMEZONE
   const overdue = isOverdue(task, currentUserTz)
   const calendarUrl = googleCalendarUrl(task, {
@@ -1554,7 +1560,14 @@ function DrawerBody({
   // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
   const reviewerIds = task.reviewerIds ?? (task.reviewerId ? [task.reviewerId] : [])
   const isReviewer = !!currentUserId && reviewerIds.includes(currentUserId)
-  const statusOptions = allowedStatusOptions(isAdmin, isReviewer)
+  const hasReviewers = reviewerIds.length > 0
+  const statusOptions = allowedStatusOptions(isAdmin, isReviewer, hasReviewers)
+  // 複数確認者の承認進捗（item: 確認フロー）— requiredApprovalsが'all'なら
+  // 確認者全員、数値ならその数値が必要承認数
+  const reviewApprovals = task.reviewApprovals ?? []
+  const neededApprovals = task.requiredApprovals === 'all' ? reviewerIds.length : (task.requiredApprovals ?? 1)
+  const alreadyApproved = !!currentUserId && reviewApprovals.some((a) => a.memberId === currentUserId)
+  const canApproveReview = isAdmin || isReviewer
 
   return (
     <div className="flex h-full flex-col">
@@ -1732,10 +1745,15 @@ function DrawerBody({
             <div className="flex flex-col items-end gap-1">
               {dependsOnTasks.length > 0 ? (
                 dependsOnTasks.map((d) => (
-                  <span key={d.id} className="inline-flex items-center gap-1.5 text-sm">
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => openTask(d.id)}
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  >
                     <GitBranch className="size-3.5 text-muted-foreground" />
                     {d.name}
-                  </span>
+                  </button>
                 ))
               ) : (
                 <span className="text-sm text-muted-foreground">{t('common.none')}</span>
@@ -1888,6 +1906,49 @@ function DrawerBody({
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 {t('taskDrawer.pendingReviewNotice')}
               </p>
+            )}
+          </div>
+        )}
+
+        {/* 複数確認者の承認進捗（item: 確認フロー）— 確認者が設定されている
+            タスクは、上のステータス変更ボタンからは「完了」を選べない
+            (allowedStatusOptionsのhasReviewers)。ここの専用「承認する」
+            ボタン経由でのみrequiredApprovals分の承認が揃うと完了になる */}
+        {task.status === 'review' && hasReviewers && (
+          <div className="mt-6">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.reviewApproval.header')}
+            </div>
+            <p className="text-sm">
+              {t('taskDrawer.reviewApproval.progress', { count: reviewApprovals.length, needed: neededApprovals })}
+            </p>
+            {reviewApprovals.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {reviewApprovals.map((a) => {
+                  const m = members.find((mm) => mm.id === a.memberId)
+                  return (
+                    <span key={a.memberId} className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs">
+                      <Avatar member={m ?? null} size={18} />
+                      {m?.displayName || m?.name || a.memberId}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            {canApproveReview && (
+              <button
+                onClick={onApproveReview}
+                disabled={alreadyApproved}
+                className={cn(
+                  'mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                  alreadyApproved
+                    ? 'cursor-not-allowed border-border bg-secondary text-muted-foreground'
+                    : 'border-primary bg-primary text-primary-foreground hover:opacity-90',
+                )}
+              >
+                <Check className="size-3.5" />
+                {alreadyApproved ? t('taskDrawer.reviewApproval.alreadyApproved') : t('taskDrawer.reviewApproval.approve')}
+              </button>
             )}
           </div>
         )}
