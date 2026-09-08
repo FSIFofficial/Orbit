@@ -471,6 +471,7 @@ export const en = {
   'taskDrawer.noResponse': 'No response',
   'taskDrawer.allRespondedDone': 'Everyone has responded, so the task is complete.',
   'taskDrawer.deptTopsRecommended': 'Department leads (recommended)',
+  'taskDrawer.roleTreeRecommended': 'Recommended by manager',
   'taskDrawer.allMembers': 'All members',
   'taskDrawer.viewSourceInput': 'View original input',
   'taskDrawer.addToMyGCal': 'Add to my Google Calendar',

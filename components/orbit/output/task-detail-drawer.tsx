@@ -36,7 +36,7 @@ import {
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, memberWorkloadCapacity, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
@@ -597,6 +597,10 @@ export function TaskDetailDrawer({
             ? getDepartmentTopsBySegment(task.department, members)
             : []
           const topIds = new Set(deptTops.map((m) => m.id))
+          const roleTreeManagers = task?.assigneeIds
+            ? directManagersOf(task.assigneeIds, members).filter((m) => !topIds.has(m.id))
+            : []
+          roleTreeManagers.forEach((m) => topIds.add(m.id))
           return (
             <div className="flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
               {deptTops.length > 0 && (
@@ -626,8 +630,39 @@ export function TaskDetailDrawer({
                       </button>
                     )
                   })}
-                  <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.allMembers')}</div>
                 </>
+              )}
+              {roleTreeManagers.length > 0 && (
+                <>
+                  <div className="px-1 pb-0.5 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.roleTreeRecommended')}</div>
+                  {roleTreeManagers.map((m) => {
+                    const checked = currentIds.includes(m.id)
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          if (!task) return
+                          const next = checked ? currentIds.filter((id) => id !== m.id) : [...currentIds, m.id]
+                          updateReviewers(task.id, next, task.requiredApprovals)
+                        }}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary',
+                          checked && 'bg-primary-muted',
+                        )}
+                      >
+                        <Avatar member={m} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">{m.displayName || m.name}</div>
+                          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+                        </div>
+                        {checked && <Check className="size-4 shrink-0 text-primary" strokeWidth={3} />}
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+              {(deptTops.length > 0 || roleTreeManagers.length > 0) && (
+                <div className="px-1 pt-1 text-xs font-medium text-muted-foreground">{tr('taskDrawer.allMembers')}</div>
               )}
               {members.filter((m) => !topIds.has(m.id)).map((m) => {
                 const checked = currentIds.includes(m.id)

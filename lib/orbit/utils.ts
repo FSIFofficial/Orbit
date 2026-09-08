@@ -29,6 +29,25 @@ export function getDepartmentTopsBySegment(segment: string, members: Member[]): 
   )
 }
 
+// 役職ツリー（item 7）— 担当者それぞれの直属の上長（reportsToIdが指す1段階
+// のみ、上長の上長までは遡らない）を重複なく集める。上長が設定されていない
+// 担当者はスキップする。
+export function directManagersOf(assigneeIds: string[], members: Member[]): Member[] {
+  const seen = new Set<string>()
+  const result: Member[] = []
+  for (const assigneeId of assigneeIds) {
+    const assignee = members.find((m) => m.id === assigneeId)
+    const managerId = assignee?.reportsToId
+    if (!managerId || seen.has(managerId)) continue
+    const manager = members.find((m) => m.id === managerId)
+    if (manager) {
+      seen.add(managerId)
+      result.push(manager)
+    }
+  }
+  return result
+}
+
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
