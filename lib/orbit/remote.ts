@@ -766,6 +766,11 @@ export const remoteApi = {
     postToGas('updateProjectHealth', { projectId, healthOverride }),
   notifyProjectHealth: (projectId: string, health: import('./types').ProjectHealthLevel) =>
     postToGas('notifyProjectHealth', { projectId, health }),
+  // item 26(追補): attentionから回復した際、通知は送らずlast_notified_health
+  // 列だけを最新化する（updateProjectHealth=上書き+必ず通知、
+  // notifyProjectHealth=自動悪化検知+必ず通知、とは役割が異なる）
+  updateProjectHealthRecord: (projectId: string, health: import('./types').ProjectHealthLevel) =>
+    postToGas('updateProjectHealthRecord', { projectId, health }),
   updateComments: (taskId: string, comments: TaskComment[]) =>
     postToGas('updateComments', { taskId, comments }),
   notifyMention: (taskId: string, commentText: string, memberIds: string[]) =>

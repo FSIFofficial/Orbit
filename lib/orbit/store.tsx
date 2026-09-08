@@ -3595,6 +3595,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // （一般ロールの閲覧では実行しない＝GAS側の権限エラーを避ける）。
   // 手動上書き中(healthOverride)のプロジェクトは対象外、かつ前回通知した
   // 実効状態(lastNotifiedHealth)からattentionへ新たに変化したときのみ送る。
+  // (追補) attentionから回復した際にlastNotifiedHealthを更新しないと、
+  // 「attention→回復→再attention」で2回目以降の再通知が飛ばなくなる抜け穴が
+  // あったため、attention以外に回復したタイミングでも(通知はせず)記録だけ
+  // 最新化する。これにより次に再びattentionへ悪化した際に確実に再通知される。
   useEffect(() => {
     if (!hydrated || !isRemoteConfigured || !currentUser || currentUser.role === BASE_ROLE) return
     const tz = currentUser.timezone ?? DEFAULT_TIMEZONE
@@ -3602,10 +3606,18 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (p.healthOverride) return
       const { health } = computeProjectAutoHealth(p, adminTasks, tz)
       if (health === 'attention' && p.lastNotifiedHealth !== 'attention') {
+        // 悪化 → attentionになった: 通知を送り、記録も更新する
         setProjects((prev) =>
           prev.map((proj) => (proj.id === p.id ? { ...proj, lastNotifiedHealth: 'attention' } : proj)),
         )
         runRemote(remoteApi.notifyProjectHealth(p.id, 'attention'))
+      } else if (health !== 'attention' && p.lastNotifiedHealth === 'attention') {
+        // 回復 → attention以外に戻った: 通知は送らず、記録だけ最新状態に
+        // 更新する（次に再びattentionへ悪化した際に確実に再通知されるようにする）
+        setProjects((prev) =>
+          prev.map((proj) => (proj.id === p.id ? { ...proj, lastNotifiedHealth: health } : proj)),
+        )
+        runRemote(remoteApi.updateProjectHealthRecord(p.id, health))
       }
     })
   }, [hydrated, currentUser, adminProjects, adminTasks, runRemote])

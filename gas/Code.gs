@@ -411,6 +411,7 @@ function authorizeAction(acting, action, body) {
     'setBlocker',           // ブロッカー設定（班長が管理）
     'notifyTaskRejected',   // タスク却下通知（管理者が送信）
     'notifyProjectHealth',  // item 26: プロジェクト健康状態の自動判定変化通知
+    'updateProjectHealthRecord', // item 26(追補): attention回復時の記録更新（通知なし）
     'updateSearchProfile',  // 人材検索プロフィール（HR管理者が設定）
     'awardSkillPoints',     // スキルポイント付与（管理者操作）
     'approveExpenseStep',   // 経費承認（管理者操作）
@@ -959,6 +960,11 @@ function doPost(e) {
         break
       case 'notifyProjectHealth':
         result = notifyProjectHealth(body.projectId, body.health)
+        break
+      case 'updateProjectHealthRecord':
+        // item 26(追補): 通知なしでlast_notified_health列だけを更新する
+        // （attentionから回復した際、次回の再悪化を確実に再通知するため）
+        result = updateProjectFields(body.projectId, { last_notified_health: body.health })
         break
       case 'updateAvatar':
         // choosing a color+initials avatar supersedes any uploaded picture
