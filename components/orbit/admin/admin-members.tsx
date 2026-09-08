@@ -214,7 +214,7 @@ export function AdminMembers() {
       </div>
 
       {csvPreview && (
-        <Modal onClose={() => setCsvPreview(null)}>
+        <Modal open={!!csvPreview} onClose={() => setCsvPreview(null)}>
           <div className="flex flex-col gap-4 p-5">
             <div className="text-sm font-semibold">{t('admin.members.csv.previewTitle', { count: csvPreview.length })}</div>
             <div className="max-h-64 overflow-y-auto">
