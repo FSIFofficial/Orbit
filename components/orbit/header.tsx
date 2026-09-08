@@ -31,6 +31,7 @@ import {
   X,
   Activity,
   Grid3x3,
+  TrendingDown,
 } from 'lucide-react'
 
 
@@ -233,6 +234,10 @@ export function Header() {
                             go({ name: 'admin', section: 'approvals' })
                             return
                           }
+                          if (n.memberId) {
+                            go({ name: 'person', id: n.memberId })
+                            return
+                          }
                           if (n.taskId) openTask(n.taskId)
                         }}
                         className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-secondary"
@@ -243,6 +248,8 @@ export function Header() {
                           <Clock className="mt-0.5 size-4 shrink-0 text-warning" />
                         ) : n.kind === 'mention' ? (
                           <AtSign className="mt-0.5 size-4 shrink-0 text-primary" />
+                        ) : n.kind === 'lowWorkload' ? (
+                          <TrendingDown className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                         ) : (
                           <ClipboardCheck className="mt-0.5 size-4 shrink-0 text-primary" />
                         )}

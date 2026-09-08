@@ -409,6 +409,38 @@ export function memberWorkloadCapacity(
   return 'full'
 }
 
+// 暫定値、要調整: 「タスクが少ない」と判定する未完了タスク数の閾値
+const LOW_WORKLOAD_TASK_THRESHOLD = 1
+
+// P16: 未完了タスク数が少なく、かつ稼働余力にも余裕がある場合のみ
+// 「タスクが少ない」と判定する（どちらか一方だけでは判定しない — 誤検知を
+// 減らすため）
+export function isLowWorkloadMember(memberId: string, allTasks: Task[]): boolean {
+  const activeCount = allTasks.filter(
+    (t) => t.assigneeIds.includes(memberId) && t.status !== 'done',
+  ).length
+  if (activeCount > LOW_WORKLOAD_TASK_THRESHOLD) return false
+  return memberWorkloadCapacity(memberId, allTasks) === 'available'
+}
+
+// P16: 稼働に余裕があるメンバー向けに、未アサインの公募タスクをスキル
+// マッチ順でおすすめする（rankCandidatesの逆方向 — タスク→候補メンバー
+// ではなく、メンバー→候補タスク）
+export function recommendedTasksForMember(member: Member, tasks: Task[], limit = 5): Task[] {
+  return tasks
+    .filter((t) => t.assigneeIds.length === 0 && (t.assignType ?? 'open_bid') === 'open_bid' && t.status !== 'done')
+    .map((t) => ({ task: t, matchCount: matchSkills(t, member).length }))
+    .sort((a, b) => {
+      if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount
+      if (!a.task.deadline && !b.task.deadline) return 0
+      if (!a.task.deadline) return 1
+      if (!b.task.deadline) return -1
+      return a.task.deadline.localeCompare(b.task.deadline)
+    })
+    .slice(0, limit)
+    .map((r) => r.task)
+}
+
 // チームレーダーチャート（item 8）— 各軸(スキル)ごとに、skillLevelsで
 // そのスキルを設定しているメンバーだけを対象に平均値を算出する。
 // 誰も設定していない軸はvalue: 0（グラフ上は0として描画される）。

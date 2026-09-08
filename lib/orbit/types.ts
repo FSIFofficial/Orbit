@@ -762,12 +762,16 @@ export interface NotificationItem {
   // 進行中タスクの更新が7日以上ない場合に表示
   // 'mention' = コメントで@メンションされた（未読のみ表示。store.tsxの
   // seenMentionIds/markMentionSeen参照）
-  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info'
+  // 'lowWorkload' = P16: 直属の部下がタスク少なめ状態の上長への通知
+  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info' | 'lowWorkload'
   title: string
   detail: string
   taskId: string
   // kind: 'mention' のときだけ設定 — 既読化(markMentionSeen)に使う
   commentId?: string
+  // kind: 'lowWorkload'(および将来のメンバー起点通知)で設定 — クリック時に
+  // そのメンバーの人物ページ(go({name:'person', id: memberId}))へ遷移する
+  memberId?: string
 }
 
 // ---- 多段階承認 (Phase 5) -----------------------------------------------
