@@ -1,10 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
-import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
+import { DIFFICULTY_LABEL, type Member } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
+import { memberWorkloadCapacity, matchSkills, type WorkloadCapacity } from '@/lib/orbit/utils'
 
 function BarRow({
   label,
@@ -38,12 +40,122 @@ function sortedCounts(map: Map<string, number>): [string, number][] {
   return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
 }
 
+interface ScatterMapColumn<T> {
+  header: string
+  align?: 'left' | 'right'
+  render: (point: T) => ReactNode
+}
+
+interface ScatterMapProps<T extends { member: Member; x: number; y: number }> {
+  points: T[]
+  // 省略時は既存ロジックと同様、点群のmax値から自動算出する
+  xMax?: number
+  yMax?: number
+  axisLabel?: string
+  tooltip: (point: T) => string
+  hoverLabel: (point: T) => string
+  columns: ScatterMapColumn<T>[]
+  sortRows?: (a: T, b: T) => number
+  maxRows?: number
+}
+
+// item 14の「スキル数×担当タスク数」散布図の描画部分（相対配置のドット・
+// グリッド線・ホバー時のツールチップ・下部のテーブル）を、item 36で3つ目の
+// 散布図が増えるにあたって共通コンポーネント化した。テーブルの列は散布図
+// ごとに項目が異なるため、汎用的なcolumns定義で構成できるようにしている。
+function ScatterMap<T extends { member: Member; x: number; y: number }>({
+  points,
+  xMax,
+  yMax,
+  axisLabel,
+  tooltip,
+  hoverLabel,
+  columns,
+  sortRows,
+  maxRows = 10,
+}: ScatterMapProps<T>) {
+  const maxX = xMax ?? Math.max(1, ...points.map((p) => p.x))
+  const maxY = yMax ?? Math.max(1, ...points.map((p) => p.y))
+  const rows = (sortRows ? [...points].sort(sortRows) : points).slice(0, maxRows)
+  return (
+    <>
+      <div className="relative mt-4 h-60 overflow-hidden rounded-md border border-border/40 bg-secondary/20">
+        {[25, 50, 75].map((pct) => (
+          <div key={pct} className="absolute left-0 right-0 border-t border-dashed border-border/30" style={{ top: `${pct}%` }} />
+        ))}
+        {[25, 50, 75].map((pct) => (
+          <div key={pct} className="absolute top-0 bottom-0 border-l border-dashed border-border/30" style={{ left: `${pct}%` }} />
+        ))}
+        {points.map((p) => {
+          const x = maxX > 0 ? (p.x / maxX) * 88 + 6 : 6
+          const y = maxY > 0 ? 94 - (p.y / maxY) * 88 : 94
+          return (
+            <div
+              key={p.member.id}
+              className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+              style={{ left: `${x}%`, top: `${y}%` }}
+              title={tooltip(p)}
+            >
+              <Avatar member={p.member} size={22} />
+              <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background group-hover:block">
+                {hoverLabel(p)}
+              </div>
+            </div>
+          )
+        })}
+        {axisLabel && (
+          <span className="absolute bottom-1 right-2 text-[9px] text-muted-foreground">{axisLabel}</span>
+        )}
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              {columns.map((c, i) => (
+                <th
+                  key={i}
+                  className={`py-1 font-medium ${i < columns.length - 1 ? 'pr-3' : ''} ${c.align === 'right' ? 'text-right' : ''}`}
+                >
+                  {c.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.member.id} className="border-t border-border/30">
+                {columns.map((c, i) => (
+                  <td
+                    key={i}
+                    className={`py-1 ${i < columns.length - 1 ? 'pr-3' : ''} ${c.align === 'right' ? 'text-right tabular-nums' : 'font-medium'}`}
+                  >
+                    {c.render(p)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 // 分析ダッシュボード（人員構成・評価分布・スキル分布）— types.ts の Member
 // に既存の evaluationHistory / skillLevels / affiliation / role を集計する
 // だけで、新しいデータモデルの追加はしていない。班長など下位ロールは組織
 // 全体の統計を見るべきではないので、他の組織全体設定（Members/Tags）と
 // 同様に DEFAULT_NON_TOP_SECTIONS には含めていない（Admin → Tagsから
 // 個別に許可することは可能）。
+// 余力が大きいほど右（X軸の正方向）にするため、fullを0・availableを2とする
+const CAPACITY_SCORE: Record<WorkloadCapacity, number> = { full: 0, normal: 1, available: 2 }
+
+const CAPACITY_LABEL_KEY: Record<WorkloadCapacity, 'admin.analytics.capacityFit.capacity.full' | 'admin.analytics.capacityFit.capacity.normal' | 'admin.analytics.capacityFit.capacity.available'> = {
+  full: 'admin.analytics.capacityFit.capacity.full',
+  normal: 'admin.analytics.capacityFit.capacity.normal',
+  available: 'admin.analytics.capacityFit.capacity.available',
+}
+
 export function AdminAnalytics() {
   const { members, visibleTasks, archivedTasks } = useOrbit()
   const { t } = useI18n()
@@ -124,16 +236,51 @@ export function AdminAnalytics() {
           : 0
         return {
           member: m,
-          skillCount: m.skills.length + (m.skillLevels ?? []).length,
-          activeTaskCount: activeTasks.length,
+          x: m.skills.length + (m.skillLevels ?? []).length,
+          y: activeTasks.length,
           completedCount: doneTasks.length,
           avgDifficulty,
         }
       }),
     [members, visibleTasks, allTasks],
   )
-  const maxSkillCount = Math.max(1, ...scatterPoints.map((p) => p.skillCount))
-  const maxTaskCount = Math.max(1, ...scatterPoints.map((p) => p.activeTaskCount))
+
+  // item 36 マップ1: スキル×経験数 — yearsOfExperience(自己申告)未設定の
+  // メンバーはこのマップから除外する
+  const skillExperiencePoints = useMemo(() =>
+    members
+      .filter((m) => !m.inactive && m.yearsOfExperience != null)
+      .map((m) => ({
+        member: m,
+        x: m.skills.length + (m.skillLevels ?? []).length,
+        y: m.yearsOfExperience!,
+      })),
+    [members],
+  )
+
+  // item 36 マップ2: 稼働余力×適合度 — 現在担当中のタスクが1件も無い
+  // メンバーはこのマップから除外する（適合度が算出できないため）
+  const capacityFitPoints = useMemo(() =>
+    members
+      .filter((m) => !m.inactive)
+      .map((m) => {
+        const activeTasks = visibleTasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done')
+        if (activeTasks.length === 0) return null
+        const capacity = memberWorkloadCapacity(m.id, allTasks)
+        const avgFit = activeTasks.reduce(
+          (sum, t) => sum + matchSkills(t, m).length / Math.max(1, t.skills.length),
+          0,
+        ) / activeTasks.length
+        return {
+          member: m,
+          x: CAPACITY_SCORE[capacity],
+          y: avgFit,
+          capacity,
+        }
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null),
+    [members, visibleTasks, allTasks],
+  )
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -219,57 +366,67 @@ export function AdminAnalytics() {
         <p className="mt-1 text-xs text-muted-foreground">
           {t('admin.analytics.scatter.desc')}
         </p>
-        <div className="relative mt-4 h-60 overflow-hidden rounded-md border border-border/40 bg-secondary/20">
-          {[25, 50, 75].map((pct) => (
-            <div key={pct} className="absolute left-0 right-0 border-t border-dashed border-border/30" style={{ top: `${pct}%` }} />
-          ))}
-          {[25, 50, 75].map((pct) => (
-            <div key={pct} className="absolute top-0 bottom-0 border-l border-dashed border-border/30" style={{ left: `${pct}%` }} />
-          ))}
-          {scatterPoints.map(({ member: m, skillCount, activeTaskCount }) => {
-            const x = maxSkillCount > 0 ? (skillCount / maxSkillCount) * 88 + 6 : 6
-            const y = maxTaskCount > 0 ? 94 - (activeTaskCount / maxTaskCount) * 88 : 94
-            return (
-              <div
-                key={m.id}
-                className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer"
-                style={{ left: `${x}%`, top: `${y}%` }}
-                title={t('admin.analytics.scatter.tooltip', { name: m.displayName || m.name, skillCount, taskCount: activeTaskCount })}
-              >
-                <Avatar member={m} size={22} />
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background group-hover:block">
-                  {t('admin.analytics.scatter.hoverLabel', { name: m.displayName || m.name, count: activeTaskCount })}
-                </div>
-              </div>
-            )
-          })}
-          <span className="absolute bottom-1 right-2 text-[9px] text-muted-foreground">{t('admin.analytics.scatter.axisLabel')}</span>
-        </div>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-muted-foreground">
-                <th className="py-1 pr-3 font-medium">{t('admin.analytics.scatter.colMember')}</th>
-                <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.scatter.colSkillCount')}</th>
-                <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.scatter.colActive')}</th>
-                <th className="py-1 text-right font-medium">{t('admin.analytics.scatter.colCompleted')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scatterPoints
-                .sort((a, b) => a.activeTaskCount - b.activeTaskCount || b.skillCount - a.skillCount)
-                .slice(0, 10)
-                .map(({ member: m, skillCount, activeTaskCount, completedCount }) => (
-                  <tr key={m.id} className="border-t border-border/30">
-                    <td className="py-1 pr-3 font-medium">{m.displayName || m.name}</td>
-                    <td className="py-1 pr-3 text-right tabular-nums">{skillCount}</td>
-                    <td className="py-1 pr-3 text-right tabular-nums">{activeTaskCount}</td>
-                    <td className="py-1 text-right tabular-nums">{completedCount}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <ScatterMap
+          points={scatterPoints}
+          axisLabel={t('admin.analytics.scatter.axisLabel')}
+          tooltip={(p) => t('admin.analytics.scatter.tooltip', { name: p.member.displayName || p.member.name, skillCount: p.x, taskCount: p.y })}
+          hoverLabel={(p) => t('admin.analytics.scatter.hoverLabel', { name: p.member.displayName || p.member.name, count: p.y })}
+          sortRows={(a, b) => a.y - b.y || b.x - a.x}
+          columns={[
+            { header: t('admin.analytics.scatter.colMember'), render: (p) => p.member.displayName || p.member.name },
+            { header: t('admin.analytics.scatter.colSkillCount'), align: 'right', render: (p) => p.x },
+            { header: t('admin.analytics.scatter.colActive'), align: 'right', render: (p) => p.y },
+            { header: t('admin.analytics.scatter.colCompleted'), align: 'right', render: (p) => p.completedCount },
+          ]}
+        />
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.skillExperience.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('admin.analytics.skillExperience.desc')}
+        </p>
+        {skillExperiencePoints.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.skillExperience.empty')}</p>
+        ) : (
+          <ScatterMap
+            points={skillExperiencePoints}
+            axisLabel={t('admin.analytics.skillExperience.axisLabel')}
+            tooltip={(p) => t('admin.analytics.skillExperience.tooltip', { name: p.member.displayName || p.member.name, skillCount: p.x, years: p.y })}
+            hoverLabel={(p) => t('admin.analytics.skillExperience.hoverLabel', { name: p.member.displayName || p.member.name, years: p.y })}
+            sortRows={(a, b) => b.y - a.y || b.x - a.x}
+            columns={[
+              { header: t('admin.analytics.scatter.colMember'), render: (p) => p.member.displayName || p.member.name },
+              { header: t('admin.analytics.skillExperience.colSkillCount'), align: 'right', render: (p) => p.x },
+              { header: t('admin.analytics.skillExperience.colYears'), align: 'right', render: (p) => p.y },
+            ]}
+          />
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.capacityFit.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('admin.analytics.capacityFit.desc')}
+        </p>
+        {capacityFitPoints.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.capacityFit.empty')}</p>
+        ) : (
+          <ScatterMap
+            points={capacityFitPoints}
+            xMax={2}
+            yMax={1}
+            axisLabel={t('admin.analytics.capacityFit.axisLabel')}
+            tooltip={(p) => t('admin.analytics.capacityFit.tooltip', { name: p.member.displayName || p.member.name, capacity: t(CAPACITY_LABEL_KEY[p.capacity]), fit: Math.round(p.y * 100) })}
+            hoverLabel={(p) => t('admin.analytics.capacityFit.hoverLabel', { name: p.member.displayName || p.member.name, fit: Math.round(p.y * 100) })}
+            sortRows={(a, b) => b.y - a.y || b.x - a.x}
+            columns={[
+              { header: t('admin.analytics.scatter.colMember'), render: (p) => p.member.displayName || p.member.name },
+              { header: t('admin.analytics.capacityFit.colCapacity'), align: 'right', render: (p) => t(CAPACITY_LABEL_KEY[p.capacity]) },
+              { header: t('admin.analytics.capacityFit.colFit'), align: 'right', render: (p) => `${Math.round(p.y * 100)}%` },
+            ]}
+          />
+        )}
       </div>
     </div>
   )
