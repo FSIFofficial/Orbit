@@ -555,7 +555,11 @@ export interface Task {
   requiredApprovals?: number | 'all'
   // 複数確認者(item: 確認フロー)— 誰が・いつ承認したかの記録。
   // requiredApprovals(必要承認数)に達すると自動的にstatus: 'done'になる。
-  reviewApprovals?: { memberId: string; at: string }[]
+  // TSK-062+TSK-067統合: 確認者が承認する際に残すコメント。レビュー
+  // フィードバックであると同時に、次回への申し送りメモとしても機能する。
+  // COM-004(activity-screen.tsxの'review'フィルタ)でそのまま時系列表示
+  // されるため、専用の蓄積先を別途作る必要はない。
+  reviewApprovals?: { memberId: string; at: string; comment?: string }[]
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved

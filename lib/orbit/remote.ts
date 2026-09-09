@@ -752,7 +752,7 @@ export const remoteApi = {
     postToGas('updateReviewer', { taskId, reviewerId }),
   updateReviewers: (taskId: string, reviewerIds: string[], requiredApprovals?: number | 'all') =>
     postToGas('updateReviewers', { taskId, reviewerIds, requiredApprovals }),
-  approveTaskReview: (taskId: string) => postToGas('approveTaskReview', { taskId }),
+  approveTaskReview: (taskId: string, comment?: string) => postToGas('approveTaskReview', { taskId, comment }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>
