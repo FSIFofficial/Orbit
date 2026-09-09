@@ -2550,7 +2550,12 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (status === 'review') {
         const original = tasks.find((t) => t.id === id)
         const reviewerIds = original ? original.reviewerIds ?? (original.reviewerId ? [original.reviewerId] : []) : []
-        if (original && reviewerIds.length > 0) {
+        // 同じ元タスクに紐づく未完了の確認タスクが既にあれば、新規生成しない
+        // (確認待ち→修正中→再び確認待ち、のような行き来で重複生成されるのを防ぐ)
+        const hasOpenConfirmTask = tasks.some(
+          (t) => t.relatedReviewTaskId === id && t.status !== 'done',
+        )
+        if (original && reviewerIds.length > 0 && !hasOpenConfirmTask) {
           createReviewConfirmTask(original, reviewerIds)
         }
       }
