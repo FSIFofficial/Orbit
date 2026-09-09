@@ -144,6 +144,7 @@ export function TaskDetailDrawer({
     getInput,
     updateTaskStatus,
     updateProgress,
+    updateProgressPercent,
     assignTask,
     updateSchedule,
     updateDependsOn,
@@ -244,6 +245,7 @@ export function TaskDetailDrawer({
               updateProgress(task.id, text)
               toast(tr('taskDrawer.progressUpdated'))
             }}
+            onUpdateProgressPercent={(percent) => updateProgressPercent(task.id, percent)}
             onUpdateEstimatedHours={(hours) => updateEstimatedHours(task.id, hours)}
             onUpdateActualHours={(hours) => updateActualHours(task.id, hours)}
             onSaveRetrospective={(r) => {
@@ -1501,6 +1503,7 @@ function DrawerBody({
   onAddComment,
   onRemoveComment,
   onProgress,
+  onUpdateProgressPercent,
   onUpdateEstimatedHours,
   onUpdateActualHours,
   onSaveRetrospective,
@@ -1542,6 +1545,7 @@ function DrawerBody({
   onAddComment: (text: string) => void
   onRemoveComment: (commentId: string) => void
   onProgress: (text: string) => void
+  onUpdateProgressPercent: (percent: number) => void
   onUpdateEstimatedHours: (hours: number | null) => void
   onUpdateActualHours: (hours: number | null) => void
   onSaveRetrospective: (retrospective: TaskRetrospective | null) => void
@@ -1991,9 +1995,31 @@ function DrawerBody({
 
         {/* Progress */}
         <div className="mt-6">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('taskDrawer.progressHeader')}
+            {!canUpdateProgress && task.progressPercent != null && (
+              <span className="tabular-nums">{task.progressPercent}%</span>
+            )}
           </div>
+          {/* TSK-010: 0-100の数値進捗率。自由記述メモとは別に、今どのくらい
+              進んでいるかをスライダーで即座に記録できる */}
+          {canUpdateProgress && (
+            <div className="mb-3 flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={task.progressPercent ?? 0}
+                onChange={(e) => onUpdateProgressPercent(Number(e.target.value))}
+                className="flex-1 accent-primary"
+                aria-label={t('taskDrawer.progressPercentLabel')}
+              />
+              <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                {task.progressPercent ?? 0}%
+              </span>
+            </div>
+          )}
           {canUpdateProgress && (
             <div className="mb-3 flex items-start gap-2">
               <textarea

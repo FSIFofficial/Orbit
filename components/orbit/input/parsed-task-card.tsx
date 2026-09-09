@@ -5,9 +5,9 @@ import type { ParsedTask } from '@/lib/orbit/types'
 import { DIFFICULTY_LABEL, TASK_IMPORTANCE } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { useI18n, DIFFICULTY_KEY } from '@/lib/orbit/i18n'
-import { Card, DifficultyBadge, Tag, Avatar } from '../primitives'
+import { Card, DifficultyBadge, Tag, Avatar, SimilarTaskSummary } from '../primitives'
 import { cn } from '@/lib/utils'
-import { findSimilarTasks, rankCandidates } from '@/lib/orbit/utils'
+import { findSimilarTasks, rankCandidates, suggestSkillsForCategory, suggestCategoriesForTitle } from '@/lib/orbit/utils'
 import { Check, Plus, Sparkles, TriangleAlert, Trash2 } from 'lucide-react'
 
 export function ParsedTaskCard({
@@ -40,18 +40,13 @@ export function ParsedTaskCard({
   const [categoryDraft, setCategoryDraft] = useState('')
   const candidates = rankCandidates(task, members, tasks).slice(0, 3)
 
-  // おすすめカテゴリ: this project's most-used categories first, falling
-  // back to 未分類 + the general option pool so there's always something
+  // TSK-034: おすすめカテゴリ — タイトルとカテゴリ名/頻出スキル名の文字列
+  // 一致 + プロジェクト内使用頻度をsuggestCategoriesForTitleでスコアリング
+  // (生成AIは使わない、既存の頻度ベース推薦をこの関数に統合)
   const suggestedCategories = (() => {
-    const tally = new Map<string, number>()
-    tasks
-      .filter((t) => t.projectId === task.projectId && t.category)
-      .forEach((t) => tally.set(t.category, (tally.get(t.category) ?? 0) + 1))
-    const ranked = Array.from(tally.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([c]) => c)
-    const rest = categoryOptions.filter((c) => !ranked.includes(c))
-    return Array.from(new Set([...ranked, ...rest]))
+    const usedCategories = tasks.map((t) => t.category).filter(Boolean)
+    const candidatePool = Array.from(new Set([...categoryOptions, ...usedCategories]))
+    return suggestCategoriesForTitle(task.name, candidatePool, tasks, task.projectId)
       .filter((c) => c !== task.category)
       .slice(0, 4)
   })()
@@ -95,7 +90,14 @@ export function ParsedTaskCard({
     setSkillDraft('')
   }
 
-  const availableSkills = skillOptions.filter((s) => !task.skills.includes(s))
+  // TSK-030: 同カテゴリの既存タスクで使われた頻度順のスキルを上位に、
+  // それ以外の未選択スキルをその後ろに続ける
+  const availableSkills = (() => {
+    const unselected = skillOptions.filter((s) => !task.skills.includes(s))
+    const byFrequency = suggestSkillsForCategory(task.category, tasks).filter((s) => unselected.includes(s))
+    const rest = unselected.filter((s) => !byFrequency.includes(s))
+    return [...byFrequency, ...rest]
+  })()
 
   const commitNewCategory = () => {
     const v = categoryDraft.trim()
@@ -161,14 +163,7 @@ export function ParsedTaskCard({
           </div>
           <ul className="mt-1 flex flex-col gap-1">
             {similar.map(({ task: s }) => (
-              <li key={s.id} className="text-xs text-muted-foreground">
-                ・{s.name}
-                {s.status === 'done' && s.retrospective && (
-                  <span className="block pl-3 text-[11px] italic">
-                    {s.retrospective.improve || s.retrospective.bad || s.retrospective.good}
-                  </span>
-                )}
-              </li>
+              <SimilarTaskSummary key={s.id} task={s} />
             ))}
           </ul>
         </div>

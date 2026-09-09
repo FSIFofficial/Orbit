@@ -107,7 +107,7 @@ function setupOrbit() {
     'visibility', 'department', 'category', 'skills', 'difficulty', 'priority',
     'last_activity', 'original_input_id', 'approval_status', 'estimated_hours',
     'importance', 'reviewer_id', 'reviewer_ids', 'depends_on_ids',
-    'progress_note', 'progress_history_json',
+    'progress_note', 'progress_percent', 'progress_history_json',
     'deliverables_json', 'history_json', 'comments_json',
     'retrospective_json', 'schedule_json', 'form_json',
     'blocker_note', 'blocker_since', 'completed_date', 'actual_hours',
@@ -115,6 +115,7 @@ function setupOrbit() {
     'required_approvals',  // 承認に必要な確認者数 (数値 or "all")
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
     'review_approvals_json', // 複数確認者の承認記録 [{"memberId","at","comment"}]
+    'open_bid_applicant_ids', // TSK-027: 公募タスクへの応募者IDリスト(カンマ区切り)
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 
@@ -825,6 +826,7 @@ function authorizeAction(acting, action, body) {
     'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
     'approveTaskReview',       // 複数確認者の承認（本人が確認者かどうかは下記でチェック）
     'checkAndGenerateRecurringTasks', // item 2/TSK-051: 生成はルール定義に従うだけなので誰でも呼べる
+    'applyToOpenBid',          // TSK-027: 担当者未定タスクへの自己応募。既存の自己アサインと同等の緩さでよい
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -918,6 +920,13 @@ function doPost(e) {
         })
         syncCalendarForTask(body.taskId)
         break
+      case 'applyToOpenBid':
+        // TSK-027: 公募タスクへの応募(承認制)。担当者(assignee_id)には
+        // 触れず、応募者リストのみ更新する
+        result = updateTaskFields(body.taskId, {
+          open_bid_applicant_ids: (body.applicantIds || []).join(','),
+        })
+        break
       case 'updatePriority':
         result = updateTaskFields(body.taskId, { priority: body.priority })
         break
@@ -940,11 +949,14 @@ function doPost(e) {
         })
         break
       case 'updateProgress':
-        result = updateTaskFields(body.taskId, {
-          progress_note: body.text,
-          progress_history_json: JSON.stringify(body.progressHistory || []),
-          last_activity: todayStr(),
-        })
+        // TSK-010: progressPercent単独更新(スライダー操作)にも相乗りさせる。
+        // body.text/body.progressHistoryが無い場合はその列に触れない
+        // (updateTaskFields/updateRowFieldsは渡されたキーのみ部分更新する)
+        var progressFields = { last_activity: todayStr() }
+        if (body.text !== undefined) progressFields.progress_note = body.text
+        if (body.progressHistory !== undefined) progressFields.progress_history_json = JSON.stringify(body.progressHistory)
+        if (body.progressPercent !== undefined) progressFields.progress_percent = body.progressPercent
+        result = updateTaskFields(body.taskId, progressFields)
         break
       case 'translateText':
         result = translateTexts(body.texts, body.targetLang)

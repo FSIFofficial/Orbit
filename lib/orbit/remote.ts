@@ -288,6 +288,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     department: (r.department || '未分類') as Department,
     assigneeIds: splitTags(r.assignee_id),
     assignType: r.assign_type || 'open_bid',
+    openBidApplicantIds: splitTags(r.open_bid_applicant_ids), // TSK-027
     startDate: r.start_date || null,
     deadline: r.due_date || null,
     dueTime: r.due_time || null,
@@ -302,6 +303,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     createdById: r.creator_id || undefined,
     createdAt: r.created_at || undefined,
     progress: r.progress_note || undefined,
+    progressPercent: r.progress_percent !== '' && r.progress_percent != null ? Number(r.progress_percent) : undefined,
     progressHistory: parseJsonArray<ProgressEntry>(r.progress_history_json) ?? [],
     pendingApproval: r.approval_status === '承認待ち',
     dependsOnIds: splitTags(r.depends_on_ids),
@@ -606,6 +608,10 @@ export const remoteApi = {
     postToGas('updateTaskStatus', { taskId, status: STATUS_LABEL[status] }),
   assignTask: (taskId: string, assigneeIds: string[]) =>
     postToGas('assignTask', { taskId, assigneeIds }),
+  // TSK-027: 公募タスクへの応募(承認制)。applicantIdsは常に更新後の全体を
+  // 送る(updateProjectMembers等と同じ「全体を送る」方式)
+  applyToOpenBid: (taskId: string, applicantIds: string[]) =>
+    postToGas('applyToOpenBid', { taskId, applicantIds }),
   updatePriority: (taskId: string, priority: Priority) =>
     postToGas('updatePriority', { taskId, priority }),
   updateDifficulty: (taskId: string, difficulty: Difficulty) =>
@@ -642,6 +648,10 @@ export const remoteApi = {
     }),
   updateProgress: (taskId: string, text: string, progressHistory: ProgressEntry[]) =>
     postToGas('updateProgress', { taskId, text, progressHistory }),
+  // TSK-010: 既存のupdateProgressアクションに相乗りし、progressPercentのみを
+  // 送る(text/progressHistoryは省略— GAS側は渡された列だけを部分更新する)
+  updateProgressPercent: (taskId: string, percent: number) =>
+    postToGas('updateProgress', { taskId, progressPercent: percent }),
   updateWill: (memberId: string, will: string[]) => postToGas('updateWill', { memberId, will }),
   updateJudgment: (memberId: string, judgment: string[]) =>
     postToGas('updateJudgment', { memberId, judgment }),

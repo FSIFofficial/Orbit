@@ -517,6 +517,11 @@ export interface Task {
   // Tasksシートのassign_type列 — 現状は常に'open_bid'（createTasksで固定設定）。
   // assigneeIdsが空 かつ assignType==='open_bid' のタスクが「公募」タブに並ぶ。
   assignType?: string
+  // TSK-027: 公募タスクへの応募者(承認制)。「応募する」は即座にassigneeIdsへ
+  // 追加せず、ここに自分のIDを積むだけにする。管理者がこの中から選んで
+  // 既存のassignTaskを呼ぶと正式に担当者になる。不採用の応募者はここに
+  // 残ったままでよい(明示的な却下操作は無い)
+  openBidApplicantIds?: string[]
   startDate?: string | null // YYYY-MM-DD, when work is expected to begin
   deadline: string | null // YYYY-MM-DD
   dueTime?: string | null // HH:MM, optional time-of-day on top of deadline
@@ -534,6 +539,9 @@ export interface Task {
   createdAt?: string // ISO datetime
   // progress tracking
   progress?: string // latest progress snapshot
+  // TSK-010: 0-100の数値進捗率。自由記述メモ(progress/progressHistory)とは
+  // 役割分担で併存させる(数値は「今どのくらいか」、メモは「何をしたか」)
+  progressPercent?: number
   progressHistory: ProgressEntry[]
   // tasks created from an INPUT submission start out awaiting an admin's
   // approval, and are hidden from the normal workspace views until then
