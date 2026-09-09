@@ -294,6 +294,7 @@ interface OrbitContextValue extends OrbitState {
   updatePermissionOverrides: (memberId: string, overrides: PermissionOverride[]) => void
   // スキルポイント・検定・レーダーチャート
   skillLevelThresholds: SkillLevelThresholds
+  updateSkillLevelThresholds: (thresholds: SkillLevelThresholds) => void
   quizDefinitions: QuizDefinition[]
   radarAxes: RadarAxis[]
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
@@ -1346,6 +1347,18 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // SKL-010: スキルレベルアップ閾値の設定（Admin > Tags）。awardSkillPoints・
+  // submitQuizResultの両方でこの閾値を使ってレベルを計算するため、ここで
+  // 変更すれば以降のポイント付与・検定合格のレベル計算に反映される。
+  const updateSkillLevelThresholds = useCallback(
+    (thresholds: SkillLevelThresholds) => {
+      setSkillLevelThresholds(thresholds)
+      if (isSettingsConfigured)
+        runRemote(remoteApi.updateSetting('skill_level_thresholds', JSON.stringify(thresholds)))
+    },
+    [runRemote],
+  )
+
   // スキルポイント付与 — タスク完了後に管理者が各スキルに対してポイントを付与。
   // 累計ポイントが閾値を超えるとスキルレベルが自動で繰り上がる。
   const awardSkillPoints = useCallback(
@@ -1462,19 +1475,30 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
               if (m.id !== memberId) return m
               const existing = [...(m.skillLevels ?? [])]
               const idx = existing.findIndex((sl) => sl.skill === quiz.targetSkill)
+              if (idx >= 0 && quiz.targetLevel <= existing[idx].level) return m
               if (idx < 0) {
                 existing.push({ skill: quiz.targetSkill, level: quiz.targetLevel })
-              } else if (quiz.targetLevel > existing[idx].level) {
+              } else {
                 existing[idx] = { ...existing[idx], level: quiz.targetLevel }
               }
-              return { ...m, skillLevels: existing }
+              // SKL-009: skill_points_jsonもレベルと整合させる。awardSkillPoints
+              // と同じ閾値計算(pts/threshold切り捨て+1=レベル)から逆算すると、
+              // レベルLに達する最低ポイントはthreshold*(L-1)
+              const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+              const threshold = skillLevelThresholds[quiz.targetSkill] ?? defaultThreshold
+              const minPointsForLevel = threshold * (quiz.targetLevel - 1)
+              const currentPoints = { ...m.skillPoints }
+              if ((currentPoints[quiz.targetSkill] ?? 0) < minPointsForLevel) {
+                currentPoints[quiz.targetSkill] = minPointsForLevel
+              }
+              return { ...m, skillLevels: existing, skillPoints: currentPoints }
             }),
           )
         }
         return { passed, score }
       }
     },
-    [quizDefinitions, reportRemoteError],
+    [quizDefinitions, reportRemoteError, skillLevelThresholds],
   )
 
   // ---- Phase 5: 経費申請・カスタムフォーム コールバック --------------------
@@ -4041,6 +4065,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateReportsTo,
     updatePermissionOverrides,
     skillLevelThresholds,
+    updateSkillLevelThresholds,
     quizDefinitions,
     radarAxes,
     awardSkillPoints,

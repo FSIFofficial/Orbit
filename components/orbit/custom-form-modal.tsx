@@ -53,6 +53,9 @@ function FormFillStep({
               {field.label}
               {field.required && <span className="ml-0.5 text-destructive">*</span>}
             </label>
+            {field.description && (
+              <p className="text-xs text-muted-foreground/80">{field.description}</p>
+            )}
             {field.type === 'text' && (
               <input
                 type="text"

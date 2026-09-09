@@ -58,6 +58,8 @@ export function AdminMembers() {
   const [desiredArea, setDesiredArea] = useState('')
   // MAT-003: 経歴(careerHistory)のrole/affiliation/descriptionから検索する
   const [experienceQuery, setExperienceQuery] = useState('')
+  // HRD-006: 休止中メンバーはデフォルトで一覧から除外する
+  const [showInactive, setShowInactive] = useState(false)
   const ROLES: Role[] = [BASE_ROLE, ...roleLevels]
 
   const [newName, setNewName] = useState('')
@@ -135,6 +137,7 @@ export function AdminMembers() {
     const q = query.trim().toLowerCase()
     const minTenure = minTenureYears.trim() ? Number(minTenureYears) : null
     return members.filter((m) => {
+      if (!showInactive && m.inactive) return false
       if (q) {
         const matchesText = [
           m.name,
@@ -160,7 +163,7 @@ export function AdminMembers() {
       }
       return true
     })
-  }, [members, query, minTenureYears, managementOnly, desiredArea, experienceQuery])
+  }, [members, query, minTenureYears, managementOnly, desiredArea, experienceQuery, showInactive])
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -295,6 +298,15 @@ export function AdminMembers() {
             className="size-3.5 accent-primary"
           />
           {t('admin.members.search.managementOnly')}
+        </label>
+        <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="size-3.5 accent-primary"
+          />
+          {t('admin.members.search.showInactive')}
         </label>
         {allDesiredAreas.length > 0 && (
           <select

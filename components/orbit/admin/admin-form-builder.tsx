@@ -140,6 +140,13 @@ function FieldEditor({
               {t('admin.formBuilder.field.required')}
             </label>
           </div>
+          <input
+            type="text"
+            value={field.description ?? ''}
+            onChange={(e) => onChange({ ...field, description: e.target.value })}
+            placeholder={t('admin.formBuilder.field.descriptionPlaceholder')}
+            className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+          />
           {field.type === 'select' && (
             <div className="space-y-1 pl-2">
               <div className="flex flex-wrap gap-1">
