@@ -403,6 +403,21 @@ interface OrbitContextValue extends OrbitState {
   approveExpenseStep: (applicationId: string, stepId: string, comment?: string) => void
   rejectExpense: (applicationId: string, reason: string) => void
   withdrawExpense: (applicationId: string) => void
+  // EXP-008: 差し戻し(修正して再提出できる却下)と、その再提出
+  returnExpense: (applicationId: string, reason: string) => void
+  resubmitExpense: (
+    applicationId: string,
+    fields: {
+      amount: number
+      categoryId: string
+      receiptUrl?: string
+      justification?: string
+      purpose?: string
+      customFieldAnswers?: Record<string, string>
+    },
+  ) => void
+  // EXP-003: 経費領収書のDriveアップロード
+  uploadExpenseReceipt: (dataUrl: string, filename: string) => Promise<string>
   updateCustomFormDefs: (forms: import('./types').CustomFormDef[]) => void
   submitCustomForm: (
     formId: string,
@@ -1362,6 +1377,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [reportRemoteError, runRemote],
   )
 
+  // EXP-003: 経費領収書をDriveにアップロードし、URLを返す。アバター/ロゴと
+  // 違って特定のメンバー/設定フィールドを直接更新するわけではないので、
+  // 呼び出し側(expense-application-modal.tsx)がreceiptUrlに反映する。
+  const uploadExpenseReceipt = useCallback(
+    (dataUrl: string, filename: string): Promise<string> => {
+      if (!isDriveConfigured) return Promise.reject(new Error('Drive is not configured'))
+      return remoteApi
+        .uploadExpenseReceipt(dataUrl, filename)
+        .then(({ url }) => {
+          setRemoteError(null)
+          return url
+        })
+        .catch((err) => {
+          reportRemoteError(err)
+          throw err
+        })
+    },
+    [reportRemoteError],
+  )
+
   // プロジェクトの表示順 — Admin > Projectsのドラッグ並び替えから呼ばれる
   const setProjectOrder = useCallback(
     (orderedIds: string[]) => {
@@ -1623,6 +1658,61 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.withdrawExpense(applicationId))
     },
     [runRemote],
+  )
+
+  // EXP-008: 却下と別の「差し戻し」— 申請者が修正して再提出できる
+  const returnExpense = useCallback(
+    (applicationId: string, reason: string) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId ? { ...app, status: 'returned', rejectionReason: reason } : app,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.returnExpense(applicationId, reason))
+    },
+    [runRemote],
+  )
+
+  // EXP-008: 差し戻された申請を、IDを変えずに更新して再提出する（新規作成ではない）
+  const resubmitExpense = useCallback(
+    (
+      applicationId: string,
+      fields: {
+        amount: number
+        categoryId: string
+        receiptUrl?: string
+        justification?: string
+        purpose?: string
+        customFieldAnswers?: Record<string, string>
+      },
+    ) => {
+      setExpenseApplications((prev) =>
+        prev.map((app) => {
+          if (app.id !== applicationId) return app
+          const category = expenseCategories.find((c) => c.id === fields.categoryId)
+          const approvalSteps = category?.approvalSteps ?? app.approvalSteps
+          return {
+            ...app,
+            ...fields,
+            approvalSteps,
+            approvals: [],
+            currentStepIndex: 0,
+            status: 'pending',
+            rejectionReason: '',
+          }
+        }),
+      )
+      if (isRemoteConfigured) {
+        const category = expenseCategories.find((c) => c.id === fields.categoryId)
+        runRemote(
+          remoteApi.resubmitExpense(applicationId, {
+            ...fields,
+            approvalSteps: category?.approvalSteps ?? [],
+          }),
+        )
+      }
+    },
+    [runRemote, expenseCategories],
   )
 
   // アンケート回答（item 22/30）— Membersシートのsurvey_responses_json列
@@ -4189,6 +4279,38 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         })
       }
     }
+    // EXP-007: 経費申請 — 自分が次の承認ステップの担当者になっている申請への通知
+    expenseApplications
+      .filter((app) => app.status === 'pending')
+      .forEach((app) => {
+        const step = app.approvalSteps[app.currentStepIndex]
+        if (!step) return
+        const isApprover =
+          (step.type === 'member' && step.memberId === currentUser.id) ||
+          (step.type === 'role' && step.role === currentUser.role)
+        if (!isApprover) return
+        items.push({
+          id: `expense-approval-${app.id}`,
+          kind: 'expense',
+          title: t('notification.expense.approval.title', { amount: app.amount }),
+          detail: t('notification.expense.approval.detail'),
+          taskId: '',
+          applicationId: app.id,
+        })
+      })
+    // EXP-007/EXP-008: 自分の申請が却下・差し戻しされたときの通知
+    expenseApplications
+      .filter((app) => app.applicantId === currentUser.id && (app.status === 'rejected' || app.status === 'returned'))
+      .forEach((app) => {
+        items.push({
+          id: `expense-${app.status}-${app.id}`,
+          kind: 'expense',
+          title: t(app.status === 'returned' ? 'notification.expense.returned.title' : 'notification.expense.rejected.title'),
+          detail: t(app.status === 'returned' ? 'notification.expense.returned.detail' : 'notification.expense.rejected.detail'),
+          taskId: '',
+          applicationId: app.id,
+        })
+      })
     // カレンダースコープ追加告知 — 一度「消す」まで表示する
     items.push({
       id: 'calendar-scope-notice',
@@ -4199,7 +4321,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     })
     const dismissedHere = dismissedNotificationIds[currentUser.id] ?? []
     return items.filter((n) => !dismissedHere.includes(n.id))
-  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, archivedTasks, seenMentionIds, dismissedNotificationIds, members, t])
+  }, [currentUser, adminPendingTasks, adminTasks, visibleTasks, archivedTasks, seenMentionIds, dismissedNotificationIds, members, expenseApplications, t])
 
   const projectTypes = useMemo(
     () =>
@@ -4441,6 +4563,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     approveExpenseStep,
     rejectExpense,
     withdrawExpense,
+    returnExpense,
+    resubmitExpense,
+    uploadExpenseReceipt,
     updateCustomFormDefs,
     submitCustomForm,
     approveFormStep,

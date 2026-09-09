@@ -591,6 +591,7 @@ function authorizeAction(acting, action, body) {
     'awardSkillPoints',     // スキルポイント付与（管理者操作）
     'approveExpenseStep',   // 経費承認（管理者操作）
     'rejectExpense',        // 経費却下（管理者操作）
+    'returnExpense',        // EXP-008: 経費差し戻し（管理者操作）
     'approveFormStep',      // フォーム承認（管理者操作）
     'rejectFormSubmission', // フォーム却下（管理者操作）
     'bulkUpdateSkills',          // スキル一括更新（管理者操作）
@@ -826,6 +827,8 @@ function authorizeAction(acting, action, body) {
     'submitQuizResult',        // 検定の受験はログイン済み誰でも
     'submitExpenseApplication',// 経費申請はログイン済み誰でも
     'withdrawExpense',         // 取り下げは本人（下層でチェック）
+    'resubmitExpense',         // EXP-008: 再提出は本人（下層でチェック）
+    'uploadExpenseReceipt',    // EXP-003: 領収書アップロードはログイン済み誰でも
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
@@ -1335,6 +1338,16 @@ function doPost(e) {
         break
       case 'withdrawExpense':
         result = setExpenseStatus(body.applicationId, 'withdrawn', null, actingMember.id)
+        break
+      case 'returnExpense':
+        result = setExpenseStatus(body.applicationId, 'returned', body.reason)
+        break
+      case 'resubmitExpense':
+        // actingMember.id を使うことでクライアントの自己申告値による偽装を防ぐ
+        result = resubmitExpense(body.applicationId, body.fields, actingMember.id)
+        break
+      case 'uploadExpenseReceipt':
+        result = uploadExpenseReceipt(body.dataUrl, body.filename, body.folderId)
         break
       case 'submitCustomForm':
         result = saveCustomFormSubmission(body.submission, actingMember)
@@ -2542,6 +2555,30 @@ function uploadOrgLogo(dataUrl, filename, folderId) {
   return { url: url }
 }
 
+// EXP-003: 経費申請の領収書をDriveにアップロードする。
+// アバター/ロゴと異なり1人につき何枚もアップロードされうるため、
+// 既存ファイルの削除は行わない。領収書は画像だけでなくPDFのこともあるので
+// サムネイルURLではなく汎用のDrive表示URLを返す。
+function uploadExpenseReceipt(dataUrl, filename, folderId) {
+  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
+  if (!match) throw new Error('Expected a base64 data URL')
+  var mimeType = match[1]
+  var base64Data = match[2]
+
+  var folder = DriveApp.getFolderById(folderId)
+  var namePrefix = 'expense_receipt_'
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename)
+  var file = folder.createFile(blob)
+  file.setName(namePrefix + Date.now())
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+
+  var url = file.getUrl()
+  console.log('uploadExpenseReceipt: url=' + url)
+  return { url: url }
+}
+
 // Deletes the member's row and clears assignee_id (or removes just their
 // id from a multi-assignee list) on every task assigned to them.
 function removeMember(memberId) {
@@ -3192,15 +3229,15 @@ function debugAvatarWrite() {
 
 var SHEET_EXPENSES = 'Expenses'
 var SHEET_FORM_SUBMISSIONS = 'FormSubmissions'
+var EXPENSES_HEADERS = ['id', 'applicant_id', 'amount', 'category_id', 'receipt_url', 'justification', 'purpose', 'custom_field_answers_json', 'approval_steps_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason']
 
+// EXP-005: custom_field_answers_json列を既存シートにも反映させるため、
+// Members/Projects/Tasks/Settingsと同じ ensureSheetHeaders パターンに統一
+// （旧実装は新規作成時にしかヘッダーを設定していなかった）。
 function ensureExpensesSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet()
-  var sheet = ss.getSheetByName(SHEET_EXPENSES)
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_EXPENSES)
-    sheet.appendRow(['id', 'applicant_id', 'amount', 'category_id', 'receipt_url', 'justification', 'purpose', 'approval_steps_json', 'approvals_json', 'current_step_index', 'status', 'created_at', 'rejection_reason'])
-  }
-  return sheet
+  ensureSheetHeaders(ss, SHEET_EXPENSES, EXPENSES_HEADERS)
+  return ss.getSheetByName(SHEET_EXPENSES)
 }
 
 function ensureFormSubmissionsSheet() {
@@ -3242,6 +3279,7 @@ function saveExpenseApplication(application, acting) {
     application.receiptUrl || '',
     application.justification || '',
     application.purpose || '',
+    JSON.stringify(application.customFieldAnswers || {}),
     JSON.stringify(application.approvalSteps || []),
     '[]',
     0,
@@ -3257,15 +3295,58 @@ function saveExpenseApplication(application, acting) {
     if (firstStep.type === 'member' && firstStep.memberId) {
       emails = memberEmailsByIds([firstStep.memberId])
     }
-    if (emails.length > 0) {
-      MailApp.sendEmail({
-        to: emails.join(','),
-        subject: 'Orbit: 経費申請が届きました',
-        body: '経費申請が届きました。Orbitから確認・承認してください。\n\n金額: ¥' + application.amount,
-      })
-    }
+    sendLocalizedEmail(emails, {
+      ja: { subject: 'Orbit: 経費申請が届きました', body: '経費申請が届きました。Orbitから確認・承認してください。\n\n金額: ¥' + application.amount },
+      en: { subject: 'Orbit: New expense application received', body: 'A new expense application has been submitted. Please review and approve it in Orbit.\n\nAmount: ¥' + application.amount },
+    })
   }
   return { id: application.id }
+}
+
+// EXP-008: 差し戻された申請を、IDを変えずに更新して再提出する（新規作成ではない）。
+function resubmitExpense(applicationId, fields, actorId) {
+  var sheet = ensureExpensesSheet()
+  var found = findExpenseRow(sheet, applicationId)
+  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+
+  var headers = found.headers
+  var applicantId = String(found.data[headers.indexOf('applicant_id')])
+  if (actorId && actorId !== applicantId) {
+    throw new Error('この経費申請を再提出する権限がありません。')
+  }
+
+  fields = fields || {}
+  var approvalSteps = fields.approvalSteps || JSON.parse(String(found.data[headers.indexOf('approval_steps_json')] || '[]'))
+  var amount = fields.amount != null ? fields.amount : found.data[headers.indexOf('amount')]
+
+  var updates = {
+    amount: amount,
+    category_id: fields.categoryId || found.data[headers.indexOf('category_id')],
+    receipt_url: fields.receiptUrl || '',
+    justification: fields.justification || '',
+    purpose: fields.purpose || '',
+    custom_field_answers_json: JSON.stringify(fields.customFieldAnswers || {}),
+    approval_steps_json: JSON.stringify(approvalSteps),
+    approvals_json: '[]',
+    current_step_index: 0,
+    status: 'pending',
+    rejection_reason: '',
+  }
+  updateRowFields(SHEET_EXPENSES, applicationId, updates)
+
+  // 1次承認者への通知（新規申請時と同じ）
+  if (approvalSteps.length > 0) {
+    var firstStep = approvalSteps[0]
+    var emails = []
+    if (firstStep.type === 'member' && firstStep.memberId) {
+      emails = memberEmailsByIds([firstStep.memberId])
+    }
+    sendLocalizedEmail(emails, {
+      ja: { subject: 'Orbit: 経費申請が再提出されました', body: '差し戻された経費申請が修正のうえ再提出されました。Orbitから確認・承認してください。\n\n金額: ¥' + amount },
+      en: { subject: 'Orbit: Expense application resubmitted', body: 'A returned expense application has been revised and resubmitted. Please review and approve it in Orbit.\n\nAmount: ¥' + amount },
+    })
+  }
+  return { ok: true }
 }
 
 function findExpenseRow(sheet, applicationId) {
@@ -3337,9 +3418,10 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
     }
     if (notifyIds.length > 0) {
       var nextEmails = memberEmailsByIds(notifyIds)
-      if (nextEmails.length > 0) {
-        MailApp.sendEmail({ to: nextEmails.join(','), subject: 'Orbit: 経費承認の依頼', body: '経費申請の承認依頼が届きました。Orbitにログインして確認してください。' })
-      }
+      sendLocalizedEmail(nextEmails, {
+        ja: { subject: 'Orbit: 経費承認の依頼', body: '経費申請の承認依頼が届きました。Orbitにログインして確認してください。' },
+        en: { subject: 'Orbit: Expense approval requested', body: 'An expense application is waiting for your approval. Please log in to Orbit to review it.' },
+      })
       notifyChat('💴 経費申請の承認依頼が届きました（ステップ ' + (nextIdx + 1) + '）。Orbitにログインして確認してください。')
     }
   }
@@ -3348,9 +3430,10 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   if (newStatus === 'approved') {
     var applicantId = String(data[headers.indexOf('applicant_id')])
     var emails = memberEmailsByIds([applicantId])
-    if (emails.length > 0) {
-      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が承認されました', body: '経費申請が承認されました。' })
-    }
+    sendLocalizedEmail(emails, {
+      ja: { subject: 'Orbit: 経費申請が承認されました', body: '経費申請が承認されました。' },
+      en: { subject: 'Orbit: Expense application approved', body: 'Your expense application has been approved.' },
+    })
   }
   return { ok: true }
 }
@@ -3403,9 +3486,10 @@ function setExpenseStatus(applicationId, status, reason, actorId) {
         }
         if (withdrawNotifyIds.length > 0) {
           var wEmails = memberEmailsByIds(withdrawNotifyIds)
-          if (wEmails.length > 0) {
-            MailApp.sendEmail({ to: wEmails.join(','), subject: 'Orbit: 経費申請が取り下げられました', body: '経費申請が取り下げられました。この申請への対応は不要です。' })
-          }
+          sendLocalizedEmail(wEmails, {
+            ja: { subject: 'Orbit: 経費申請が取り下げられました', body: '経費申請が取り下げられました。この申請への対応は不要です。' },
+            en: { subject: 'Orbit: Expense application withdrawn', body: 'The expense application has been withdrawn. No action is needed on your part.' },
+          })
           notifyChat('💴 経費申請が取り下げられました。この申請への対応は不要です。')
         }
       }
@@ -3415,9 +3499,19 @@ function setExpenseStatus(applicationId, status, reason, actorId) {
   // 却下通知
   if (status === 'rejected') {
     var emails = memberEmailsByIds([applicantId])
-    if (emails.length > 0) {
-      MailApp.sendEmail({ to: emails.join(','), subject: 'Orbit: 経費申請が却下されました', body: '経費申請が却下されました。\n理由: ' + (reason || '—') })
-    }
+    sendLocalizedEmail(emails, {
+      ja: { subject: 'Orbit: 経費申請が却下されました', body: '経費申請が却下されました。\n理由: ' + (reason || '—') },
+      en: { subject: 'Orbit: Expense application rejected', body: 'Your expense application has been rejected.\nReason: ' + (reason || '—') },
+    })
+  }
+
+  // EXP-008: 差し戻し通知（却下とは別。修正して再提出できる旨を伝える）
+  if (status === 'returned') {
+    var rEmails = memberEmailsByIds([applicantId])
+    sendLocalizedEmail(rEmails, {
+      ja: { subject: 'Orbit: 経費申請が差し戻されました', body: '経費申請が差し戻されました。内容を修正のうえ、再提出してください。\n理由: ' + (reason || '—') },
+      en: { subject: 'Orbit: Expense application returned for revision', body: 'Your expense application has been returned for revision. Please update it and resubmit.\nReason: ' + (reason || '—') },
+    })
   }
   return { ok: true }
 }

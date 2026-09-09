@@ -810,7 +810,8 @@ export interface NotificationItem {
   // 'mention' = コメントで@メンションされた（未読のみ表示。store.tsxの
   // seenMentionIds/markMentionSeen参照）
   // 'lowWorkload' = P16: 直属の部下がタスク少なめ状態の上長への通知
-  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info' | 'lowWorkload'
+  // 'expense' = EXP-007: 経費申請の承認待ち/却下・差し戻し通知
+  kind: 'approval' | 'review' | 'deadline' | 'stale' | 'mention' | 'info' | 'lowWorkload' | 'expense'
   title: string
   detail: string
   taskId: string
@@ -819,6 +820,8 @@ export interface NotificationItem {
   // kind: 'lowWorkload'(および将来のメンバー起点通知)で設定 — クリック時に
   // そのメンバーの人物ページ(go({name:'person', id: memberId}))へ遷移する
   memberId?: string
+  // kind: 'expense' のときだけ設定 — 該当の経費申請ID
+  applicationId?: string
 }
 
 // ---- 多段階承認 (Phase 5) -----------------------------------------------
@@ -854,11 +857,14 @@ export interface ExpenseCategory {
   id: string
   label: string
   approvalSteps: ApprovalStep[]
+  // EXP-005: このカテゴリの申請フォームに追加する独自項目
+  customFields?: { key: string; label: string; type: 'text' | 'number' | 'date' }[]
 }
 
 // ---- 経費申請 -----------------------------------------------------------
 
-export type ExpenseApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn'
+// EXP-008: 'returned' = 差し戻し(却下'rejected'とは別。修正して再提出できる)
+export type ExpenseApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'returned'
 
 export interface ExpenseApplication {
   id: string
@@ -868,6 +874,8 @@ export interface ExpenseApplication {
   receiptUrl?: string
   justification?: string
   purpose?: string
+  // EXP-005: カテゴリのcustomFieldsへの回答 {key: 回答値}
+  customFieldAnswers?: Record<string, string>
   // 作成時点のステップ定義のスナップショット
   approvalSteps: ApprovalStep[]
   approvals: ApprovalRecord[]

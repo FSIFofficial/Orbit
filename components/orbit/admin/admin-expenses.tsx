@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import type { ApprovalStep, ExpenseApplication, ExpenseCategory } from '@/lib/orbit/types'
-import { Plus, Trash2, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, CheckCircle, XCircle, ChevronDown, ChevronUp, Undo2 } from 'lucide-react'
 import { Modal } from '@/components/orbit/modal'
 import { AdminAccessNote } from '@/components/orbit/primitives'
 import { useI18n } from '@/lib/orbit/i18n'
@@ -107,6 +107,55 @@ function ApprovalStepEditor({
   )
 }
 
+// ---- CustomFieldsEditor (EXP-005: カテゴリ別カスタム項目) ----
+
+type CustomField = { key: string; label: string; type: 'text' | 'number' | 'date' }
+
+function CustomFieldsEditor({
+  fields,
+  onChange,
+}: {
+  fields: CustomField[]
+  onChange: (fields: CustomField[]) => void
+}) {
+  const { t } = useI18n()
+  const addField = () => onChange([...fields, { key: crypto.randomUUID(), label: '', type: 'text' }])
+  const removeField = (key: string) => onChange(fields.filter((f) => f.key !== key))
+  const updateField = (key: string, patch: Partial<CustomField>) =>
+    onChange(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)))
+
+  return (
+    <div className="space-y-2">
+      {fields.map((field) => (
+        <div key={field.key} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+          <input
+            type="text"
+            value={field.label}
+            onChange={(e) => updateField(field.key, { label: e.target.value })}
+            placeholder={t('admin.expenses.customField.labelPlaceholder')}
+            className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
+          />
+          <select
+            value={field.type}
+            onChange={(e) => updateField(field.key, { type: e.target.value as CustomField['type'] })}
+            className="rounded border border-border bg-background px-2 py-1 text-xs"
+          >
+            <option value="text">{t('admin.expenses.customField.type.text')}</option>
+            <option value="number">{t('admin.expenses.customField.type.number')}</option>
+            <option value="date">{t('admin.expenses.customField.type.date')}</option>
+          </select>
+          <button onClick={() => removeField(field.key)} className="text-muted-foreground hover:text-destructive">
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      <button onClick={addField} className="flex items-center gap-1 text-xs text-primary hover:underline">
+        <Plus className="size-3" /> {t('admin.expenses.customField.add')}
+      </button>
+    </div>
+  )
+}
+
 // ---- CategoryEditor Modal ----
 
 function CategoryEditor({
@@ -125,10 +174,17 @@ function CategoryEditor({
   const { t } = useI18n()
   const [label, setLabel] = useState(initial?.label ?? '')
   const [steps, setSteps] = useState<ApprovalStep[]>(initial?.approvalSteps ?? [])
+  const [customFields, setCustomFields] = useState<CustomField[]>(initial?.customFields ?? [])
 
   const handleSave = () => {
     if (!label.trim()) return
-    onSave({ id: initial?.id ?? crypto.randomUUID(), label: label.trim(), approvalSteps: steps })
+    const cleanedFields = customFields.filter((f) => f.label.trim())
+    onSave({
+      id: initial?.id ?? crypto.randomUUID(),
+      label: label.trim(),
+      approvalSteps: steps,
+      customFields: cleanedFields.length > 0 ? cleanedFields : undefined,
+    })
     onClose()
   }
 
@@ -149,6 +205,10 @@ function CategoryEditor({
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">{t('admin.expenses.category.approvalStepsLabel')}</label>
           <ApprovalStepEditor steps={steps} onChange={setSteps} members={members} roleLevels={roleLevels} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">{t('admin.expenses.category.customFieldsLabel')}</label>
+          <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm">
@@ -173,19 +233,22 @@ function ApplicationCard({
   app,
   onApprove,
   onReject,
+  onReturn,
   getMember,
   getCategory,
 }: {
   app: ExpenseApplication
   onApprove: (stepId: string) => void
   onReject: (reason: string) => void
+  onReturn: (reason: string) => void
   getMember: (id: string | null) => { name: string; displayName?: string } | undefined
   getCategory: (id: string) => ExpenseCategory | undefined
 }) {
   const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
-  const [rejectOpen, setRejectOpen] = useState(false)
+  const [actionReason, setActionReason] = useState('')
+  // EXP-008: 却下と差し戻しは理由入力モーダルを共有する
+  const [actionModal, setActionModal] = useState<'reject' | 'return' | null>(null)
 
   const applicant = getMember(app.applicantId)
   const category = getCategory(app.categoryId)
@@ -196,12 +259,14 @@ function ApplicationCard({
     approved: t('admin.expenses.status.approved'),
     rejected: t('admin.expenses.status.rejected'),
     withdrawn: t('admin.expenses.status.withdrawn'),
+    returned: t('admin.expenses.status.returned'),
   }
   const statusColor: Record<ExpenseApplication['status'], string> = {
     pending: 'text-yellow-600',
     approved: 'text-green-600',
     rejected: 'text-destructive',
     withdrawn: 'text-muted-foreground',
+    returned: 'text-orange-600',
   }
 
   return (
@@ -239,6 +304,14 @@ function ApplicationCard({
           {app.justification && (
             <div className="text-sm"><span className="text-muted-foreground">{t('admin.expenses.justificationLabel')}</span>{app.justification}</div>
           )}
+          {category?.customFields?.map((field) =>
+            app.customFieldAnswers?.[field.key] ? (
+              <div key={field.key} className="text-sm">
+                <span className="text-muted-foreground">{field.label}: </span>
+                {app.customFieldAnswers[field.key]}
+              </div>
+            ) : null,
+          )}
 
           <div className="space-y-1">
             <div className="text-xs font-semibold text-muted-foreground">{t('admin.expenses.approvalStepsTitle')}</div>
@@ -270,7 +343,13 @@ function ApplicationCard({
                 <CheckCircle className="size-3.5" /> {t('admin.expenses.approve')}
               </button>
               <button
-                onClick={() => setRejectOpen(true)}
+                onClick={() => setActionModal('return')}
+                className="flex items-center gap-1.5 rounded-md border border-orange-500 px-3 py-1.5 text-xs text-orange-600 hover:bg-orange-500/10"
+              >
+                <Undo2 className="size-3.5" /> {t('admin.expenses.return')}
+              </button>
+              <button
+                onClick={() => setActionModal('reject')}
                 className="flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
               >
                 <XCircle className="size-3.5" /> {t('admin.expenses.reject')}
@@ -278,34 +357,41 @@ function ApplicationCard({
             </div>
           )}
           {app.rejectionReason && (
-            <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+            <div className={`rounded-md p-2 text-xs ${app.status === 'returned' ? 'bg-orange-500/10 text-orange-600' : 'bg-destructive/10 text-destructive'}`}>
               {t('admin.expenses.rejectionReasonLabel', { reason: app.rejectionReason })}
             </div>
           )}
         </div>
       )}
 
-      {rejectOpen && (
-        <Modal open={true} onClose={() => setRejectOpen(false)}>
+      {actionModal && (
+        <Modal open={true} onClose={() => setActionModal(null)}>
           <div className="space-y-3 p-4">
-            <h3 className="font-semibold">{t('admin.expenses.rejectModal.title')}</h3>
+            <h3 className="font-semibold">
+              {actionModal === 'reject' ? t('admin.expenses.rejectModal.title') : t('admin.expenses.returnModal.title')}
+            </h3>
             <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
+              value={actionReason}
+              onChange={(e) => setActionReason(e.target.value)}
               className="w-full rounded border border-border bg-background px-3 py-2 text-sm"
               rows={3}
-              placeholder={t('admin.expenses.rejectModal.placeholder')}
+              placeholder={actionModal === 'reject' ? t('admin.expenses.rejectModal.placeholder') : t('admin.expenses.returnModal.placeholder')}
             />
             <div className="flex justify-end gap-2">
-              <button onClick={() => setRejectOpen(false)} className="rounded-md border border-border px-3 py-1.5 text-sm">
+              <button onClick={() => setActionModal(null)} className="rounded-md border border-border px-3 py-1.5 text-sm">
                 {t('admin.expenses.cancel')}
               </button>
               <button
-                disabled={!rejectReason.trim()}
-                onClick={() => { onReject(rejectReason); setRejectOpen(false) }}
-                className="rounded-md bg-destructive px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                disabled={!actionReason.trim()}
+                onClick={() => {
+                  if (actionModal === 'reject') onReject(actionReason)
+                  else onReturn(actionReason)
+                  setActionReason('')
+                  setActionModal(null)
+                }}
+                className={`rounded-md px-3 py-1.5 text-sm text-white disabled:opacity-50 ${actionModal === 'reject' ? 'bg-destructive' : 'bg-orange-600'}`}
               >
-                {t('admin.expenses.rejectModal.submit')}
+                {actionModal === 'reject' ? t('admin.expenses.rejectModal.submit') : t('admin.expenses.returnModal.submit')}
               </button>
             </div>
           </div>
@@ -324,6 +410,7 @@ export function AdminExpenses() {
     updateExpenseCategories,
     approveExpenseStep,
     rejectExpense,
+    returnExpense,
     members,
     roleLevels,
     getMember,
@@ -380,6 +467,7 @@ export function AdminExpenses() {
                     app={app}
                     onApprove={(stepId) => approveExpenseStep(app.id, stepId)}
                     onReject={(reason) => rejectExpense(app.id, reason)}
+                    onReturn={(reason) => returnExpense(app.id, reason)}
                     getMember={getMember}
                     getCategory={getCategory}
                   />
@@ -397,6 +485,7 @@ export function AdminExpenses() {
                     app={app}
                     onApprove={(stepId) => approveExpenseStep(app.id, stepId)}
                     onReject={(reason) => rejectExpense(app.id, reason)}
+                    onReturn={(reason) => returnExpense(app.id, reason)}
                     getMember={getMember}
                     getCategory={getCategory}
                   />
