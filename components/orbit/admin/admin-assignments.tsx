@@ -99,6 +99,12 @@ function MatchPanel({
     toast(t('admin.assignments.assignedToast', { name: m.displayName || m.name }))
   }
 
+  // TSK-027: 公募タスクへの応募者(openBidApplicantIds)。既存のassignTask
+  // をそのまま呼ぶだけで正式な担当者にできる(応募≠即アサイン)
+  const applicants = (task.openBidApplicantIds ?? [])
+    .map((id) => members.find((m) => m.id === id))
+    .filter((m): m is Member => !!m)
+
   return (
     <div>
       {/* Task header */}
@@ -122,6 +128,25 @@ function MatchPanel({
           </div>
         </div>
       </div>
+
+      {/* TSK-027: 公募への応募者 */}
+      {applicants.length > 0 && (
+        <div className="mt-5">
+          <h3 className="text-sm font-semibold">{t('admin.assignments.applicants.title', { count: applicants.length })}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{t('admin.assignments.applicants.desc')}</p>
+          <div className="mt-3 space-y-3">
+            {applicants.map((member) => (
+              <CandidateCard
+                key={member.id}
+                member={member}
+                matches={matchSkills(task, member)}
+                onAssign={() => handleAssign(member)}
+                weeklyHours={weeklyWorkload(member.id, allTasks)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recommended candidates */}
       <div className="mt-5 flex items-center gap-2">

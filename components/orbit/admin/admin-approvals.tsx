@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
-import { Avatar, DifficultyBadge, ProjectTag, Tag } from '@/components/orbit/primitives'
+import { Avatar, DifficultyBadge, ProjectTag, Tag, SimilarTaskSummary } from '@/components/orbit/primitives'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
 import { findSimilarTasks, formatDeadline } from '@/lib/orbit/utils'
@@ -106,14 +106,7 @@ export function AdminApprovals() {
                         </div>
                         <ul className="mt-1 flex flex-col gap-0.5">
                           {similar.map(({ task: s }) => (
-                            <li key={s.id} className="text-xs text-muted-foreground">
-                              ・{s.name}
-                              {s.status === 'done' && s.retrospective && (
-                                <span className="block pl-3 text-[11px] italic">
-                                  {s.retrospective.improve || s.retrospective.bad || s.retrospective.good}
-                                </span>
-                              )}
-                            </li>
+                            <SimilarTaskSummary key={s.id} task={s} />
                           ))}
                         </ul>
                       </div>

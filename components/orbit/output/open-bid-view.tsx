@@ -10,8 +10,9 @@ import { Megaphone } from 'lucide-react'
 import type { Task } from '@/lib/orbit/types'
 
 // 公募タスク — assigneeIdsが空 かつ assignType==='open_bid' のタスクに
-// 誰でも「応募する」で自分を担当者にできる導線。応募ロジックはtask-detail-
-// drawer.tsxのonTake（担当する）と同じ: assignTask(id, [currentUserId])
+// 「応募する」ボタンを出す。TSK-027: 即座にassignTaskで自己アサインする
+// のではなく、openBidApplicantIdsに自分のIDを積む「応募」に留める(承認制)。
+// 実際に担当者にする操作はadmin-assignments.tsx側で管理者が行う。
 export function OpenBidView({
   tasks,
   onOpenTask,
@@ -19,7 +20,7 @@ export function OpenBidView({
   tasks: Task[]
   onOpenTask: (id: string) => void
 }) {
-  const { getProject, currentUser, assignTask } = useOrbit()
+  const { getProject, currentUser, applyToOpenBid, withdrawOpenBidApplication } = useOrbit()
   const toast = useToast()
   const { t } = useI18n()
 
@@ -29,8 +30,14 @@ export function OpenBidView({
 
   const apply = (task: Task) => {
     if (!currentUser) return
-    assignTask(task.id, [currentUser.id])
+    applyToOpenBid(task.id)
     toast(t('openBid.appliedToast', { name: task.name }))
+  }
+
+  const withdraw = (task: Task) => {
+    if (!currentUser) return
+    withdrawOpenBidApplication(task.id)
+    toast(t('openBid.withdrawnToast', { name: task.name }))
   }
 
   if (openBidTasks.length === 0) {
@@ -48,6 +55,7 @@ export function OpenBidView({
       <div className="flex flex-col gap-2">
         {openBidTasks.map((task) => {
           const project = getProject(task.projectId)
+          const alreadyApplied = !!currentUser && (task.openBidApplicantIds ?? []).includes(currentUser.id)
           return (
             <div
               key={task.id}
@@ -79,15 +87,30 @@ export function OpenBidView({
                   </div>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => apply(task)}
-                disabled={!currentUser}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40 sm:self-start"
-              >
-                <Avatar member={currentUser} size={18} />
-                {t('openBid.apply')}
-              </button>
+              {alreadyApplied ? (
+                <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+                  <span className="rounded-lg bg-secondary px-3 py-1.5 text-center text-xs font-medium text-muted-foreground">
+                    {t('openBid.applied')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => withdraw(task)}
+                    className="text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                  >
+                    {t('openBid.withdraw')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => apply(task)}
+                  disabled={!currentUser}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40 sm:self-start"
+                >
+                  <Avatar member={currentUser} size={18} />
+                  {t('openBid.apply')}
+                </button>
+              )}
             </div>
           )
         })}

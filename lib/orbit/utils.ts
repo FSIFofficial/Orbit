@@ -266,6 +266,36 @@ export function findSimilarTasks(
     .slice(0, 3)
 }
 
+// TSK-030: 要求スキル候補表示の改善 — 生成AIは使わず、同じカテゴリの既存
+// タスクで実際に使われているスキルの頻度から推薦する(内容解析ではなく、
+// 過去実績に基づくヒューリスティック)。
+export function suggestSkillsForCategory(category: string, allTasks: Task[]): string[] {
+  const counts: Record<string, number> = {}
+  allTasks
+    .filter((t) => t.category === category)
+    .forEach((t) => t.skills.forEach((s) => { counts[s] = (counts[s] ?? 0) + 1 }))
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([skill]) => skill)
+}
+
+// TSK-034: カテゴリ候補表示の改善 — 生成AIは使わず、タイトル文字列と
+// カテゴリ名・そのカテゴリの頻出スキル名との単純な部分一致によるスコアを、
+// プロジェクト内使用頻度と組み合わせて順位付けする(内容解析ではなく
+// 文字列一致ヒューリスティック)。
+export function suggestCategoriesForTitle(title: string, categories: string[], allTasks: Task[]): string[] {
+  const lower = title.toLowerCase()
+  const scored = categories.map((cat) => {
+    const catTasks = allTasks.filter((t) => t.category === cat)
+    const topSkills = suggestSkillsForCategory(cat, allTasks).slice(0, 3)
+    let score = catTasks.length * 0.1 // 既存の頻度ベース分
+    if (lower.includes(cat.toLowerCase())) score += 10
+    topSkills.forEach((s) => { if (lower.includes(s.toLowerCase())) score += 3 })
+    return { cat, score }
+  })
+  return scored.sort((a, b) => b.score - a.score).map((s) => s.cat)
+}
+
 // 手一杯なメンバーまでどんどん薦めると偏りが起きるため、現在の未完了タスク数
 // がこれ以上のメンバーはおすすめ候補から除外する（完全に選べなくなるわけでは
 // なく、「その他のメンバーから選ぶ」には引き続き表示される）。数字は仮

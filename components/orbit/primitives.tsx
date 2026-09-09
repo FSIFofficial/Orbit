@@ -9,7 +9,7 @@ import {
   type Priority,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import type { Member, Department } from '@/lib/orbit/types'
+import type { Member, Department, Task } from '@/lib/orbit/types'
 import { useI18n, STATUS_KEY, DIFFICULTY_KEY, DEPARTMENT_KEY, PRIORITY_KEY } from '@/lib/orbit/i18n'
 import { useOrbit } from '@/lib/orbit/store'
 
@@ -249,6 +249,44 @@ export function AdminAccessNote({ level, className }: { level: 'fullAdmin' | 'da
       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
       {level === 'fullAdmin' ? t('admin.accessNote.fullAdmin') : t('admin.accessNote.daihyo')}
     </p>
+  )
+}
+
+// TSK-064: 類似タスクの振り返り・成果物・実績工数をまとめて表示する共通
+// コンポーネント。parsed-task-card.tsx(入力時の類似タスク警告)と
+// admin-approvals.tsx(承認時の類似タスク警告)の両方で使う想定
+export function SimilarTaskSummary({ task }: { task: Task }) {
+  const { t } = useI18n()
+  const note =
+    task.status === 'done' && task.retrospective
+      ? task.retrospective.improve || task.retrospective.bad || task.retrospective.good
+      : null
+  const deliverables = (task.deliverables ?? []).slice(0, 3)
+  return (
+    <li className="text-xs text-muted-foreground">
+      ・{task.name}
+      {note && <span className="block pl-3 text-[11px] italic">{note}</span>}
+      {task.actualHours != null && (
+        <span className="block pl-3 text-[11px]">
+          {t('similarTask.actualHoursLabel', { hours: task.actualHours })}
+        </span>
+      )}
+      {deliverables.length > 0 && (
+        <span className="mt-0.5 flex flex-wrap gap-x-2 pl-3 text-[11px]">
+          {deliverables.map((d) => (
+            <a
+              key={d.id}
+              href={d.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline"
+            >
+              {d.label || d.url}
+            </a>
+          ))}
+        </span>
+      )}
+    </li>
   )
 }
 

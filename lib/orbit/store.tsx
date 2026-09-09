@@ -259,7 +259,10 @@ interface OrbitContextValue extends OrbitState {
     },
   ) => void
   updateProgress: (id: string, text: string) => void
+  updateProgressPercent: (id: string, percent: number) => void
   assignTask: (id: string, memberIds: string[]) => void
+  applyToOpenBid: (taskId: string) => void
+  withdrawOpenBidApplication: (taskId: string) => void
   updateWill: (memberId: string, will: string[]) => void
   updateJudgment: (memberId: string, judgment: string[]) => void
   approveTask: (id: string) => void
@@ -2310,6 +2313,17 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [currentUserId, runRemote],
   )
 
+  // TSK-010: 0-100の数値進捗率。自由記述メモ(updateProgress)とは独立して、
+  // スライダー操作のたびに即座に保存する
+  const updateProgressPercent = useCallback(
+    (id: string, percent: number) => {
+      const clamped = Math.max(0, Math.min(100, Math.round(percent)))
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, progressPercent: clamped } : t)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateProgressPercent(id, clamped))
+    },
+    [runRemote],
+  )
+
   // Auto-certify: once a member has SKILL_CERT_THRESHOLD completed tasks in
   // the same category, that category is added to their Judgment tags.
   const maybeCertifySkill = useCallback(
@@ -2436,6 +2450,43 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [tasks, appendHistory, runRemote],
+  )
+
+  // TSK-027: 公募タスクへの応募(承認制)。即座にassigneeIdsへは追加せず、
+  // openBidApplicantIdsに自分のIDを積むだけ(重複追加は防ぐ)。実際に
+  // 担当者にするのは管理者がadmin-assignments.tsx等から既存のassignTaskを
+  // 呼ぶ操作。
+  const applyToOpenBid = useCallback(
+    (taskId: string) => {
+      if (!currentUserId) return
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t
+          if ((t.openBidApplicantIds ?? []).includes(currentUserId)) return t
+          const next = [...(t.openBidApplicantIds ?? []), currentUserId]
+          if (isRemoteConfigured) runRemote(remoteApi.applyToOpenBid(taskId, next))
+          return { ...t, openBidApplicantIds: next }
+        }),
+      )
+    },
+    [currentUserId, runRemote],
+  )
+
+  // 応募の取り下げ。管理者権限は不要で本人のみ(呼び出し元のUIで本人にしか
+  // ボタンを出さない)
+  const withdrawOpenBidApplication = useCallback(
+    (taskId: string) => {
+      if (!currentUserId) return
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t
+          const next = (t.openBidApplicantIds ?? []).filter((id) => id !== currentUserId)
+          if (isRemoteConfigured) runRemote(remoteApi.applyToOpenBid(taskId, next))
+          return { ...t, openBidApplicantIds: next }
+        }),
+      )
+    },
+    [currentUserId, runRemote],
   )
 
   const updateWill = useCallback(
@@ -4035,7 +4086,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateDifficulty,
     updateTaskDetails,
     updateProgress,
+    updateProgressPercent,
     assignTask,
+    applyToOpenBid,
+    withdrawOpenBidApplication,
     updateWill,
     updateJudgment,
     approveTask,

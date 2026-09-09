@@ -234,6 +234,37 @@ export function AdminAnalytics() {
   // item 14: メンバー別 スキル数×担当タスク数 散布図（稼働余力可視化）
   // x軸: スキル数（能力の幅）, y軸: 担当中タスク数（稼働量）
   const allTasks = useMemo(() => [...visibleTasks, ...archivedTasks], [visibleTasks, archivedTasks])
+
+  // TSK-058: カテゴリ別平均工数分析 — done かつ actualHours設定済みの
+  // タスクのみをカテゴリごとに集計する(parsed-task-card.tsxのsuggestedHours
+  // と同じ「実績があれば実績、無ければ想定」の平均化ではなく、ここでは
+  // 実績時間と想定時間を別々に平均して両者を比較できるようにする)
+  const categoryHoursRows = useMemo(() => {
+    const byCategory = new Map<
+      string,
+      { actualSum: number; actualCount: number; estimatedSum: number; estimatedCount: number }
+    >()
+    allTasks
+      .filter((t) => t.status === 'done' && typeof t.actualHours === 'number')
+      .forEach((t) => {
+        const entry = byCategory.get(t.category) ?? { actualSum: 0, actualCount: 0, estimatedSum: 0, estimatedCount: 0 }
+        entry.actualSum += t.actualHours!
+        entry.actualCount += 1
+        if (typeof t.estimatedHours === 'number') {
+          entry.estimatedSum += t.estimatedHours
+          entry.estimatedCount += 1
+        }
+        byCategory.set(t.category, entry)
+      })
+    return Array.from(byCategory.entries())
+      .map(([category, e]) => ({
+        category,
+        count: e.actualCount,
+        avgActual: e.actualSum / e.actualCount,
+        avgEstimated: e.estimatedCount > 0 ? e.estimatedSum / e.estimatedCount : null,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [allTasks])
   const scatterPoints = useMemo(() =>
     members
       .filter((m) => !m.inactive)
@@ -560,6 +591,39 @@ export function AdminAnalytics() {
                 suffix={t('admin.analytics.surveyCombo.suffix', { avg: row.avg.toFixed(1), count: row.count })}
               />
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.categoryHours.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.categoryHours.desc')}</p>
+        {categoryHoursRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.categoryHours.empty')}</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-1 pr-3 font-medium">{t('admin.analytics.categoryHours.colCategory')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.categoryHours.colCount')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.categoryHours.colAvgActual')}</th>
+                  <th className="py-1 text-right font-medium">{t('admin.analytics.categoryHours.colAvgEstimated')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryHoursRows.map((row) => (
+                  <tr key={row.category} className="border-t border-border/30">
+                    <td className="py-1 pr-3 font-medium">{row.category}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.count}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.avgActual.toFixed(1)}h</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {row.avgEstimated != null ? `${row.avgEstimated.toFixed(1)}h` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -171,6 +171,12 @@ export function KanbanCard({
         </div>
       )}
 
+      {task.progressPercent != null && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary" title={`${task.progressPercent}%`}>
+          <div className="h-full rounded-full bg-primary" style={{ width: `${task.progressPercent}%` }} />
+        </div>
+      )}
+
       {showBottomRow && (
         <div className="mt-2 flex items-center justify-between gap-2">
           {showCategory && (
