@@ -41,12 +41,12 @@ export function ParsedTaskCard({
   const candidates = rankCandidates(task, members, tasks).slice(0, 3)
 
   // TSK-034: おすすめカテゴリ — タイトルとカテゴリ名/頻出スキル名の文字列
-  // 一致 + 使用頻度をsuggestCategoriesForTitleでスコアリング(生成AIは
-  // 使わない、既存の頻度ベース推薦をこの関数に統合)
+  // 一致 + プロジェクト内使用頻度をsuggestCategoriesForTitleでスコアリング
+  // (生成AIは使わない、既存の頻度ベース推薦をこの関数に統合)
   const suggestedCategories = (() => {
     const usedCategories = tasks.map((t) => t.category).filter(Boolean)
     const candidatePool = Array.from(new Set([...categoryOptions, ...usedCategories]))
-    return suggestCategoriesForTitle(task.name, candidatePool, tasks)
+    return suggestCategoriesForTitle(task.name, candidatePool, tasks, task.projectId)
       .filter((c) => c !== task.category)
       .slice(0, 4)
   })()

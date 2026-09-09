@@ -281,14 +281,22 @@ export function suggestSkillsForCategory(category: string, allTasks: Task[]): st
 
 // TSK-034: カテゴリ候補表示の改善 — 生成AIは使わず、タイトル文字列と
 // カテゴリ名・そのカテゴリの頻出スキル名との単純な部分一致によるスコアを、
-// プロジェクト内使用頻度と組み合わせて順位付けする(内容解析ではなく
-// 文字列一致ヒューリスティック)。
-export function suggestCategoriesForTitle(title: string, categories: string[], allTasks: Task[]): string[] {
+// 「同じプロジェクト内」での使用頻度と組み合わせて順位付けする(内容解析
+// ではなく文字列一致ヒューリスティック)。頻度をプロジェクト内に絞るのは、
+// プロジェクトごとに使う分類の傾向が違うため(全社共通のトレンドではなく、
+// 「このプロジェクトでは実際どのカテゴリが多いか」を優先したいという判断)。
+export function suggestCategoriesForTitle(
+  title: string,
+  categories: string[],
+  allTasks: Task[],
+  projectId: string,
+): string[] {
   const lower = title.toLowerCase()
+  const projectTasks = allTasks.filter((t) => t.projectId === projectId)
   const scored = categories.map((cat) => {
-    const catTasks = allTasks.filter((t) => t.category === cat)
-    const topSkills = suggestSkillsForCategory(cat, allTasks).slice(0, 3)
-    let score = catTasks.length * 0.1 // 既存の頻度ベース分
+    const catTasks = projectTasks.filter((t) => t.category === cat)
+    const topSkills = suggestSkillsForCategory(cat, projectTasks).slice(0, 3)
+    let score = catTasks.length * 0.1
     if (lower.includes(cat.toLowerCase())) score += 10
     topSkills.forEach((s) => { if (lower.includes(s.toLowerCase())) score += 3 })
     return { cat, score }
