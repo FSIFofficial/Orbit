@@ -654,6 +654,7 @@ function authorizeAction(acting, action, body) {
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
     'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
     'approveTaskReview',       // 複数確認者の承認（本人が確認者かどうかは下記でチェック）
+    'checkAndGenerateRecurringTasks', // item 2/TSK-051: 生成はルール定義に従うだけなので誰でも呼べる
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -1160,6 +1161,12 @@ function doPost(e) {
       case 'submitSurveyResponse':
         // actingMember.id を使うことでクライアントの自己申告値(body.memberId)による偽装を防ぐ
         result = saveSurveyResponse(actingMember.id, body.answers || {})
+        break
+      case 'checkAndGenerateRecurringTasks':
+        // item 2/TSK-051: クライアント側(誰かがOrbitを開いた時)とサーバー側
+        // 日次トリガー(dailyMaintenance)の両方からこの同じロック付き関数を
+        // 呼ぶことで、定期タスクの二重生成を防ぐ
+        result = generateRecurringTasksLocked()
         break
       default:
         throw new Error('Unknown action: ' + body.action)
@@ -2507,32 +2514,59 @@ function getSettingValue(key) {
   return ''
 }
 
-// ---- 定期タスクの自動生成（サーバー側・日次トリガー）------------------------
+// ---- 定期タスクの自動生成（サーバー側・日次トリガー + クライアント手動チェック）--
 //
-// RecurringTaskRule (Admin > Projects の定期タスク) is normally checked
-// client-side whenever someone's browser loads the app that day — see
-// lib/orbit/store.tsx. That only fires if somebody happens to open Orbit on
-// the due day. This mirrors the same generation logic server-side, driven
-// by a time-based trigger (see setupDailyTrigger below), so a rule fires
-// even if nobody opens the app. Requires SETTINGS_CSV to be configured
-// (gas/README.md §4.6) — without it, recurring rules only live in each
-// browser's localStorage and this function has nothing to read.
-function generateRecurringTasks() {
+// item 2/TSK-051の修正: RecurringTaskRule (Admin > Projects の定期タスク) の
+// 生成要否判定・実際の生成をこのLockService付き関数に一本化する。以前は
+// サーバー側の日次トリガー(dailyMaintenance)と、クライアント側
+// (lib/orbit/store.tsx、誰かがOrbitを開いた時に走る)の両方が、それぞれ
+// 独立に「今日まだ生成していないか」を判定・生成していた。公開CSVの
+// キャッシュ反映には数分のラグがある(gas/README.mdの既知の制約)ため、
+// クライアント側がlastGeneratedDateを更新した直後にサーバー側トリガーが
+// 古い値を読んでしまい、同じルールから同日中に2件生成される競合が
+// 起きていた。加えてクライアント側の期限計算はtoISOString()（UTC基準）
+// を使っており、曜日/日付の判定（ブラウザのローカルタイムゾーン基準）
+// とズレて期限が1日早くなることがあった。両方の経路をここへ統一し、
+// LockServiceで排他制御することでどちらも解消する。
+function generateRecurringTasksLocked() {
+  var lock = LockService.getScriptLock()
+  try {
+    lock.waitLock(10000) // 最大10秒待つ。取れなければ諦める(次の呼び出しに任せる)
+  } catch (e) {
+    console.warn('generateRecurringTasksLocked: ロック取得に失敗、スキップ: ' + e)
+    return { generated: [] }
+  }
+  try {
+    return generateRecurringTasksInternal()
+  } finally {
+    lock.releaseLock()
+  }
+}
+
+// 実際の生成ロジック(generateRecurringTasksLocked()がロックを取得した状態で
+// のみ呼ぶこと)。getSettingValue/updateSettingはSettingsシートを直接
+// 読み書きするため(getSettingValue参照)、クライアントが読む公開CSVの
+// キャッシュ遅延の影響を受けない。戻り値のgeneratedにcreateTasks()の
+// 戻り値({tempId, id}[])をそのまま含めるので、呼び出し元(クライアント)は
+// 生成されたタスクのidを個別に組み立てる必要がなく、そのままrefreshAll()
+// 等で全体を再取得すればよい。
+function generateRecurringTasksInternal() {
   var raw = getSettingValue(SETTINGS_KEY_RECURRING_RULES)
-  if (!raw) return
+  if (!raw) return { generated: [] }
   var rules
   try {
     rules = JSON.parse(raw)
   } catch (err) {
-    return // malformed value — don't let a bad cell break the trigger
+    return { generated: [] } // malformed value — don't let a bad cell break the trigger
   }
-  if (!rules || rules.length === 0) return
+  if (!rules || rules.length === 0) return { generated: [] }
 
   var now = new Date()
   var today = todayStr()
   var dow = now.getDay()
   var dom = now.getDate()
   var changed = false
+  var generated = []
 
   rules.forEach(function (rule) {
     if (!rule.active || rule.lastGeneratedDate === today) return
@@ -2551,7 +2585,7 @@ function generateRecurringTasks() {
       }
       // same payload shape/columns the client sends for a recurring-generated
       // task (see store.tsx) — reuses createTasks() so both paths stay in sync
-      createTasks([
+      var created = createTasks([
         {
           tempId: 'recurring-' + rule.id,
           title: rule.name,
@@ -2565,6 +2599,7 @@ function generateRecurringTasks() {
           pendingApproval: false,
         },
       ])
+      generated = generated.concat(created)
       rule.lastGeneratedDate = today
       changed = true
     } catch (err) {
@@ -2573,14 +2608,15 @@ function generateRecurringTasks() {
   })
 
   if (changed) updateSetting(SETTINGS_KEY_RECURRING_RULES, JSON.stringify(rules))
+  return { generated: generated }
 }
 
 // One-time setup: open this file in the Apps Script editor, select
 // "setupDailyTrigger" in the function dropdown next to ▶ Run, and run it
 // once. It installs a daily time-based trigger that drives
-// generateRecurringTasks() and the overdue-task Discord sweep below. Safe
-// to re-run — it clears any existing trigger for dailyMaintenance first so
-// re-running it never creates duplicates that fire the same day twice.
+// generateRecurringTasksLocked() and the overdue-task Discord sweep below.
+// Safe to re-run — it clears any existing trigger for dailyMaintenance first
+// so re-running it never creates duplicates that fire the same day twice.
 function setupDailyTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'dailyMaintenance') ScriptApp.deleteTrigger(t)
@@ -2589,11 +2625,11 @@ function setupDailyTrigger() {
 }
 
 // The function the trigger installed by setupDailyTrigger() actually calls.
-// Each step is isolated so a failure in one (e.g. generateRecurringTasks
+// Each step is isolated so a failure in one (e.g. generateRecurringTasksLocked
 // throwing on a malformed rule) can't also skip the other.
 function dailyMaintenance() {
   try {
-    generateRecurringTasks()
+    generateRecurringTasksLocked()
   } catch (err) {
     // best-effort — still run the overdue sweep below
   }

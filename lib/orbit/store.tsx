@@ -909,15 +909,48 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setRefreshing(false))
   }, [reportRemoteError])
 
-  // 定期タスク generation check (item 2) — there's no server-side cron in
-  // this GAS + static-export architecture, so a due rule is generated
-  // client-side whenever any member's browser loads the app on the
-  // matching day. Each rule tracks lastGeneratedDate so it only fires once
-  // per day regardless of how many times/people load the app that day.
+  // 定期タスク generation check (item 2/TSK-051の修正) — 生成の要否判定・
+  // 実際の生成はGAS側のLockService付き関数(generateRecurringTasksLocked)
+  // に一本化した。以前はここで独自に同じ判定・生成をクライアント側でも
+  // 行っており、サーバー側の日次トリガー(dailyMaintenance)と競合して
+  // 同じルールから同日中に2件生成されることがあった(公開CSVのキャッシュ
+  // 反映には数分のラグがあり、クライアントがlastGeneratedDateを更新した
+  // 直後にサーバー側トリガーが古い値を読んでしまうため)。さらに期限計算が
+  // toISOString()(UTC基準)である一方、曜日/日付の判定(dow/dom)はブラウザの
+  // ローカルタイムゾーン基準だったため、深夜0時〜9時台(日本時間)に実行
+  // されると期限が1日早くズレる問題もあった。
+  //
+  // recurringRulesがGASのSettingsシートへ同期されるのはisSettingsConfigured
+  // の時だけ(addRecurringRule等参照)なので、その場合のみサーバー側の関数を
+  // 呼ぶ。Settings CSVが未設定の環境(isRemoteConfigured のみでrecurring_rules
+  // はローカルにしか無い場合や、GASそのものを使わないローカルデモ環境)では
+  // サーバーに読める値が無いため、以前と同様クライアント側で生成する
+  // (この経路はブラウザが1つしか無いことが前提の簡易フォールバックなので
+  // 二重生成の心配は無いが、期限計算は曜日/日付判定と同じローカル
+  // タイムゾーン基準に統一した)。isRemoteConfiguredがtrueならMembers/
+  // Projects/Tasks自体は連携済みなので、ルール定義はローカルのままでも
+  // 生成したタスクはremoteApi.createTasksで実際のTasksシートへ書き込む
+  // (isRemoteConfiguredがfalseの完全ローカルデモ環境ではローカルstateのみ)。
   useEffect(() => {
     if (!hydrated || recurringRules.length === 0) return
+
+    if (isSettingsConfigured) {
+      remoteApi
+        .checkAndGenerateRecurringTasks()
+        .then(({ generated }) => {
+          if (!generated || generated.length === 0) return
+          // 生成されたタスクの詳細フィールドはrefreshAll()で丸ごと再取得
+          // すれば十分で、ここで個別に組み立て直す必要は無い
+          refreshAll()
+        })
+        .catch(reportRemoteError)
+      return
+    }
+
+    const toLocalDateStr = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     const now = new Date()
-    const todayStr = now.toISOString().slice(0, 10)
+    const todayStr = toLocalDateStr(now)
     const dow = now.getDay()
     const dom = now.getDate()
 
@@ -928,7 +961,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
       const deadline =
         rule.dueInDays != null
-          ? new Date(now.getTime() + rule.dueInDays * 86400000).toISOString().slice(0, 10)
+          ? toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate() + rule.dueInDays))
           : null
       const newTask: Task = {
         id: `t-${Math.random().toString(36).slice(2, 9)}`,
@@ -949,12 +982,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         pendingApproval: false,
       }
       setTasks((prev) => [newTask, ...prev])
-      setRecurringRules((prev) => {
-        const next = prev.map((r) => (r.id === rule.id ? { ...r, lastGeneratedDate: todayStr } : r))
-        if (isSettingsConfigured)
-          runRemote(remoteApi.updateSetting('recurring_rules', JSON.stringify(next)))
-        return next
-      })
+      setRecurringRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, lastGeneratedDate: todayStr } : r)))
+      // isSettingsConfiguredがfalseでもisRemoteConfigured(Tasksシート自体は
+      // 連携済み)はtrueということがあり得る(Settingsシートは任意の追加設定
+      // のため)。その場合、ルール定義はローカルのままで構わないが、生成した
+      // タスクは実際のTasksシートへ書き込む必要がある。これが無いと生成物が
+      // Reactのローカルstateにしか残らず、リロードで消え他メンバーにも
+      // 共有されない。
       if (isRemoteConfigured) {
         remoteApi
           .createTasks([
@@ -978,7 +1012,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           .catch(reportRemoteError)
       }
     })
-  }, [hydrated, recurringRules, reportRemoteError, runRemote])
+  }, [hydrated, recurringRules, reportRemoteError, refreshAll])
 
   // keep the skill/category pools growing with whatever actually shows up
   // on tasks (from the sheet or elsewhere), not just manually-added ones
