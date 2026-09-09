@@ -329,6 +329,7 @@ function mapTaskRow(r: Record<string, string>): Task {
       : undefined,
     reviewApprovals: parseJsonArray<{ memberId: string; at: string }>(r.review_approvals_json),
     requiredSkillLevels: parseJsonObject<Partial<Record<string, SkillLevelValue>>>(r.required_skill_levels_json),
+    relatedReviewTaskId: r.related_review_task_id || undefined,
   }
 }
 
@@ -559,6 +560,7 @@ export interface CreateTaskPayload {
   visibility?: 'all' | '幹部'
   estimatedHours?: number
   importance?: string
+  relatedReviewTaskId?: string
 }
 
 async function postToGas<T = unknown>(action: string, payload: Record<string, unknown>): Promise<T> {
@@ -902,6 +904,8 @@ export const remoteApi = {
       'checkAndGenerateRecurringTasks',
       {},
     ),
+  // NTF-005: 日次トリガー任せだった期限超過リマインドの手動発火
+  triggerOverdueReminders: () => postToGas('triggerOverdueReminders', {}),
 }
 
 // re-exported for the parser fallback in input-screen.tsx, which needs to

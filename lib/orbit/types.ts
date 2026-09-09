@@ -577,6 +577,9 @@ export interface Task {
   // COM-004(activity-screen.tsxの'review'フィルタ)でそのまま時系列表示
   // されるため、専用の蓄積先を別途作る必要はない。
   reviewApprovals?: { memberId: string; at: string; comment?: string }[]
+  // APR-007: このタスクが「◯◯の確認待ち」タスクである場合、確認対象の
+  // 元タスクのID。通常のタスクではundefined
+  relatedReviewTaskId?: string
   // "困っている/作業が止まっている" — separate from status so a task can be
   // flagged blocked without losing its in-progress status; cleared (undefined)
   // once resolved

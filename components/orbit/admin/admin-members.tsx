@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useToast } from '@/components/orbit/toast'
@@ -14,6 +15,27 @@ import type { Member, Role } from '@/lib/orbit/types'
 import { tenureYears, formatDepartmentPath } from '@/lib/orbit/utils'
 import { PermissionOverridesButton } from './admin-permission-overrides'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+
+// HRD-009: CSV/xlsxのどちらも、同じ「行=[氏名,メール,所属,ロール]」の
+// 2次元配列に正規化してから、この共通ロジックでプレビュー配列に変換する
+function parseBulkMemberRows(
+  rows2d: string[][],
+  roles: Role[],
+): { name: string; email: string; affiliation: string; role: Role }[] {
+  if (rows2d.length < 2) return []
+  // detect if first row is a header (contains 氏名 or name-like text)
+  const startIdx = /氏名|name|名前/i.test(rows2d[0]?.[0] ?? '') ? 1 : 0
+  return rows2d
+    .slice(startIdx)
+    .map((cols) => {
+      const name = cols[0] ?? ''
+      const email = cols[1] ?? ''
+      const affiliation = cols[2] ?? ''
+      const role = cols[3] && roles.includes(cols[3] as Role) ? (cols[3] as Role) : BASE_ROLE
+      return { name, email, affiliation, role }
+    })
+    .filter((r) => r.name)
+}
 
 function workload(count: number, tr: (key: TranslationKey) => string): { label: string; className: string } {
   if (count <= 2) return { label: tr('admin.members.workload.low'), className: 'text-muted-foreground' }
@@ -69,25 +91,36 @@ export function AdminMembers() {
 
   const [csvPreview, setCsvPreview] = useState<{ name: string; email: string; affiliation: string; role: Role }[] | null>(null)
 
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // HRD-009: 拡張子で分岐 — .xlsxはSheetJS(xlsx)で最初のシートを読み込み、
+  // .csvは既存のテキスト解析のまま。どちらも同じparseBulkMemberRowsに渡す
+  const handleBulkFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    if (/\.xlsx$/i.test(file.name)) {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const data = ev.target?.result as ArrayBuffer
+        const wb = XLSX.read(data, { type: 'array' })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        if (!sheet) return
+        const rows2d = XLSX.utils
+          .sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
+          .map((cols) => cols.map((c) => String(c ?? '').trim()))
+        const rows = parseBulkMemberRows(rows2d, ROLES)
+        if (rows.length) setCsvPreview(rows)
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
-      const lines = text.split(/\r?\n/).filter((l) => l.trim())
-      if (lines.length < 2) return
-      // detect if first row is a header (contains 氏名 or name-like text)
-      const startIdx = /氏名|name|名前/i.test(lines[0]) ? 1 : 0
-      const rows = lines.slice(startIdx).map((line) => {
-        const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
-        const name = cols[0] ?? ''
-        const email = cols[1] ?? ''
-        const affiliation = cols[2] ?? ''
-        const role = (cols[3] && ROLES.includes(cols[3] as Role)) ? cols[3] as Role : BASE_ROLE
-        return { name, email, affiliation, role }
-      }).filter((r) => r.name)
+      const rows2d = text
+        .split(/\r?\n/)
+        .filter((l) => l.trim())
+        .map((line) => line.split(',').map((c) => c.trim().replace(/^"|"$/g, '')))
+      const rows = parseBulkMemberRows(rows2d, ROLES)
       if (rows.length) setCsvPreview(rows)
     }
     reader.readAsText(file)
@@ -221,7 +254,12 @@ export function AdminMembers() {
           <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary">
             <Upload className="size-3.5" />
             {t('admin.members.register.csvBulk')}
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvUpload} />
+            <input
+              type="file"
+              accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={handleBulkFileUpload}
+            />
           </label>
           <span className="text-xs text-muted-foreground">{t('admin.members.register.csvFormat')}</span>
         </div>

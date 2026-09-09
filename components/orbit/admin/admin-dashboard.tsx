@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
+import { useToast } from '@/components/orbit/toast'
 import { Avatar, ProjectTag } from '@/components/orbit/primitives'
 import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
@@ -20,6 +22,7 @@ import {
   Sparkles,
   HeartPulse,
   FileSpreadsheet,
+  Send,
 } from 'lucide-react'
 
 export function AdminDashboard() {
@@ -32,10 +35,15 @@ export function AdminDashboard() {
     getProject,
     currentUser,
     updateProjectHealth,
+    triggerOverdueReminders,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
+  const toast = useToast()
   const { t: tr } = useI18n()
   const tz = currentUser?.timezone ?? DEFAULT_TIMEZONE
+  // NTF-005: 期限超過リマインドの手動発火。連打で重複送信されないよう
+  // 送信中はボタンをdisabledにする
+  const [sendingReminders, setSendingReminders] = useState(false)
 
   const inProgress = tasks.filter((t) => t.status === 'progress')
   const needsSupport = tasks.filter((t) => t.status === 'support')
@@ -203,6 +211,27 @@ export function AdminDashboard() {
             renderMeta={(t) => tr('admin.dashboard.meta.deadline', { date: formatDeadline(t.deadline) })}
             onOpen={openTask}
             getProject={getProject}
+            action={
+              overdue.length > 0 ? (
+                <button
+                  disabled={sendingReminders}
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    setSendingReminders(true)
+                    try {
+                      await triggerOverdueReminders()
+                      toast(tr('admin.dashboard.overdueReminders.toast'))
+                    } finally {
+                      setSendingReminders(false)
+                    }
+                  }}
+                  className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Send className="size-3" />
+                  {tr('admin.dashboard.overdueReminders.button')}
+                </button>
+              ) : undefined
+            }
           />
           <AttentionGroup
             title={tr('admin.dashboard.label.unassigned')}
@@ -310,6 +339,7 @@ function AttentionGroup({
   renderMeta,
   onOpen,
   getProject,
+  action,
 }: {
   title: string
   icon: React.ReactNode
@@ -317,6 +347,7 @@ function AttentionGroup({
   renderMeta: (t: import('@/lib/orbit/types').Task) => string
   onOpen: (id: string) => void
   getProject: (id: string) => import('@/lib/orbit/types').Project | undefined
+  action?: React.ReactNode
 }) {
   const { t: tr } = useI18n()
   return (
@@ -325,6 +356,7 @@ function AttentionGroup({
         {icon}
         <span className="text-sm font-medium">{title}</span>
         <span className="ml-auto font-mono text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
+        {action}
       </div>
       {tasks.length === 0 ? (
         <div className="px-4 py-6 text-center text-xs text-muted-foreground">{tr('admin.dashboard.noneFound')}</div>
