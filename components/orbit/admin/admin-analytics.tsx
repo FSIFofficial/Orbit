@@ -201,6 +201,17 @@ export function AdminAnalytics() {
   }
   const maxUniversity = Math.max(1, ...universityRows.map(([, c]) => c))
 
+  // HRD-018: 学年別人数（gradeYearは自由記述文字列）。未設定メンバーは
+  // 「未設定」としてまとめる。学年は大学名ほど個人を特定しやすくないため、
+  // 大学別セクションのような「3人未満はその他」への統合は行わない
+  const gradeYearCounts = new Map<string, number>()
+  members.forEach((m) => {
+    const grade = m.gradeYear || t('admin.analytics.gradeYear.unset')
+    gradeYearCounts.set(grade, (gradeYearCounts.get(grade) ?? 0) + 1)
+  })
+  const gradeYearRows = sortedCounts(gradeYearCounts)
+  const maxGradeYear = Math.max(1, ...gradeYearRows.map(([, c]) => c))
+
   const skillCounts = new Map<string, number>()
   const skillLevelSum = new Map<string, number>()
   members.forEach((m) => {
@@ -428,6 +439,20 @@ export function AdminAnalytics() {
           <div className="mt-4 flex flex-col gap-2.5">
             {universityRows.map(([university, count]) => (
               <BarRow key={university} label={university} count={count} max={maxUniversity} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.gradeYear.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.gradeYear.desc')}</p>
+        {gradeYearRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.gradeYear.empty')}</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {gradeYearRows.map(([grade, count]) => (
+              <BarRow key={grade} label={grade} count={count} max={maxGradeYear} />
             ))}
           </div>
         )}

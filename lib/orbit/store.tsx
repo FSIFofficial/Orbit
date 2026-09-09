@@ -335,6 +335,7 @@ interface OrbitContextValue extends OrbitState {
   ) => void
   updateTrainingHistory: (memberId: string, entries: TrainingRecord[]) => void
   notifyTrainingRequest: (memberId: string, trainingName: string) => void
+  triggerOverdueReminders: () => Promise<void>
   notifyTrainingDecision: (memberId: string, trainingName: string, approved: boolean) => void
   updateDevelopmentPlan: (memberId: string, entries: DevelopmentPlanEntry[]) => void
   updateOneOnOnes: (memberId: string, entries: OneOnOneRecord[]) => void
@@ -2454,6 +2455,66 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [members, runRemote],
   )
 
+  // APR-007: 確認待ちになったタスクについて、確認者を担当者とする軽量な
+  // 「確認タスク」を自動生成する。applyTaskSetTemplate等と同じパターン
+  // (ローカルに仮IDで追加 → isRemoteConfigured ならcreateTasksで本登録し、
+  // 返ってきた本物のidに差し替える)
+  const createReviewConfirmTask = useCallback(
+    (original: Task, reviewerIds: string[]) => {
+      const today = new Date().toISOString().slice(0, 10)
+      const tempId = `t-${Math.random().toString(36).slice(2, 9)}`
+      const confirmTask: Task = {
+        id: tempId,
+        name: `確認: ${original.name}`,
+        description: '',
+        projectId: original.projectId,
+        department: original.department,
+        assigneeIds: reviewerIds,
+        deadline: null,
+        category: '確認',
+        skills: [],
+        difficulty: '誰でも可',
+        priority: '中',
+        status: 'todo',
+        lastActivity: today,
+        createdById: currentUserId ?? undefined,
+        createdAt: new Date().toISOString(),
+        progressHistory: [],
+        pendingApproval: false,
+        relatedReviewTaskId: original.id,
+      }
+      setTasks((prev) => [confirmTask, ...prev])
+      if (isRemoteConfigured) {
+        remoteApi
+          .createTasks([
+            {
+              tempId,
+              title: confirmTask.name,
+              projectId: confirmTask.projectId,
+              department: confirmTask.department,
+              category: confirmTask.category,
+              skills: [],
+              difficulty: confirmTask.difficulty,
+              priority: confirmTask.priority,
+              deadline: null,
+              assigneeIds: reviewerIds,
+              creatorId: currentUserId ?? undefined,
+              pendingApproval: false,
+              relatedReviewTaskId: original.id,
+            },
+          ])
+          .then((mapping) => {
+            const realId = mapping[0]?.id
+            if (!realId) return
+            setTasks((prev) => prev.map((t) => (t.id === tempId ? { ...t, id: realId } : t)))
+            setRemoteError(null)
+          })
+          .catch(reportRemoteError)
+      }
+    },
+    [currentUserId, reportRemoteError],
+  )
+
   const updateTaskStatus = useCallback(
     (id: string, status: TaskStatus) => {
       // 前提タスクが完了していない限り、このタスクは完了にできない — UI側
@@ -2484,12 +2545,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         maybeCertifySkill(updated, id)
         registerSkillsFromTask(updated, id)
       }
+      // APR-007: 確認者が設定されているタスクが確認待ちに入ったら、確認者を
+      // 担当者とする確認タスクを自動生成する
+      if (status === 'review') {
+        const original = tasks.find((t) => t.id === id)
+        const reviewerIds = original ? original.reviewerIds ?? (original.reviewerId ? [original.reviewerId] : []) : []
+        // 同じ元タスクに紐づく未完了の確認タスクが既にあれば、新規生成しない
+        // (確認待ち→修正中→再び確認待ち、のような行き来で重複生成されるのを防ぐ)
+        const hasOpenConfirmTask = tasks.some(
+          (t) => t.relatedReviewTaskId === id && t.status !== 'done',
+        )
+        if (original && reviewerIds.length > 0 && !hasOpenConfirmTask) {
+          createReviewConfirmTask(original, reviewerIds)
+        }
+      }
       // entering 確認待ち is the assignee's "I'm done, please confirm" signal
       // — the admin gets emailed (gas/Code.gs) and already sees it surface
       // in the Admin dashboard's 確認待ち panel automatically.
       if (isRemoteConfigured) runRemote(remoteApi.updateTaskStatus(id, status))
     },
-    [tasks, maybeCertifySkill, registerSkillsFromTask, appendHistory, runRemote],
+    [tasks, maybeCertifySkill, registerSkillsFromTask, appendHistory, runRemote, createReviewConfirmTask],
   )
 
   const assignTask = useCallback(
@@ -3086,6 +3161,13 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // NTF-005: 期限超過リマインドの手動発火。ローカルデモ(isRemoteConfigured
+  // でない)ではメール送信先が無いため何もしない
+  const triggerOverdueReminders = useCallback(async () => {
+    if (!isRemoteConfigured) return
+    await remoteApi.triggerOverdueReminders()
+  }, [])
+
   const updateDevelopmentPlan = useCallback(
     (memberId: string, entries: DevelopmentPlanEntry[]) => {
       setMembers((prev) =>
@@ -3236,25 +3318,42 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const approveTaskReview = useCallback(
     (taskId: string, comment?: string) => {
       if (!currentUserId) return
+      // 元タスクがこの承認で完了に達するかを先に判定しておき、達する場合は
+      // APR-007: 対応する確認タスク(relatedReviewTaskIdが一致するもの)も
+      // 同じ更新で自動的に完了にする
+      const original = tasks.find((t) => t.id === taskId)
+      let willComplete = false
+      if (original) {
+        const already = (original.reviewApprovals ?? []).some((a) => a.memberId === currentUserId)
+        const nextCount = (original.reviewApprovals ?? []).length + (already ? 0 : 1)
+        const reviewerIds = original.reviewerIds ?? (original.reviewerId ? [original.reviewerId] : [])
+        const needed = original.requiredApprovals === 'all' ? reviewerIds.length : (original.requiredApprovals ?? 1)
+        willComplete = nextCount >= needed
+      }
+      const today = new Date().toISOString().slice(0, 10)
       setTasks((prev) =>
         prev.map((t) => {
-          if (t.id !== taskId) return t
-          const already = (t.reviewApprovals ?? []).some((a) => a.memberId === currentUserId)
-          const nextApprovals = already
-            ? t.reviewApprovals!
-            : [...(t.reviewApprovals ?? []), { memberId: currentUserId, at: new Date().toISOString(), comment }]
-          const reviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
-          const needed = t.requiredApprovals === 'all' ? reviewerIds.length : (t.requiredApprovals ?? 1)
-          if (nextApprovals.length >= needed) {
-            const today = new Date().toISOString().slice(0, 10)
-            return { ...t, reviewApprovals: nextApprovals, status: 'done', completedDate: today, lastActivity: today }
+          if (t.id === taskId) {
+            const already = (t.reviewApprovals ?? []).some((a) => a.memberId === currentUserId)
+            const nextApprovals = already
+              ? t.reviewApprovals!
+              : [...(t.reviewApprovals ?? []), { memberId: currentUserId, at: new Date().toISOString(), comment }]
+            const reviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
+            const needed = t.requiredApprovals === 'all' ? reviewerIds.length : (t.requiredApprovals ?? 1)
+            if (nextApprovals.length >= needed) {
+              return { ...t, reviewApprovals: nextApprovals, status: 'done', completedDate: today, lastActivity: today }
+            }
+            return { ...t, reviewApprovals: nextApprovals }
           }
-          return { ...t, reviewApprovals: nextApprovals }
+          if (willComplete && t.relatedReviewTaskId === taskId && t.status !== 'done') {
+            return { ...t, status: 'done', completedDate: today, lastActivity: today }
+          }
+          return t
         }),
       )
       if (isRemoteConfigured) runRemote(remoteApi.approveTaskReview(taskId, comment))
     },
-    [currentUserId, runRemote],
+    [currentUserId, runRemote, tasks],
   )
 
   const bulkUpdateSkills = useCallback(
@@ -4040,6 +4139,21 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           }
         })
     }
+    // P16/NTF-015: 本人が「タスクが少ない」状態なら、本人自身にも直接通知する
+    // (上長への通知とは別。両方に通知する方針)
+    {
+      const allTasksForWorkload = [...visibleTasks, ...archivedTasks]
+      if (isLowWorkloadMember(currentUser.id, allTasksForWorkload)) {
+        items.push({
+          id: `low-workload-self-${currentUser.id}`,
+          kind: 'lowWorkload',
+          title: t('notification.lowWorkloadSelf.title'),
+          detail: t('notification.lowWorkloadSelf.detail'),
+          taskId: '',
+          memberId: currentUser.id,
+        })
+      }
+    }
     // カレンダースコープ追加告知 — 一度「消す」まで表示する
     items.push({
       id: 'calendar-scope-notice',
@@ -4242,6 +4356,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateCareerGoals,
     updateTrainingHistory,
     notifyTrainingRequest,
+    triggerOverdueReminders,
     notifyTrainingDecision,
     updateDevelopmentPlan,
     updateOneOnOnes,

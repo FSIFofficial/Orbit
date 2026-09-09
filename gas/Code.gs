@@ -119,6 +119,7 @@ function setupOrbit() {
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
     'review_approvals_json', // 複数確認者の承認記録 [{"memberId","at","comment"}]
     'open_bid_applicant_ids', // TSK-027: 公募タスクへの応募者IDリスト(カンマ区切り)
+    'related_review_task_id', // APR-007: このタスクが確認タスクである場合、確認対象の元タスクのid
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 
@@ -599,6 +600,7 @@ function authorizeAction(acting, action, body) {
     'updateTransferHistory',     // 異動履歴（班長は担当メンバーのみ）
     'updateOneOnOnes',           // 1on1記録（班長は担当メンバーのみ）
     'updateCompetencies',        // コンピテンシー評価（班長は担当メンバーのみ）
+    'triggerOverdueReminders',   // NTF-005: 期限超過リマインドの手動発火
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     // 一般ロールでも、未アサインのタスクに自分だけを追加する「自己アサイン」
@@ -1363,6 +1365,12 @@ function doPost(e) {
         // 呼ぶことで、定期タスクの二重生成を防ぐ
         result = generateRecurringTasksLocked()
         break
+      case 'triggerOverdueReminders':
+        // NTF-005: 日次トリガー任せだった期限超過リマインドを、管理者が
+        // 任意タイミングで手動発火できるようにする
+        notifyOverdueTasksToAssignees()
+        result = { ok: true }
+        break
       default:
         throw new Error('Unknown action: ' + body.action)
     }
@@ -1434,6 +1442,8 @@ function createTasks(tasks) {
           return t.estimatedHours || ''
         case 'importance':
           return t.importance || ''
+        case 'related_review_task_id':
+          return t.relatedReviewTaskId || ''
         default:
           return ''
       }
@@ -1480,7 +1490,32 @@ function approveTaskReview(taskId, actorId, comment) {
     fields.status = '完了'
     fields.completed_date = todayStr()
   }
-  return updateRowFields(SHEET_TASKS, taskId, fields)
+  var result = updateRowFields(SHEET_TASKS, taskId, fields)
+  if (approvals.length >= needed) {
+    completeRelatedReviewTasks(taskId)
+  }
+  return result
+}
+
+// APR-007: 元タスクの承認が完了した際、対応する確認タスク（related_review_task_id
+// が元タスクのidと一致するタスク）も自動的に完了にする
+function completeRelatedReviewTasks(originalTaskId) {
+  var sheet = getSheet(SHEET_TASKS)
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var relCol = headers.indexOf('related_review_task_id')
+  var statusCol = headers.indexOf('status')
+  if (relCol < 0 || sheet.getLastRow() <= 1) return
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues()
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][relCol] || '') === String(originalTaskId) && rows[i][statusCol] !== '完了') {
+      updateRowFields(SHEET_TASKS, String(rows[i][idCol]), {
+        status: '完了',
+        completed_date: todayStr(),
+        last_activity: todayStr(),
+      })
+    }
+  }
 }
 
 function updateProjectFields(projectId, fields) {
