@@ -422,6 +422,8 @@ interface OrbitContextValue extends OrbitState {
   ) => void
   // EXP-003: 経費領収書のDriveアップロード
   uploadExpenseReceipt: (dataUrl: string, filename: string) => Promise<string>
+  // FRM-007: アンケート設問画像のDriveアップロード
+  uploadSurveyImage: (dataUrl: string, filename: string) => Promise<string>
   updateCustomFormDefs: (forms: import('./types').CustomFormDef[]) => void
   submitCustomForm: (
     formId: string,
@@ -3919,6 +3921,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [reportRemoteError],
   )
 
+  // FRM-007: アンケート設問の画像をDriveにアップロードし、URLを返す。
+  // uploadExpenseReceiptと同じパターン — 呼び出し側(admin-tags.tsxの
+  // SurveyQuestionsEditor)がdraft上のimageUrlに反映する。
+  const uploadSurveyImage = useCallback(
+    (dataUrl: string, filename: string): Promise<string> => {
+      if (!isDriveConfigured) return Promise.reject(new Error('Drive is not configured'))
+      return remoteApi
+        .uploadSurveyImage(dataUrl, filename)
+        .then(({ url }) => {
+          setRemoteError(null)
+          return url
+        })
+        .catch((err) => {
+          reportRemoteError(err)
+          throw err
+        })
+    },
+    [reportRemoteError],
+  )
+
   const persistOnboarded = useCallback((ids: Set<string>) => {
     try {
       window.localStorage.setItem(ONBOARDED_STORAGE_KEY, JSON.stringify([...ids]))
@@ -4588,6 +4610,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     returnExpense,
     resubmitExpense,
     uploadExpenseReceipt,
+    uploadSurveyImage,
     updateCustomFormDefs,
     submitCustomForm,
     approveFormStep,
