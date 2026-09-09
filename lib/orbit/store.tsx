@@ -927,7 +927,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // サーバーに読める値が無いため、以前と同様クライアント側で生成する
   // (この経路はブラウザが1つしか無いことが前提の簡易フォールバックなので
   // 二重生成の心配は無いが、期限計算は曜日/日付判定と同じローカル
-  // タイムゾーン基準に統一した)。
+  // タイムゾーン基準に統一した)。isRemoteConfiguredがtrueならMembers/
+  // Projects/Tasks自体は連携済みなので、ルール定義はローカルのままでも
+  // 生成したタスクはremoteApi.createTasksで実際のTasksシートへ書き込む
+  // (isRemoteConfiguredがfalseの完全ローカルデモ環境ではローカルstateのみ)。
   useEffect(() => {
     if (!hydrated || recurringRules.length === 0) return
 
@@ -980,6 +983,34 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       }
       setTasks((prev) => [newTask, ...prev])
       setRecurringRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, lastGeneratedDate: todayStr } : r)))
+      // isSettingsConfiguredがfalseでもisRemoteConfigured(Tasksシート自体は
+      // 連携済み)はtrueということがあり得る(Settingsシートは任意の追加設定
+      // のため)。その場合、ルール定義はローカルのままで構わないが、生成した
+      // タスクは実際のTasksシートへ書き込む必要がある。これが無いと生成物が
+      // Reactのローカルstateにしか残らず、リロードで消え他メンバーにも
+      // 共有されない。
+      if (isRemoteConfigured) {
+        remoteApi
+          .createTasks([
+            {
+              tempId: newTask.id,
+              title: newTask.name,
+              projectId: rule.projectId,
+              department: rule.department,
+              category: rule.category,
+              skills: rule.skills,
+              difficulty: rule.difficulty,
+              priority: rule.priority,
+              deadline,
+              pendingApproval: false,
+            },
+          ])
+          .then((mapping) => {
+            const realId = mapping[0]?.id
+            if (realId) setTasks((prev) => prev.map((t) => (t.id === newTask.id ? { ...t, id: realId } : t)))
+          })
+          .catch(reportRemoteError)
+      }
     })
   }, [hydrated, recurringRules, reportRemoteError, refreshAll])
 
