@@ -834,6 +834,9 @@ function SkillAwardModal({
   const [pointsMap, setPointsMap] = useState<Record<string, number>>(() =>
     Object.fromEntries(task.skills.map((s) => [s, 10])),
   )
+  // SKL-013: 初期値(固定10)のまま未確認か、参考値採用/手動入力で管理者が
+  // 確認済みかを色分けするための状態
+  const [confirmedSkills, setConfirmedSkills] = useState<Set<string>>(new Set())
 
   // Compute average awarded points for each skill from similar-category done tasks
   const avgPoints = Object.fromEntries(
@@ -851,8 +854,12 @@ function SkillAwardModal({
     }),
   )
 
-  const setPoint = (skill: string, value: number) =>
+  const setPoint = (skill: string, value: number) => {
     setPointsMap((prev) => ({ ...prev, [skill]: Math.max(0, value) }))
+    // 参考値ボタン・手動入力どちらの経路も同じsetPointを通るので、ここで
+    // 一括して「確認済み」にできる
+    setConfirmedSkills((prev) => new Set(prev).add(skill))
+  }
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -883,13 +890,18 @@ function SkillAwardModal({
                 {t('taskDrawer.award.referenceValue', { points: avgPoints[skill] })}
               </button>
             )}
+            {!confirmedSkills.has(skill) && (
+              <span className="shrink-0 text-[10px] text-amber-600">{t('taskDrawer.award.unconfirmedLabel')}</span>
+            )}
             <input
               type="number"
               min={0}
               max={9999}
               value={pointsMap[skill] ?? 0}
               onChange={(e) => setPoint(skill, Number(e.target.value))}
-              className="h-8 w-20 rounded-md border border-border bg-background px-2 text-right text-sm outline-none focus:border-primary"
+              className={`h-8 w-20 rounded-md border bg-background px-2 text-right text-sm outline-none focus:border-primary ${
+                confirmedSkills.has(skill) ? 'border-border' : 'border-amber-400'
+              }`}
             />
           </div>
         ))}

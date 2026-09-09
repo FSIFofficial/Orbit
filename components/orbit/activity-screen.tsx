@@ -4,10 +4,18 @@ import { useMemo, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
-import { MessageSquare, TrendingUp, Filter } from 'lucide-react'
-import { useI18n } from '@/lib/orbit/i18n'
+import { MessageSquare, TrendingUp, CheckCircle2, Filter } from 'lucide-react'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+import { STATUS_LABEL } from '@/lib/orbit/types'
 
-type ActivityKind = 'all' | 'comment' | 'progress'
+type ActivityKind = 'all' | 'comment' | 'progress' | 'review'
+
+const KIND_LABEL_KEY: Record<ActivityKind, TranslationKey> = {
+  all: 'activity.filter.all',
+  comment: 'activity.filter.comment',
+  progress: 'activity.filter.progress',
+  review: 'activity.filter.review',
+}
 
 // item 6: 個人が発言したコメント・進捗報告を、タスクをまたいで横断的に一覧表示。
 // currentUser の発言のみデフォルト表示。フィルタで他メンバーも見られる。
@@ -22,44 +30,75 @@ export function ActivityScreen() {
   const activities = useMemo(() => {
     const items: {
       id: string
-      kind: 'comment' | 'progress'
+      kind: 'comment' | 'progress' | 'review'
       taskId: string
       taskName: string
       text: string
       at: string
     }[] = []
 
-    visibleTasks.forEach((t) => {
-      if (kind !== 'progress') {
-        t.comments?.forEach((c) => {
+    // ループ変数をtaskと名付ける(以前はtだったが、下のレビュー履歴で
+    // useI18nのt()を呼ぶ必要があるため、翻訳関数のtとの衝突を避ける)
+    visibleTasks.forEach((task) => {
+      if (kind === 'all' || kind === 'comment') {
+        task.comments?.forEach((c) => {
           if (memberId && c.byId !== memberId) return
           items.push({
             id: `c-${c.id}`,
             kind: 'comment',
-            taskId: t.id,
-            taskName: t.name,
+            taskId: task.id,
+            taskName: task.name,
             text: c.text,
             at: c.at,
           })
         })
       }
-      if (kind !== 'comment') {
-        t.progressHistory?.forEach((p) => {
+      if (kind === 'all' || kind === 'progress') {
+        task.progressHistory?.forEach((p) => {
           if (memberId && p.byId !== memberId) return
           items.push({
             id: `p-${p.id}`,
             kind: 'progress',
-            taskId: t.id,
-            taskName: t.name,
+            taskId: task.id,
+            taskName: task.name,
             text: p.text,
             at: p.at,
+          })
+        })
+      }
+      // COM-004: レビュー履歴 — 確認待ち/完了へのステータス変更(task.history)
+      // と、複数確認者の承認記録(task.reviewApprovals)を「レビュー」として
+      // 統合表示する
+      if (kind === 'all' || kind === 'review') {
+        task.history?.forEach((h) => {
+          if (h.field !== 'status') return
+          if (h.to !== STATUS_LABEL.review && h.to !== STATUS_LABEL.done) return
+          if (memberId && h.byId !== memberId) return
+          items.push({
+            id: `h-${h.id}`,
+            kind: 'review',
+            taskId: task.id,
+            taskName: task.name,
+            text: t('activity.review.statusChanged', { status: h.to }),
+            at: h.at,
+          })
+        })
+        task.reviewApprovals?.forEach((ra, i) => {
+          if (memberId && ra.memberId !== memberId) return
+          items.push({
+            id: `ra-${task.id}-${i}`,
+            kind: 'review',
+            taskId: task.id,
+            taskName: task.name,
+            text: t('activity.review.approved'),
+            at: ra.at,
           })
         })
       }
     })
 
     return items.sort((a, b) => b.at.localeCompare(a.at))
-  }, [visibleTasks, kind, memberId])
+  }, [visibleTasks, kind, memberId, t])
 
   const member = members.find((m) => m.id === memberId)
 
@@ -84,7 +123,7 @@ export function ActivityScreen() {
             </option>
           ))}
         </select>
-        {(['all', 'comment', 'progress'] as ActivityKind[]).map((k) => (
+        {(['all', 'comment', 'progress', 'review'] as ActivityKind[]).map((k) => (
           <button
             key={k}
             onClick={() => setKind(k)}
@@ -94,7 +133,7 @@ export function ActivityScreen() {
                 : 'border-border text-foreground hover:bg-secondary'
             }`}
           >
-            {k === 'all' ? t('activity.filter.all') : k === 'comment' ? t('activity.filter.comment') : t('activity.filter.progress')}
+            {t(KIND_LABEL_KEY[k])}
           </button>
         ))}
       </div>
@@ -117,8 +156,10 @@ export function ActivityScreen() {
               <div className="mt-0.5 shrink-0">
                 {a.kind === 'comment' ? (
                   <MessageSquare className="size-4 text-primary" />
-                ) : (
+                ) : a.kind === 'progress' ? (
                   <TrendingUp className="size-4 text-success" />
+                ) : (
+                  <CheckCircle2 className="size-4 text-[var(--status-review-fg)]" />
                 )}
               </div>
               <div className="min-w-0 flex-1">

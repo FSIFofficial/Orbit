@@ -123,7 +123,12 @@ export function CareerTab({
   skillOptions: string[]
   updateSearchProfile: (
     id: string,
-    p: { yearsOfExperience: number | null; hasManagementExperience: boolean; desiredAreas: string[] },
+    p: {
+      yearsOfExperience: number | null
+      hasManagementExperience: boolean
+      desiredAreas: string[]
+      desiredSkills: string[]
+    },
   ) => void
   updateCareerHistory: (id: string, entries: CareerHistoryEntry[]) => void
   updateQualifications: (id: string, entries: Qualification[]) => void
@@ -156,7 +161,7 @@ export function CareerTab({
 
   return (
     <div className="mt-5 flex flex-col gap-4">
-      <SearchProfileSection member={member} editable={editable} onSave={updateSearchProfile} />
+      <SearchProfileSection member={member} editable={editable} skillOptions={skillOptions} onSave={updateSearchProfile} />
       <EducationInfoSection member={member} editable={editable} onSave={updateEducationInfo} />
       <CareerGoalsSection member={member} editable={editable} onSave={updateCareerGoals} />
       <SkillLevelsSection
@@ -229,10 +234,12 @@ export function CareerTab({
 function SearchProfileSection({
   member,
   editable,
+  skillOptions,
   onSave,
 }: {
   member: Member
   editable: boolean
+  skillOptions: string[]
   onSave: CareerTabProps['updateSearchProfile']
 }) {
   const { t } = useI18n()
@@ -254,6 +261,7 @@ function SearchProfileSection({
                 yearsOfExperience: e.target.value ? Number(e.target.value) : null,
                 hasManagementExperience: !!member.hasManagementExperience,
                 desiredAreas: member.desiredAreas ?? [],
+                desiredSkills: member.desiredSkills ?? [],
               })
             }
             className={cn(fieldClass, 'w-20 disabled:opacity-50')}
@@ -269,6 +277,7 @@ function SearchProfileSection({
                 yearsOfExperience: member.yearsOfExperience ?? null,
                 hasManagementExperience: e.target.checked,
                 desiredAreas: member.desiredAreas ?? [],
+                desiredSkills: member.desiredSkills ?? [],
               })
             }
             className="size-3.5 accent-primary disabled:opacity-50"
@@ -287,10 +296,31 @@ function SearchProfileSection({
                 yearsOfExperience: member.yearsOfExperience ?? null,
                 hasManagementExperience: !!member.hasManagementExperience,
                 desiredAreas: next,
+                desiredSkills: member.desiredSkills ?? [],
               })
             }
             emptyText={t('common.notSet')}
             placeholder={t('career.searchProfile.addAreaPlaceholder')}
+          />
+        </div>
+      </div>
+      <div className="mt-3">
+        <span className="text-xs font-medium text-muted-foreground">{t('career.searchProfile.desiredSkills')}</span>
+        <div className="mt-1">
+          <EditableTags
+            tags={member.desiredSkills ?? []}
+            editable={editable}
+            options={skillOptions}
+            onChange={(next) =>
+              onSave(member.id, {
+                yearsOfExperience: member.yearsOfExperience ?? null,
+                hasManagementExperience: !!member.hasManagementExperience,
+                desiredAreas: member.desiredAreas ?? [],
+                desiredSkills: next,
+              })
+            }
+            emptyText={t('common.notSet')}
+            placeholder={t('career.searchProfile.addSkillPlaceholder')}
           />
         </div>
       </div>

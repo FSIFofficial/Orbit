@@ -56,6 +56,8 @@ export function AdminMembers() {
   const [minTenureYears, setMinTenureYears] = useState('')
   const [managementOnly, setManagementOnly] = useState(false)
   const [desiredArea, setDesiredArea] = useState('')
+  // MAT-003: 経歴(careerHistory)のrole/affiliation/descriptionから検索する
+  const [experienceQuery, setExperienceQuery] = useState('')
   const ROLES: Role[] = [BASE_ROLE, ...roleLevels]
 
   const [newName, setNewName] = useState('')
@@ -147,9 +149,18 @@ export function AdminMembers() {
       if (minTenure !== null && (!m.joinedAt || tenureYears(m.joinedAt) < minTenure)) return false
       if (managementOnly && !m.hasManagementExperience) return false
       if (desiredArea && !(m.desiredAreas ?? []).includes(desiredArea)) return false
+      if (experienceQuery.trim()) {
+        const eq = experienceQuery.trim().toLowerCase()
+        const matches = (m.careerHistory ?? []).some((entry) =>
+          [entry.role, entry.affiliation, entry.description]
+            .filter((v): v is string => !!v)
+            .some((v) => v.toLowerCase().includes(eq)),
+        )
+        if (!matches) return false
+      }
       return true
     })
-  }, [members, query, minTenureYears, managementOnly, desiredArea])
+  }, [members, query, minTenureYears, managementOnly, desiredArea, experienceQuery])
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -268,6 +279,13 @@ export function AdminMembers() {
           placeholder={t('admin.members.search.tenurePlaceholder')}
           title={t('admin.members.search.tenureTitle')}
           className="h-9 w-28 rounded-lg border border-border bg-card px-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
+        />
+        <input
+          value={experienceQuery}
+          onChange={(e) => setExperienceQuery(e.target.value)}
+          placeholder={t('admin.members.search.experiencePlaceholder')}
+          title={t('admin.members.search.experienceTitle')}
+          className="h-9 w-40 rounded-lg border border-border bg-card px-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
         />
         <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-sm">
           <input

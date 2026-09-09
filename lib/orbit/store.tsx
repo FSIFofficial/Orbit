@@ -308,7 +308,12 @@ interface OrbitContextValue extends OrbitState {
   // ---- タレントマネジメント ----
   updateSearchProfile: (
     memberId: string,
-    profile: { yearsOfExperience: number | null; hasManagementExperience: boolean; desiredAreas: string[] },
+    profile: {
+      yearsOfExperience: number | null
+      hasManagementExperience: boolean
+      desiredAreas: string[]
+      desiredSkills: string[]
+    },
   ) => void
   updateCareerHistory: (memberId: string, entries: CareerHistoryEntry[]) => void
   updateQualifications: (memberId: string, entries: Qualification[]) => void
@@ -2775,6 +2780,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         yearsOfExperience: number | null
         hasManagementExperience: boolean
         desiredAreas: string[]
+        desiredSkills: string[]
       },
     ) => {
       setMembers((prev) =>
@@ -2785,6 +2791,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
                 yearsOfExperience: profile.yearsOfExperience ?? undefined,
                 hasManagementExperience: profile.hasManagementExperience,
                 desiredAreas: profile.desiredAreas,
+                desiredSkills: profile.desiredSkills,
               }
             : m,
         ),

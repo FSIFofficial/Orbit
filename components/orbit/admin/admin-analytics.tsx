@@ -254,6 +254,18 @@ export function AdminAnalytics() {
     [members, visibleTasks, allTasks],
   )
 
+  // ANL-006: 難易度×成果分析 — item 14の散布図で既に計算しているが表示に
+  // 使われていなかったavgDifficultyを、completedCountとの散布図として
+  // 再利用する。完了タスクが無いメンバーはavgDifficultyが意味を持たない
+  // ため除外する。
+  const difficultyOutcomePoints = useMemo(
+    () =>
+      scatterPoints
+        .filter((p) => p.completedCount > 0)
+        .map((p) => ({ member: p.member, x: p.avgDifficulty, y: p.completedCount })),
+    [scatterPoints],
+  )
+
   // item 36 マップ1: スキル×経験数 — yearsOfExperience(自己申告)未設定の
   // メンバーはこのマップから除外する
   const skillExperiencePoints = useMemo(() =>
@@ -446,6 +458,30 @@ export function AdminAnalytics() {
             { header: t('admin.analytics.scatter.colCompleted'), align: 'right', render: (p) => p.completedCount },
           ]}
         />
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.difficultyOutcome.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('admin.analytics.difficultyOutcome.desc')}
+        </p>
+        {difficultyOutcomePoints.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.difficultyOutcome.empty')}</p>
+        ) : (
+          <ScatterMap
+            points={difficultyOutcomePoints}
+            xMax={DIFFICULTY_LABEL.length - 1}
+            axisLabel={t('admin.analytics.difficultyOutcome.axisLabel')}
+            tooltip={(p) => t('admin.analytics.difficultyOutcome.tooltip', { name: p.member.displayName || p.member.name, difficulty: p.x.toFixed(1), completed: p.y })}
+            hoverLabel={(p) => t('admin.analytics.difficultyOutcome.hoverLabel', { name: p.member.displayName || p.member.name, completed: p.y })}
+            sortRows={(a, b) => b.y - a.y || b.x - a.x}
+            columns={[
+              { header: t('admin.analytics.scatter.colMember'), render: (p) => p.member.displayName || p.member.name },
+              { header: t('admin.analytics.difficultyOutcome.colDifficulty'), align: 'right', render: (p) => p.x.toFixed(1) },
+              { header: t('admin.analytics.difficultyOutcome.colCompleted'), align: 'right', render: (p) => p.y },
+            ]}
+          />
+        )}
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
