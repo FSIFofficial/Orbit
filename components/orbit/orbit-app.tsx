@@ -21,6 +21,7 @@ import { DailyReportScreen } from './daily-report-screen'
 import { SurveyScreen } from './survey-screen'
 import { OrgSettingsScreen } from './org-settings-screen'
 import { SkillGridScreen } from './skill-grid-screen'
+import { LearningContentScreen } from './learning-content-screen'
 import { TaskDetailDrawer } from './output/task-detail-drawer'
 import { OrbitMark } from './primitives'
 import { TriangleAlert } from 'lucide-react'
@@ -179,6 +180,7 @@ function Router() {
         {screen.name === 'survey' && <SurveyScreen />}
         {screen.name === 'org-settings' && <OrgSettingsScreen />}
         {screen.name === 'skillgrid' && <SkillGridScreen />}
+        {screen.name === 'learning' && <LearningContentScreen />}
       </div>
       <TaskDetailDrawer taskId={openTaskId} onClose={closeTask} />
     </div>

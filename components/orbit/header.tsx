@@ -32,6 +32,7 @@ import {
   Activity,
   Grid3x3,
   TrendingDown,
+  GraduationCap,
 } from 'lucide-react'
 
 
@@ -403,6 +404,15 @@ export function Header() {
                 >
                   <Grid3x3 className="size-4" />
                   {t('header.menu.skillGrid')}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false)
+                    go({ name: 'learning' })
+                  }}
+                >
+                  <GraduationCap className="size-4" />
+                  {t('header.menu.learning')}
                 </MenuItem>
                 {canAccessSurvey && (
                   <MenuItem

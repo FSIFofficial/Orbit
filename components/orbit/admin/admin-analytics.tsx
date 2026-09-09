@@ -6,7 +6,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { DIFFICULTY_LABEL, type Member } from '@/lib/orbit/types'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
-import { memberWorkloadCapacity, matchSkills, tenureYears, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { memberWorkloadCapacity, matchSkills, tenureYears, computeTaskPerformanceScore, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { SURVEY_SCALE_QUESTION_IDS } from '@/components/orbit/survey-screen'
 
 function BarRow({
@@ -282,6 +282,41 @@ export function AdminAnalytics() {
       }))
       .sort((a, b) => b.count - a.count)
   }, [allTasks])
+
+  // ANL-010: 部門別比較 — affiliation(所属)ごとに、メンバー数・平均担当中
+  // タスク数(稼働量の目安)・平均完了タスク数・期限内完了率を比較する。
+  // 期限内完了率の算出はANL-004のcomputeTaskPerformanceScoreを部門単位で
+  // 再利用する(直近90日・deadline設定済みタスクのみ対象、というロジックは共通)
+  const affiliationComparisonRows = useMemo(() => {
+    const groups = new Map<string, Member[]>()
+    members.forEach((m) => {
+      const aff = m.affiliation || t('admin.analytics.unset')
+      if (!groups.has(aff)) groups.set(aff, [])
+      groups.get(aff)!.push(m)
+    })
+    return Array.from(groups.entries())
+      .map(([affiliation, group]) => {
+        const memberCount = group.length
+        const avgActive =
+          memberCount > 0
+            ? group.reduce(
+                (sum, m) => sum + visibleTasks.filter((t) => t.assigneeIds.includes(m.id) && t.status !== 'done').length,
+                0,
+              ) / memberCount
+            : 0
+        const perfScores = group.map((m) => computeTaskPerformanceScore(m.id, allTasks))
+        const avgCompleted =
+          memberCount > 0 ? perfScores.reduce((sum, p) => sum + p.completedCount, 0) / memberCount : 0
+        const withRate = perfScores.filter((p) => p.onTimeRate != null)
+        const onTimeRate =
+          withRate.length > 0
+            ? withRate.reduce((sum, p) => sum + (p.onTimeRate ?? 0), 0) / withRate.length
+            : null
+        return { affiliation, memberCount, avgActive, avgCompleted, onTimeRate }
+      })
+      .sort((a, b) => b.memberCount - a.memberCount)
+  }, [members, visibleTasks, allTasks, t])
+
   const scatterPoints = useMemo(() =>
     members
       .filter((m) => !m.inactive)
@@ -650,6 +685,41 @@ export function AdminAnalytics() {
                     <td className="py-1 pr-3 text-right tabular-nums">{row.avgActual.toFixed(1)}h</td>
                     <td className="py-1 text-right tabular-nums">
                       {row.avgEstimated != null ? `${row.avgEstimated.toFixed(1)}h` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.affiliationComparison.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.affiliationComparison.desc')}</p>
+        {affiliationComparisonRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.affiliationComparison.empty')}</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-1 pr-3 font-medium">{t('admin.analytics.affiliationComparison.colAffiliation')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.affiliationComparison.colMemberCount')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.affiliationComparison.colAvgActive')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.affiliationComparison.colAvgCompleted')}</th>
+                  <th className="py-1 text-right font-medium">{t('admin.analytics.affiliationComparison.colOnTimeRate')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {affiliationComparisonRows.map((row) => (
+                  <tr key={row.affiliation} className="border-t border-border/30">
+                    <td className="py-1 pr-3 font-medium">{row.affiliation}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.memberCount}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.avgActive.toFixed(1)}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.avgCompleted.toFixed(1)}</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {row.onTimeRate != null ? `${row.onTimeRate.toFixed(1)}%` : '—'}
                     </td>
                   </tr>
                 ))}

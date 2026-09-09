@@ -27,6 +27,7 @@ export type AdminSection =
   | 'analytics'
   | 'org'
   | 'quiz'
+  | 'learning'
   | 'radar'
   | 'expenses'
   | 'forms'
@@ -49,6 +50,7 @@ export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'tags', label: 'Tags' },
   { key: 'org', label: 'Org Tree' },
   { key: 'quiz', label: 'Quiz' },
+  { key: 'learning', label: 'Learning' },
   { key: 'radar', label: 'Radar' },
   { key: 'expenses', label: 'Expenses' },
   { key: 'forms', label: 'Forms' },
@@ -470,6 +472,23 @@ export interface QuizDefinition {
   targetLevel: SkillLevelValue
   passRate: number // 合格ライン: 0–100 (%)
   questions: QuizQuestion[]
+}
+
+// ---- 学習コンテンツ (LRN-001) ---------------------------------------------
+
+/**
+ * 学習コンテンツ(動画・マニュアル・外部リンク等) (Settings キー:
+ * "learning_contents" の配列要素)
+ */
+export interface LearningContent {
+  id: string
+  title: string
+  description?: string
+  url: string
+  contentType: 'video' | 'manual' | 'link' | 'other'
+  relatedSkill?: string // skillOptionsのいずれか、任意
+  relatedQuizId?: string // QuizDefinition.id、任意(この資料で学んだ後この検定を受ける、等の紐付け)
+  createdAt: string
 }
 
 // ---- レーダーチャート軸 ---------------------------------------------------
