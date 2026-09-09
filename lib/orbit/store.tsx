@@ -186,6 +186,7 @@ interface OrbitContextValue extends OrbitState {
   updateTaskSetTemplateItems: (templateId: string, items: TaskSetTemplateItem[]) => void
   removeTaskSetTemplate: (templateId: string) => void
   applyTaskSetTemplate: (templateId: string, projectId: string) => void
+  importTasksFromProject: (sourceProjectId: string, targetProjectId: string, taskIds: string[]) => void
   recurringRules: RecurringTaskRule[]
   // item 17: ポジション要件 — jobType (role level string) -> required skills
   jobRequirements: Record<string, string[]>
@@ -273,7 +274,10 @@ interface OrbitContextValue extends OrbitState {
   removeProject: (projectId: string) => void
   updateProjectMembers: (projectId: string, memberIds: string[]) => void
   updateProjectOwner: (projectId: string, ownerId: string | null) => void
-  updateProjectDetails: (projectId: string, description: string, type?: string, goal?: string) => void
+  updateProjectDetails: (
+    projectId: string,
+    fields: { name: string; description: string; type?: string; goal?: string; startDate?: string | null; endDate?: string | null },
+  ) => void
   activeProjects: Project[]
   setProjectArchived: (projectId: string, archived: boolean) => void
   setProjectOrder: (orderedIds: string[]) => void
@@ -339,6 +343,7 @@ interface OrbitContextValue extends OrbitState {
   setMemberTimezone: (memberId: string, timezone: string) => void
   setMemberLocale: (memberId: string, locale: string) => void
   toggleUnavailableDate: (memberId: string, date: string) => void
+  updateAvailableHours: (memberId: string, hours: { start: string; end: string } | null) => void
   updateSchedule: (id: string, startDate: string | null, deadline: string | null) => void
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
@@ -2069,6 +2074,77 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [taskSetTemplates, currentUserId, reportRemoteError, runRemote],
   )
 
+  // PRJ-016/017: 過去の実プロジェクトのタスクをコピーして現在のプロジェクトに
+  // 取り込む。applyTaskSetTemplateと同じパターン(一括createTasks→id差し替え)
+  // だが、テンプレート項目ではなく既存タスクをソースにする点が異なる。
+  // 実績系フィールド(status/assigneeIds/deadline/startDate等)は新規タスクと
+  // して扱うためリセットし、分類系フィールド(name/department/category/
+  // skills/difficulty/priority/estimatedHours)のみ引き継ぐ。
+  const importTasksFromProject = useCallback(
+    (sourceProjectId: string, targetProjectId: string, taskIds: string[]) => {
+      const sourceTasks = tasks.filter((t) => t.projectId === sourceProjectId && taskIds.includes(t.id))
+      if (sourceTasks.length === 0) return
+
+      const today = new Date().toISOString().slice(0, 10)
+      const tempIdBySourceId = new Map(
+        sourceTasks.map((t) => [t.id, `t-${Math.random().toString(36).slice(2, 9)}`]),
+      )
+
+      const newTasks: Task[] = sourceTasks.map((src) => ({
+        id: tempIdBySourceId.get(src.id)!,
+        name: src.name,
+        description: '',
+        projectId: targetProjectId,
+        department: src.department,
+        assigneeIds: [],
+        deadline: null,
+        startDate: null,
+        category: src.category,
+        skills: src.skills,
+        difficulty: src.difficulty,
+        priority: src.priority,
+        estimatedHours: src.estimatedHours,
+        status: 'todo',
+        lastActivity: today,
+        createdById: currentUserId ?? undefined,
+        createdAt: new Date().toISOString(),
+        progressHistory: [],
+        pendingApproval: false,
+      }))
+
+      setTasks((prev) => [...newTasks, ...prev])
+
+      if (isRemoteConfigured) {
+        const payloads = newTasks.map((t) => ({
+          tempId: t.id,
+          title: t.name,
+          projectId: targetProjectId,
+          department: t.department,
+          category: t.category,
+          skills: t.skills,
+          difficulty: t.difficulty,
+          priority: t.priority,
+          deadline: null,
+          startDate: null,
+          estimatedHours: t.estimatedHours,
+          creatorId: currentUserId ?? undefined,
+          pendingApproval: false,
+        }))
+        remoteApi
+          .createTasks(payloads)
+          .then((mapping) => {
+            const realId = new Map(mapping.map((m) => [m.tempId, m.id]))
+            setTasks((prev) =>
+              prev.map((t) => (realId.has(t.id) ? { ...t, id: realId.get(t.id)! } : t)),
+            )
+            setRemoteError(null)
+          })
+          .catch(reportRemoteError)
+      }
+    },
+    [tasks, currentUserId, reportRemoteError, runRemote],
+  )
+
   // 定期タスク (item 2) — admin-defined recurring generation rules
   const addRecurringRule = useCallback(
     (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => {
@@ -2678,11 +2754,26 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 概要・種類は作成後も編集できる（種類を変えても、既存タスクやテンプレートの
   // 自動追加には影響しない — あくまで新規作成時の初期タスク生成に使われるだけ）
   const updateProjectDetails = useCallback(
-    (projectId: string, description: string, type?: string, goal?: string) => {
+    (
+      projectId: string,
+      fields: { name: string; description: string; type?: string; goal?: string; startDate?: string | null; endDate?: string | null },
+    ) => {
       setProjects((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, description, type: type || undefined, goal: goal || undefined } : p)),
+        prev.map((p) =>
+          p.id === projectId
+            ? {
+                ...p,
+                name: fields.name,
+                description: fields.description,
+                type: fields.type || undefined,
+                goal: fields.goal || undefined,
+                startDate: fields.startDate || undefined,
+                endDate: fields.endDate || undefined,
+              }
+            : p,
+        ),
       )
-      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, description, type, goal))
+      if (isRemoteConfigured) runRemote(remoteApi.updateProjectDetails(projectId, fields))
     },
     [runRemote],
   )
@@ -3067,6 +3158,16 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       if (isRemoteConfigured) runRemote(remoteApi.updateUnavailableDates(memberId, next))
     },
     [members, runRemote],
+  )
+
+  // CAL-009: 日々の稼働可能時間帯。参考情報として表示するのみで、自動判定
+  // には使わない
+  const updateAvailableHours = useCallback(
+    (memberId: string, hours: { start: string; end: string } | null) => {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, availableHours: hours ?? undefined } : m)))
+      if (isRemoteConfigured) runRemote(remoteApi.updateAvailableHours(memberId, hours))
+    },
+    [runRemote],
   )
 
   const updateSchedule = useCallback(
@@ -4038,6 +4139,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateTaskSetTemplateItems,
     removeTaskSetTemplate,
     applyTaskSetTemplate,
+    importTasksFromProject,
     recurringRules,
     jobRequirements,
     setJobRequirements,
@@ -4148,6 +4250,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setMemberTimezone,
     setMemberLocale,
     toggleUnavailableDate,
+    updateAvailableHours,
     updateSchedule,
     updateDependsOn,
     updateReviewer,

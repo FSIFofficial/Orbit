@@ -66,6 +66,11 @@ export function ProjectDetail({ id }: { id: string }) {
             {project.description && (
               <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{project.description}</p>
             )}
+            {(project.startDate || project.endDate) && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {t('project.detail.periodLabel', { start: project.startDate || '?', end: project.endDate || '?' })}
+              </p>
+            )}
             {owner && (
               <button
                 onClick={() => go({ name: 'person', id: owner.id })}

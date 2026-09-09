@@ -27,6 +27,7 @@ import {
   Pencil,
   Check,
   CalendarOff,
+  Clock,
   Bell,
   Mail,
   ImageUp,
@@ -97,6 +98,7 @@ export function PersonDetail({ id }: { id: string }) {
     setMemberTimezone,
     setMemberLocale,
     toggleUnavailableDate,
+    updateAvailableHours,
     updateAvatar,
     uploadAvatarImage,
     driveEnabled,
@@ -1137,6 +1139,49 @@ export function PersonDetail({ id }: { id: string }) {
                   }}
                   className="h-7 rounded-md border border-dashed border-border-strong bg-card px-2 text-xs outline-none focus:border-primary"
                 />
+              </div>
+
+              {/* CAL-009: 稼働可能時間帯 — あくまで参考情報。自動判定には使わない */}
+              <div className="mt-4 border-t border-border pt-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="size-4 text-muted-foreground" />
+                  <SectionLabel>{t('person.calendar.availableHours.title')}</SectionLabel>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('person.calendar.availableHours.desc')}
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={member.availableHours?.start ?? ''}
+                    onChange={(e) => {
+                      const start = e.target.value
+                      const end = member.availableHours?.end ?? ''
+                      updateAvailableHours(member.id, start || end ? { start, end } : null)
+                    }}
+                    className="h-7 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
+                  />
+                  <span className="text-xs text-muted-foreground">〜</span>
+                  <input
+                    type="time"
+                    value={member.availableHours?.end ?? ''}
+                    onChange={(e) => {
+                      const end = e.target.value
+                      const start = member.availableHours?.start ?? ''
+                      updateAvailableHours(member.id, start || end ? { start, end } : null)
+                    }}
+                    className="h-7 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
+                  />
+                  {member.availableHours && (
+                    <button
+                      onClick={() => updateAvailableHours(member.id, null)}
+                      className="text-muted-foreground opacity-60 hover:opacity-100"
+                      aria-label={t('person.calendar.availableHours.clear')}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}

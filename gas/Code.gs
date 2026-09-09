@@ -94,12 +94,15 @@ function setupOrbit() {
     'grade_year',              // 学年
     'custom_fields_json',      // 団体ごとのカスタム列（人材DB）の値 {"key":"value"}
     'survey_responses_json',   // item 22/30: このメンバー自身の全アンケート回答履歴 [{"id","submittedAt","answers"}]
+    'available_hours_json',    // CAL-009: 日々の稼働可能時間帯（参考情報） {"start":"10:00","end":"18:00"}
   ]
   var PROJECTS_HEADERS = [
     'id', 'name', 'description', 'type', 'owner_id', 'member_ids', 'archived', 'parent_id',
     'goal', // 目標（概要=descriptionとは別枠）
     'health_override',       // item 26: 幹部による健康状態の手動上書き
     'last_notified_health',  // item 26: 直近に通知した実効健康状態（重複通知防止）
+    'start_date', // PRJ-003: プロジェクトの開始日（任意, YYYY-MM-DD）
+    'end_date',   // PRJ-003: プロジェクトの終了予定日（任意, YYYY-MM-DD）
   ]
   var TASKS_HEADERS = [
     'id', 'project_id', 'title', 'description', 'status', 'assign_type',
@@ -790,6 +793,7 @@ function authorizeAction(acting, action, body) {
     'updateDisplayName',     // 表示名変更は本人のみ
     'updateUnavailableDates',// 稼働不可日は本人のみ
     'updateAbsentDates',    // 不在日は本人のみ
+    'updateAvailableHours', // CAL-009: 稼働可能時間帯は本人のみ
     'updateTimezone',       // タイムゾーン設定は本人のみ
     'updateLocale',         // 表示言語設定は本人のみ
   ]
@@ -1043,6 +1047,11 @@ function doPost(e) {
           unavailable_dates: (body.dates || []).join(','),
         })
         break
+      case 'updateAvailableHours':
+        result = updateMemberFields(body.memberId, {
+          available_hours_json: body.hours ? JSON.stringify(body.hours) : '',
+        })
+        break
       case 'updateSchedule':
         result = updateTaskFields(body.taskId, {
           start_date: body.startDate || '',
@@ -1144,9 +1153,12 @@ function doPost(e) {
         break
       case 'updateProjectDetails':
         result = updateProjectFields(body.projectId, {
+          name: body.name || '',
           description: body.description || '',
           type: body.type || '',
           goal: body.goal || '',
+          start_date: body.startDate || '',
+          end_date: body.endDate || '',
         })
         break
       case 'updateProjectArchived':

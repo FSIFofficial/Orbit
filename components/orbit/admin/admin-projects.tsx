@@ -23,6 +23,7 @@ import {
   Archive,
   ArchiveRestore,
   Check,
+  FolderInput,
   GripVertical,
   LayoutTemplate,
   Pencil,
@@ -82,6 +83,7 @@ export function AdminProjects() {
     updateTaskSetTemplateItems,
     removeTaskSetTemplate,
     applyTaskSetTemplate,
+    importTasksFromProject,
     recurringRules,
     addRecurringRule,
     removeRecurringRule,
@@ -99,11 +101,24 @@ export function AdminProjects() {
   const [removing, setRemoving] = useState<Project | null>(null)
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null)
   const [applyingTo, setApplyingTo] = useState<Project | null>(null)
+  // PRJ-016/017: 過去のプロジェクトからのタスク取込。取込元を選ぶと、その
+  // プロジェクトのタスク一覧がチェックボックス付きで表示され(デフォルト
+  // 全選択)、チェックを外したタスクは取込対象から除外できる
+  const [importingTo, setImportingTo] = useState<Project | null>(null)
+  const [importSourceId, setImportSourceId] = useState('')
+  const [importSelectedIds, setImportSelectedIds] = useState<Set<string>>(new Set())
+  const importSourceTasks = useMemo(
+    () => visibleTasks.filter((task) => task.projectId === importSourceId),
+    [visibleTasks, importSourceId],
+  )
+  useEffect(() => {
+    setImportSelectedIds(new Set(importSourceTasks.map((task) => task.id)))
+  }, [importSourceId])
   const [managingMembersOf, setManagingMembersOf] = useState<Project | null>(null)
   const [managingOwnerOf, setManagingOwnerOf] = useState<Project | null>(null)
   const [editingDetailsOf, setEditingDetailsOf] = useState<Project | null>(null)
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
-  const [detailsDraft, setDetailsDraft] = useState({ description: '', type: '', goal: '' })
+  const [detailsDraft, setDetailsDraft] = useState({ name: '', description: '', type: '', goal: '', startDate: '', endDate: '' })
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('')
@@ -290,7 +305,14 @@ export function AdminProjects() {
                       <span className="min-w-0 flex-1 truncate">{p.description || '—'}</span>
                       <button
                         onClick={() => {
-                          setDetailsDraft({ description: p.description, type: p.type ?? '', goal: p.goal ?? '' })
+                          setDetailsDraft({
+                            name: p.name,
+                            description: p.description,
+                            type: p.type ?? '',
+                            goal: p.goal ?? '',
+                            startDate: p.startDate ?? '',
+                            endDate: p.endDate ?? '',
+                          })
                           setEditingDetailsOf(p)
                         }}
                         className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -371,6 +393,17 @@ export function AdminProjects() {
                             {t('admin.projects.applyTemplateButton')}
                           </button>
                         )}
+                        <button
+                          onClick={() => {
+                            setImportingTo(p)
+                            setImportSourceId('')
+                            setImportSelectedIds(new Set())
+                          }}
+                          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary"
+                        >
+                          <FolderInput className="size-3.5" />
+                          {t('admin.projects.importTasksButton')}
+                        </button>
                         <button
                           onClick={() => {
                             setProjectArchived(p.id, true)
@@ -610,6 +643,72 @@ export function AdminProjects() {
         </div>
       </Modal>
 
+      <Modal open={!!importingTo} onClose={() => setImportingTo(null)}>
+        <h2 className="text-base font-semibold">{t('admin.projects.importModal.title', { name: importingTo?.name ?? '' })}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.projects.importModal.desc')}</p>
+        <div className="mt-3">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.importModal.sourceLabel')}</label>
+          <select
+            value={importSourceId}
+            onChange={(e) => setImportSourceId(e.target.value)}
+            className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+          >
+            <option value="">{t('common.notSet')}</option>
+            {projects
+              .filter((p) => p.id !== importingTo?.id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+          </select>
+        </div>
+        {importSourceId && (
+          <div className="mt-3 max-h-72 overflow-auto orbit-scroll rounded-lg border border-border">
+            {importSourceTasks.length === 0 ? (
+              <p className="px-3 py-4 text-center text-sm text-muted-foreground">{t('admin.projects.importModal.empty')}</p>
+            ) : (
+              importSourceTasks.map((srcTask) => (
+                <label
+                  key={srcTask.id}
+                  className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0 hover:bg-secondary/50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={importSelectedIds.has(srcTask.id)}
+                    onChange={(e) => {
+                      setImportSelectedIds((prev) => {
+                        const next = new Set(prev)
+                        if (e.target.checked) next.add(srcTask.id)
+                        else next.delete(srcTask.id)
+                        return next
+                      })
+                    }}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{srcTask.name}</span>
+                  {srcTask.category && <span className="shrink-0 text-xs text-muted-foreground">{srcTask.category}</span>}
+                </label>
+              ))
+            )}
+          </div>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" className="h-9" onClick={() => setImportingTo(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            className="h-9"
+            disabled={importSelectedIds.size === 0}
+            onClick={() => {
+              if (!importingTo || !importSourceId) return
+              importTasksFromProject(importSourceId, importingTo.id, Array.from(importSelectedIds))
+              toast(t('admin.projects.importModal.toast', { count: importSelectedIds.size, project: importingTo.name }))
+              setImportingTo(null)
+            }}
+          >
+            {t('admin.projects.importModal.submit', { count: importSelectedIds.size })}
+          </Button>
+        </div>
+      </Modal>
+
       <Modal open={!!managingMembersOf} onClose={() => setManagingMembersOf(null)}>
         <h2 className="text-base font-semibold">{t('admin.projects.membersModal.title', { name: managingMembersOf?.name ?? '' })}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -695,6 +794,14 @@ export function AdminProjects() {
         <h2 className="text-base font-semibold">{t('admin.projects.detailsModal.title', { name: editingDetailsOf?.name ?? '' })}</h2>
         <div className="mt-3 flex flex-col gap-3">
           <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.nameLabel')}</label>
+            <input
+              value={detailsDraft.name}
+              onChange={(e) => setDetailsDraft({ ...detailsDraft, name: e.target.value })}
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.form.goalLabel')}</label>
             <textarea
               value={detailsDraft.goal}
@@ -732,6 +839,26 @@ export function AdminProjects() {
               {t('admin.projects.detailsModal.hint')}
             </p>
           </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.detailsModal.startDateLabel')}</label>
+              <input
+                type="date"
+                value={detailsDraft.startDate}
+                onChange={(e) => setDetailsDraft({ ...detailsDraft, startDate: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('admin.projects.detailsModal.endDateLabel')}</label>
+              <input
+                type="date"
+                value={detailsDraft.endDate}
+                onChange={(e) => setDetailsDraft({ ...detailsDraft, endDate: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+              />
+            </div>
+          </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" className="h-9" onClick={() => setEditingDetailsOf(null)}>
@@ -741,12 +868,14 @@ export function AdminProjects() {
             className="h-9"
             onClick={() => {
               if (editingDetailsOf) {
-                updateProjectDetails(
-                  editingDetailsOf.id,
-                  detailsDraft.description.trim(),
-                  detailsDraft.type || undefined,
-                  detailsDraft.goal.trim() || undefined,
-                )
+                updateProjectDetails(editingDetailsOf.id, {
+                  name: detailsDraft.name.trim() || editingDetailsOf.name,
+                  description: detailsDraft.description.trim(),
+                  type: detailsDraft.type || undefined,
+                  goal: detailsDraft.goal.trim() || undefined,
+                  startDate: detailsDraft.startDate || null,
+                  endDate: detailsDraft.endDate || null,
+                })
                 toast(t('admin.projects.detailsModal.updateToast'))
               }
               setEditingDetailsOf(null)
