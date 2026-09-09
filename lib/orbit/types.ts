@@ -165,6 +165,12 @@ export interface Member {
   // 不在日リスト（YYYY-MM-DD）— カレンダービューで自分で登録し、
   // Googleカレンダーとも同期する
   absentDates?: string[]
+  // CAL-009: 日々の稼働可能時間帯(任意)。absentDatesは「その日は稼働不可」
+  // という日単位のフラグだが、こちらは「稼働する日は何時から何時まで
+  // 動けるか」という時間帯の目安。あくまで参考情報として表示するのみで、
+  // スケジュール調整の自動判定には使わない(タイムゾーン処理の複雑化を
+  // 避けるため、現状は文字列としてシンプルに保持する)
+  availableHours?: { start: string; end: string } // HH:MM形式
   // 本人のタイムゾーン（IANA名、例: 'Asia/Tokyo'）— コメントの投稿日時など
   // 時刻を含む表示のみに使う。日付のみのフィールド（deadline等）はTZに
   // 関係ないカレンダー日として扱うため対象外（lib/orbit/timezone.ts）
@@ -373,6 +379,9 @@ export interface Project {
   // item 26: 直近に通知を送った時点の実効的な健康状態。自動判定が同じ
   // 'attention'状態を維持している間の重複通知を防ぐために使う。
   lastNotifiedHealth?: ProjectHealthLevel
+  // PRJ-003: プロジェクトの期間(開始日/終了予定日)。任意項目
+  startDate?: string // YYYY-MM-DD
+  endDate?: string // YYYY-MM-DD
 }
 
 export type ProjectHealthLevel = 'good' | 'watch' | 'attention'

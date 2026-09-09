@@ -238,6 +238,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     skillPoints: parseJsonObject<SkillPoints>(r.skill_points_json),
     inactive: r.inactive === 'TRUE' ? true : undefined,
     absentDates: splitTags(r.absent_dates),
+    availableHours: parseJsonObject<{ start: string; end: string }>(r.available_hours_json),
     lastLogin: r.last_login || undefined,
     timezone: r.timezone || undefined,
     locale: r.locale || undefined,
@@ -267,6 +268,8 @@ function mapProjectRow(r: Record<string, string>): Project {
     goal: r.goal || undefined,
     healthOverride: (r.health_override || undefined) as Project['healthOverride'],
     lastNotifiedHealth: (r.last_notified_health || undefined) as Project['lastNotifiedHealth'],
+    startDate: r.start_date || undefined,
+    endDate: r.end_date || undefined,
   }
 }
 
@@ -678,6 +681,8 @@ export const remoteApi = {
     postToGas('updateJoinedAt', { memberId, joinedAt }),
   updateUnavailableDates: (memberId: string, dates: string[]) =>
     postToGas('updateUnavailableDates', { memberId, dates }),
+  updateAvailableHours: (memberId: string, hours: { start: string; end: string } | null) =>
+    postToGas('updateAvailableHours', { memberId, hours }),
   updateTimezone: (memberId: string, timezone: string) =>
     postToGas('updateTimezone', { memberId, timezone }),
   updateLocale: (memberId: string, locale: string) =>
@@ -775,8 +780,10 @@ export const remoteApi = {
     postToGas('updateProjectOwner', { projectId, ownerId }),
   updateProjectParent: (projectId: string, parentId: string | null) =>
     postToGas('updateProjectParent', { projectId, parentId }),
-  updateProjectDetails: (projectId: string, description: string, type: string | undefined, goal?: string) =>
-    postToGas('updateProjectDetails', { projectId, description, type, goal }),
+  updateProjectDetails: (
+    projectId: string,
+    fields: { name: string; description: string; type?: string; goal?: string; startDate?: string | null; endDate?: string | null },
+  ) => postToGas('updateProjectDetails', { projectId, ...fields }),
   updateProjectArchived: (projectId: string, archived: boolean) =>
     postToGas('updateProjectArchived', { projectId, archived }),
   updateProjectHealth: (projectId: string, healthOverride: import('./types').ProjectHealthLevel | null) =>
