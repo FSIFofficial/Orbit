@@ -189,6 +189,10 @@ export interface Member {
   // desired growth areas/skills ("成長したい領域やスキル"), distinct from
   // Will (what they want to do) and skills (what they already have)
   desiredAreas?: string[]
+  // DEV-002: 本人が取得したい具体的なスキル(desiredAreasより粒度が細かい、
+  // skillOptionsの個別スキル名の配列)。成長したい「領域」とは別に、
+  // 具体的に習得したい「スキル」を個別設定できるようにする。
+  desiredSkills?: string[]
 
   // 人材データベース
   careerHistory?: CareerHistoryEntry[]

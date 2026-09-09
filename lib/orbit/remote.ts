@@ -219,6 +219,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     yearsOfExperience: r.years_of_experience ? Number(r.years_of_experience) : undefined,
     hasManagementExperience: /^(true|1|yes)$/i.test((r.has_management_experience || '').trim()),
     desiredAreas: splitTags(r.desired_areas),
+    desiredSkills: splitTags(r.desired_skills), // DEV-002
     careerHistory: parseJsonArray<CareerHistoryEntry>(r.career_history_json),
     qualifications: parseJsonArray<Qualification>(r.qualifications_json),
     evaluationHistory: parseJsonArray<EvaluationRecord>(r.evaluation_history_json),
@@ -796,7 +797,12 @@ export const remoteApi = {
   // ---- タレントマネジメント ----
   updateSearchProfile: (
     memberId: string,
-    profile: { yearsOfExperience: number | null; hasManagementExperience: boolean; desiredAreas: string[] },
+    profile: {
+      yearsOfExperience: number | null
+      hasManagementExperience: boolean
+      desiredAreas: string[]
+      desiredSkills: string[]
+    },
   ) => postToGas('updateSearchProfile', { memberId, ...profile }),
   updateCareerHistory: (memberId: string, entries: CareerHistoryEntry[]) =>
     postToGas('updateCareerHistory', { memberId, entries }),

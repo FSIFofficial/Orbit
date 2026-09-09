@@ -185,6 +185,7 @@ export function AdminMemberDb() {
         yearsOfExperience: val === '' ? null : Number(val),
         hasManagementExperience: member.hasManagementExperience ?? false,
         desiredAreas: member.desiredAreas ?? [],
+        desiredSkills: member.desiredSkills ?? [],
       })
     } else if (colKey === 'joinedAt') {
       updateJoinedAt(memberId, val || null)

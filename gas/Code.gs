@@ -1058,6 +1058,7 @@ function doPost(e) {
               : body.yearsOfExperience,
           has_management_experience: body.hasManagementExperience ? 'TRUE' : 'FALSE',
           desired_areas: (body.desiredAreas || []).join(','),
+          desired_skills: (body.desiredSkills || []).join(','), // DEV-002
         })
         break
       case 'updateCareerHistory':
@@ -2967,7 +2968,7 @@ function setupOrbit() {
     'avatar_url', 'avatar_color', 'avatar_initials',
     'will_tags', 'judgment_tags',
     'reports_to_id', 'mentor_id', 'joined_at', 'unavailable_dates', 'project_ids',
-    'years_of_experience', 'has_management_experience', 'desired_areas',
+    'years_of_experience', 'has_management_experience', 'desired_areas', 'desired_skills',
     'career_history_json', 'qualifications_json', 'evaluation_history_json',
     'transfer_history_json', 'skill_levels_json', 'competencies_json',
     'career_aspiration', 'desired_future_role', 'career_plan',
