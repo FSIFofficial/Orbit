@@ -333,6 +333,7 @@ Orbit のログインには Google アカウントでのサインインを使い
 | `one_on_one_questions` | 1on1ワークシートの質問項目（Admin → Tags の UI から設定可） | JSON配列（文字列） |
 | `initial_tasks_json` | 初ログイン時に付与されるタスク一覧（未設定時はハードコードの3件） | JSON配列（各要素に `name`・`description`） |
 | `inactive_notify_days` | 未アクセス通知の閾値（日数、デフォルト25） | 数値文字列 |
+| `department_tree_config` | 部署ツリー構成（Admin → Org Tree の「部署を編集」から設定可。未設定時はメンバーの `department_path` から動的導出） | JSON配列（各要素に `path`・任意で `label`） |
 
 > **`skill_level_thresholds`（スキルレベルアップ閾値）**: スキルポイントが何点に達したらレベルが上がるかを設定します。  
 > 例: `{"デフォルト":100,"デザイン":150}` → デザインスキルは150点でレベルアップ、他は100点。
