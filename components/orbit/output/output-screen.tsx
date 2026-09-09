@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
+import { ExpenseHistoryModal } from '@/components/orbit/expense-history-modal'
 import { CustomFormModal } from '@/components/orbit/custom-form-modal'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
@@ -117,6 +118,7 @@ export function OutputScreen() {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [projectFilter, setProjectFilter] = useState('')
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -270,13 +272,22 @@ export function OutputScreen() {
           </div>
           <div className="flex items-center gap-2">
             {expenseCategories.length > 0 && (
-              <button
-                onClick={() => setExpenseModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                <Receipt className="size-3.5" />
-                {tr('output.expenseApply')}
-              </button>
+              <>
+                <button
+                  onClick={() => setExpenseModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Receipt className="size-3.5" />
+                  {tr('output.expenseApply')}
+                </button>
+                <button
+                  onClick={() => setExpenseHistoryOpen(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <FileText className="size-3.5" />
+                  {tr('output.expenseHistory')}
+                </button>
+              </>
             )}
             {customFormDefs.length > 0 && (
               <button
@@ -602,6 +613,7 @@ export function OutputScreen() {
 
       <TaskDetailDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
       {expenseModalOpen && <ExpenseApplicationModal onClose={() => setExpenseModalOpen(false)} />}
+      {expenseHistoryOpen && <ExpenseHistoryModal onClose={() => setExpenseHistoryOpen(false)} />}
       {formModalOpen && <CustomFormModal onClose={() => setFormModalOpen(false)} />}
     </div>
   )

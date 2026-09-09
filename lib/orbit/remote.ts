@@ -725,6 +725,12 @@ export const remoteApi = {
       filename,
       folderId: DRIVE_FOLDER_ID,
     }),
+  uploadExpenseReceipt: (dataUrl: string, filename: string) =>
+    postToGas<{ url: string }>('uploadExpenseReceipt', {
+      dataUrl,
+      filename,
+      folderId: DRIVE_FOLDER_ID,
+    }),
   addMember: (name: string, email: string, affiliation: string, role: Role) =>
     postToGas<{ id: string }>('addMember', { name, email, affiliation, role }),
   updateEmail: (memberId: string, email: string) => postToGas('updateEmail', { memberId, email }),
@@ -892,6 +898,20 @@ export const remoteApi = {
     postToGas('rejectExpense', { applicationId, reason }),
   withdrawExpense: (applicationId: string) =>
     postToGas('withdrawExpense', { applicationId }),
+  returnExpense: (applicationId: string, reason: string) =>
+    postToGas('returnExpense', { applicationId, reason }),
+  resubmitExpense: (
+    applicationId: string,
+    fields: {
+      amount: number
+      categoryId: string
+      receiptUrl?: string
+      justification?: string
+      purpose?: string
+      customFieldAnswers?: Record<string, string>
+      approvalSteps: import('./types').ApprovalStep[]
+    },
+  ) => postToGas('resubmitExpense', { applicationId, fields }),
   // ---- カスタムフォーム ----
   submitCustomForm: (submission: import('./types').CustomFormSubmission) =>
     postToGas('submitCustomForm', { submission }),
