@@ -18,10 +18,11 @@ import { AdminFormBuilder } from './admin-form-builder'
 import { AdminMemberDb } from './admin-member-db'
 import { AdminLeadership } from './admin-leadership'
 import { AdminRecruiting } from './admin-recruiting'
+import { AdminDailyReports } from './admin-daily-reports'
 import { useOrbit } from '@/lib/orbit/store'
 import { OrbitMark } from '../primitives'
 import type { AdminSection } from '@/lib/orbit/types'
-import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, BookOpen, Radar, Receipt, FileText, Database, Crown, Briefcase } from 'lucide-react'
+import { LayoutDashboard, UserPlus, FileClock, FolderPlus, Users, BarChart3, Tags, Network, GraduationCap, BookOpen, Radar, Receipt, FileText, Database, Crown, Briefcase, NotebookPen } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Section = AdminSection
@@ -43,6 +44,7 @@ function buildNav(t: (key: TranslationKey) => string): { key: Section; label: st
     { key: 'expenses', label: t('admin.nav.expenses'), icon: <Receipt className="size-4" /> },
     { key: 'forms', label: t('admin.nav.forms'), icon: <FileText className="size-4" /> },
     { key: 'memberdb', label: t('admin.nav.memberdb'), icon: <Database className="size-4" /> },
+    { key: 'dailyReports', label: t('admin.nav.dailyReports'), icon: <NotebookPen className="size-4" /> },
   ]
 }
 
@@ -164,6 +166,7 @@ export function AdminScreen({ section }: { section: Section }) {
           {section === 'memberdb' && <AdminMemberDb />}
           {section === 'leadership' && <AdminLeadership />}
           {section === 'recruiting' && <AdminRecruiting />}
+          {section === 'dailyReports' && <AdminDailyReports />}
         </div>
       </div>
     </div>

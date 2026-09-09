@@ -18,6 +18,7 @@ import type {
   CustomFormDef,
   CustomFormSubmission,
   CustomMemberColumn,
+  DailyReportEntry,
   Department,
   DepartmentTreeNode,
   DevelopmentPlanEntry,
@@ -431,6 +432,9 @@ interface OrbitContextValue extends OrbitState {
   ) => void
   approveFormStep: (submissionId: string, stepId: string, comment?: string) => void
   rejectFormSubmission: (submissionId: string, reason: string) => void
+  // REP-004/REP-005: 日報・週報
+  submitDailyReport: (report: DailyReportEntry) => void
+  fetchDailyReports: () => Promise<DailyReportEntry[]>
   // タスク確認ターゲット更新
   updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
   approveTaskReview: (taskId: string, comment?: string) => void
@@ -1798,6 +1802,28 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     },
     [customFormDefs, currentUserId, runRemote],
   )
+
+  // REP-004: 日報・週報をGASへ送信する。永続化はDailyReportsシート側で
+  // 行うため、ここではグローバルstateを持たない(daily-report-screen.tsx
+  // 自身がlocalStorageでper-member履歴を管理している)。
+  const submitDailyReport = useCallback(
+    (report: DailyReportEntry) => {
+      if (isRemoteConfigured) runRemote(remoteApi.submitDailyReport(report))
+    },
+    [runRemote],
+  )
+
+  // REP-005: 管理者の日報・週報閲覧画面が開いたタイミングで明示的に呼ぶ
+  // 読み取り専用フェッチ。経費申請のように「書き込みはGASにあるが読み取りは
+  // ローカルstateのみ」という状態を繰り返さないよう、グローバルstateに
+  // キャッシュせず呼び出しのたびに最新を取得する設計にしている。
+  const fetchDailyReports = useCallback((): Promise<DailyReportEntry[]> => {
+    if (!isRemoteConfigured) return Promise.resolve([])
+    return remoteApi.fetchDailyReports().catch((err) => {
+      reportRemoteError(err)
+      throw err
+    })
+  }, [reportRemoteError])
 
   const approveFormStep = useCallback(
     (submissionId: string, stepId: string, comment?: string) => {
@@ -4615,6 +4641,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     submitCustomForm,
     approveFormStep,
     rejectFormSubmission,
+    submitDailyReport,
+    fetchDailyReports,
     bulkUpdateSkills,
     candidates,
     addCandidate,

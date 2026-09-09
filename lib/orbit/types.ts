@@ -33,6 +33,8 @@ export type AdminSection =
   | 'forms'
   | 'memberdb'
   | 'leadership'
+  // REP-005: 日報・週報の管理者閲覧
+  | 'dailyReports'
   // 'recruiting' はrolePermissions/visibleAdminSectionsのロール単位制御とは
   // 独立に、Member.permissionOverrides(targetType:'recruiting')の個別付与
   // だけでアクセス可否を決める（admin-screen.tsxのcanAccessRecruiting参照）。
@@ -55,6 +57,7 @@ export const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: 'expenses', label: 'Expenses' },
   { key: 'forms', label: 'Forms' },
   { key: 'memberdb', label: '人材DB' },
+  { key: 'dailyReports', label: 'Daily Reports' },
 ]
 
 // Members/Tags manage org-wide config (roles, notification routing, the
@@ -948,4 +951,22 @@ export interface SurveyResponse {
   memberId: string
   submittedAt: string // ISO datetime
   answers: Record<string, number | string>
+}
+
+// ---- 日報・週報 (REP-004/REP-005) -----------------------------------------
+// daily-report-screen.tsxが書く/読む単位。GAS(DailyReportsシート)経由で
+// 団体全体に共有される — 経費申請と同じく保存はsubmitDailyReport、
+// 読み取りは管理者閲覧画面が明示的に呼ぶfetchDailyReportsで取得する。
+
+export type DailyReportType = 'daily' | 'weekly'
+
+export interface DailyReportEntry {
+  id: string
+  memberId: string
+  type: DailyReportType
+  date: string // YYYY-MM-DD
+  done: string
+  todo: string
+  issues: string
+  createdAt: string // ISO datetime
 }

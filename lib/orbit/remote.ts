@@ -935,6 +935,11 @@ export const remoteApi = {
     postToGas('approveFormStep', { submissionId, stepId, actorId, comment }),
   rejectFormSubmission: (submissionId: string, reason: string) =>
     postToGas('rejectFormSubmission', { submissionId, reason }),
+  // ---- 日報・週報 (REP-004/REP-005) ----
+  submitDailyReport: (report: import('./types').DailyReportEntry) =>
+    postToGas('submitDailyReport', { report }),
+  fetchDailyReports: () =>
+    postToGas<import('./types').DailyReportEntry[]>('fetchDailyReports', {}),
   bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) =>
     postToGas('bulkUpdateSkills', { updates }),
   updateAbsentDates: (memberId: string, dates: string[]) =>
