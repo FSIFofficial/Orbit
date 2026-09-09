@@ -42,6 +42,7 @@ import type {
   SkillLevelThresholds,
   SkillLevelValue,
   SkillPoints,
+  SurveyQuestion,
   SurveyResponse,
   Task,
   TaskComment,
@@ -314,6 +315,9 @@ interface OrbitContextValue extends OrbitState {
   // LRN-001: 学習コンテンツ
   learningContents: LearningContent[]
   updateLearningContents: (contents: LearningContent[]) => void
+  // FRM-006: アンケート設問（未設定なら固定6問にフォールバック）
+  surveyQuestions: SurveyQuestion[]
+  updateSurveyQuestions: (questions: SurveyQuestion[]) => void
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
   // 人材DBのカスタム列（団体ごとに追加可能）
   customMemberColumns: import('./types').CustomMemberColumn[]
@@ -737,6 +741,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [learningContents, setLearningContents] = useState<LearningContent[]>([])
+  // FRM-006: アンケート設問リスト — 空ならsurvey-screen.tsxが固定6問にフォールバックする
+  const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
   const [customMemberColumns, setCustomMemberColumns] = useState<CustomMemberColumn[]>([])
   // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
@@ -880,6 +886,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.initialTasks.length) setInitialTasksFromSettings(s.initialTasks)
         if (s.departmentTreeConfig.length) setDepartmentTreeConfigState(s.departmentTreeConfig)
         if (s.learningContents.length) setLearningContents(s.learningContents)
+        if (s.surveyQuestions.length) setSurveyQuestions(s.surveyQuestions)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -947,6 +954,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.initialTasks.length) setInitialTasksFromSettings(settings.initialTasks)
           if (settings.departmentTreeConfig.length) setDepartmentTreeConfigState(settings.departmentTreeConfig)
           if (settings.learningContents.length) setLearningContents(settings.learningContents)
+          if (settings.surveyQuestions.length) setSurveyQuestions(settings.surveyQuestions)
         }
         setRemoteError(null)
       })
@@ -1479,6 +1487,15 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // FRM-006: アンケート設問の更新（Admin）
+  const updateSurveyQuestions = useCallback(
+    (questions: SurveyQuestion[]) => {
+      setSurveyQuestions(questions)
+      if (isSettingsConfigured) runRemote(remoteApi.updateSurveyQuestions(questions))
+    },
+    [runRemote],
+  )
+
   // レーダーチャート軸の更新（Admin）
   const updateRadarAxes = useCallback(
     (axes: RadarAxis[]) => {
@@ -1902,7 +1919,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       } catch { /* ignore */ }
 
       setTasks((prevTasks) => {
-        if (prevTasks.length > 0) return prevTasks
+        // REC-006: 「組織にタスクが1件もない場合のみ」ではなく「このメンバーに
+        // まだ初期タスクを付与していない場合」で発火を制御する（上のgivenIds
+        // チェックが本来の判定）。他のタスクが既にあっても2人目以降の新規
+        // メンバーに初期タスクを付与できるよう、組織全体のタスク有無は見ない。
         const now = new Date().toISOString()
         const base = { assigneeIds: [userId], status: 'todo' as const, progressHistory: [] as import('./types').ProgressEntry[], department: '未分類' as const, category: '未分類', skills: [], priority: '中' as const, difficulty: '新人歓迎' as const, deadline: null, createdAt: now, lastActivity: now.slice(0, 10) }
         const taskDefs = initialTasksFromSettings.length ? initialTasksFromSettings : HARDCODED_INITIAL_TASKS
@@ -4503,6 +4523,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     submitQuizResult,
     learningContents,
     updateLearningContents,
+    surveyQuestions,
+    updateSurveyQuestions,
     customMemberColumns,
     updateCustomMemberColumns,
     updateCustomField,

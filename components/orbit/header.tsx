@@ -106,7 +106,11 @@ export function Header() {
           const comment = t.comments?.find((c) => c.text.toLowerCase().includes(q))
           if (comment) snippet = comment.text
           else {
-            const deliverable = t.deliverables?.find((d) => d.label.toLowerCase().includes(q))
+            // KNO-004: 成果物のラベルだけでなくURLにもマッチしたら検索結果に含める。
+            // snippetにはラベルを出す(URLそのものより人間が読みやすいため)
+            const deliverable = t.deliverables?.find(
+              (d) => d.label.toLowerCase().includes(q) || d.url.toLowerCase().includes(q),
+            )
             if (deliverable) snippet = deliverable.label
             else if (t.retrospective) {
               const r = t.retrospective

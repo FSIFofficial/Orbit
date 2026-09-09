@@ -6,7 +6,7 @@ import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel, Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
-import type { AdminSection, CustomMemberColumn } from '@/lib/orbit/types'
+import type { AdminSection, CustomMemberColumn, SurveyQuestion } from '@/lib/orbit/types'
 import { Plus, Check, ChevronUp, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
@@ -211,6 +211,9 @@ export function AdminTags() {
 
       {/* item 20: 1on1ワークシート質問項目 */}
       <OneOnOneQuestionsEditor />
+
+      {/* FRM-006/FRM-007: アンケート設問のカスタマイズ */}
+      <SurveyQuestionsEditor />
 
       {/* item 26: 通知種別・頻度設定 */}
       <NotifySettingsEditor />
@@ -462,6 +465,129 @@ function OneOnOneQuestionsEditor() {
           <Plus className="size-3.5" />
           {t('admin.tags.oneOnOne.add')}
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// FRM-006/FRM-007: アンケート設問エディタ。OneOnOneQuestionsEditorと同じ
+// 場所に置くが、こちらは1項目に複数フィールド(文言・型・画像URL等)を
+// 持つため、1操作=1コミットではなくローカルstateで編集してまとめて
+// 「保存」する構造にする（キー入力ごとに通信が飛ぶのを避けるため）。
+// 空配列(未設定)ならsurvey-screen.tsxが既存の固定6問にフォールバックする。
+function SurveyQuestionsEditor() {
+  const { surveyQuestions, updateSurveyQuestions } = useOrbit()
+  const toast = useToast()
+  const { t } = useI18n()
+  const [draft, setDraft] = useState<SurveyQuestion[]>(surveyQuestions)
+
+  const addQuestion = () => {
+    setDraft([...draft, { id: crypto.randomUUID(), text: '', type: 'scale', scaleMinLabel: '', scaleMaxLabel: '' }])
+  }
+  const removeQuestion = (id: string) => setDraft(draft.filter((q) => q.id !== id))
+  const updateQuestion = (id: string, patch: Partial<SurveyQuestion>) =>
+    setDraft(draft.map((q) => (q.id === id ? { ...q, ...patch } : q)))
+  const moveQuestion = (index: number, dir: -1 | 1) => {
+    const target = index + dir
+    if (target < 0 || target >= draft.length) return
+    const next = [...draft]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setDraft(next)
+  }
+
+  const handleSave = () => {
+    updateSurveyQuestions(draft.filter((q) => q.text.trim()))
+    toast(t('admin.tags.surveyQuestions.savedToast'))
+  }
+  const handleReset = () => setDraft(surveyQuestions)
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>{t('admin.tags.surveyQuestions.title')}</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">{t('admin.tags.surveyQuestions.desc')}</p>
+
+      <div className="mt-3 flex flex-col gap-2">
+        {draft.length === 0 && (
+          <span className="text-sm text-muted-foreground">{t('admin.tags.surveyQuestions.emptyFallback')}</span>
+        )}
+        {draft.map((q, i) => (
+          <div key={q.id} className="rounded-md border border-border bg-secondary/30 p-3">
+            <div className="flex items-start gap-2">
+              <div className="flex flex-col gap-0.5 pt-1">
+                <button onClick={() => moveQuestion(i, -1)} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30">
+                  <ChevronUp className="size-3.5" />
+                </button>
+                <button onClick={() => moveQuestion(i, 1)} disabled={i === draft.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30">
+                  <ChevronDown className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 space-y-2">
+                <input
+                  value={q.text}
+                  onChange={(e) => updateQuestion(q.id, { text: e.target.value })}
+                  placeholder={t('admin.tags.surveyQuestions.textPlaceholder')}
+                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={q.type}
+                    onChange={(e) => updateQuestion(q.id, { type: e.target.value as SurveyQuestion['type'] })}
+                    className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                  >
+                    <option value="scale">{t('admin.tags.surveyQuestions.type.scale')}</option>
+                    <option value="text">{t('admin.tags.surveyQuestions.type.text')}</option>
+                  </select>
+                  {q.type === 'scale' && (
+                    <>
+                      <input
+                        value={q.scaleMinLabel ?? ''}
+                        onChange={(e) => updateQuestion(q.id, { scaleMinLabel: e.target.value })}
+                        placeholder={t('admin.tags.surveyQuestions.scaleMinPlaceholder')}
+                        className="h-8 w-32 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                      />
+                      <input
+                        value={q.scaleMaxLabel ?? ''}
+                        onChange={(e) => updateQuestion(q.id, { scaleMaxLabel: e.target.value })}
+                        placeholder={t('admin.tags.surveyQuestions.scaleMaxPlaceholder')}
+                        className="h-8 w-32 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                      />
+                    </>
+                  )}
+                </div>
+                {/* FRM-007: 設問に添える画像(任意) */}
+                <input
+                  type="url"
+                  value={q.imageUrl ?? ''}
+                  onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value || undefined })}
+                  placeholder={t('admin.tags.surveyQuestions.imageUrlPlaceholder')}
+                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                />
+              </div>
+              <button
+                onClick={() => removeQuestion(q.id)}
+                className="mt-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                aria-label={t('admin.tags.surveyQuestions.removeAriaLabel')}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="outline" className="h-8 text-xs" onClick={addQuestion}>
+          <Plus className="size-3.5" />
+          {t('admin.tags.surveyQuestions.add')}
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" className="h-8 text-xs" onClick={handleReset}>
+            {t('common.cancel')}
+          </Button>
+          <Button className="h-8 text-xs" onClick={handleSave}>
+            {t('common.save')}
+          </Button>
+        </div>
       </div>
     </div>
   )

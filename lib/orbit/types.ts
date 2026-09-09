@@ -451,6 +451,23 @@ export interface DepartmentTreeNode {
   label?: string      // 表示名（省略時は path の末尾ノード名を使う）
 }
 
+// ---- アンケート設問 (FRM-006/FRM-007) --------------------------------------
+
+/**
+ * アンケート設問定義 (Settings キー: "survey_questions" の配列要素)。
+ * 未設定(空配列)の団体は survey-screen.tsx の buildDefaultQuestions
+ * (従来のq1〜q6固定6問)にフォールバックする。
+ */
+export interface SurveyQuestion {
+  id: string
+  text: string
+  type: 'scale' | 'text'
+  scaleMinLabel?: string
+  scaleMaxLabel?: string
+  // FRM-007: 設問に添える画像(任意)
+  imageUrl?: string
+}
+
 // ---- 検定（クイズ） -------------------------------------------------------
 
 export interface QuizQuestion {
