@@ -45,6 +45,7 @@ import type {
   NotifyKind,
   PermissionOverride,
   SkillPoints,
+  SurveyQuestion,
 } from './types'
 import { STATUS_LABEL, isAdminRole } from './types'
 import { getGasAuthToken, refreshGasAuthToken } from './google-sheet-sync'
@@ -446,6 +447,9 @@ export interface RemoteSettings {
   departmentTreeConfig: DepartmentTreeNode[]
   // LRN-001: 学習コンテンツ一覧 — Settings キー "learning_contents"
   learningContents: LearningContent[]
+  // FRM-006: アンケート設問リスト — Settings キー "survey_questions"。
+  // 空配列なら survey-screen.tsx はこれまで通りの固定6問にフォールバックする
+  surveyQuestions: SurveyQuestion[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -547,6 +551,9 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     learningContents: (() => {
       try { const r = byKey.get('learning_contents'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    surveyQuestions: (() => {
+      try { const r = byKey.get('survey_questions'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
 }
@@ -879,6 +886,9 @@ export const remoteApi = {
   // ---- 学習コンテンツ (LRN-001) ----
   updateLearningContents: (contents: LearningContent[]) =>
     postToGas('updateSetting', { key: 'learning_contents', value: JSON.stringify(contents) }),
+  // ---- アンケート設問 (FRM-006) ----
+  updateSurveyQuestions: (questions: SurveyQuestion[]) =>
+    postToGas('updateSetting', { key: 'survey_questions', value: JSON.stringify(questions) }),
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) =>
     postToGas<{ passed: boolean; score: number; newLevel?: number }>('submitQuizResult', { quizId, memberId, answers }),
   // ---- レーダーチャート軸 ----

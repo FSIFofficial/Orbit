@@ -5,19 +5,13 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { ArrowLeft, ClipboardList, Check, ChevronRight } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
+import type { SurveyQuestion } from '@/lib/orbit/types'
 
 // item 22: メンバー体験定点測定（簡易アンケートフォーム）
 // 回答はSurveyResponsesシート(GAS経由)に保存し、団体全体で共有される。
 // 管理者は記録を閲覧できる。
-// 仮決め: 質問項目は6つ固定（団体ごとのカスタマイズはadmin-tags等で将来対応）
-
-interface SurveyQuestion {
-  id: string
-  text: string
-  type: 'scale' | 'text'
-  scaleMin?: string
-  scaleMax?: string
-}
+// FRM-006: 質問項目はSettings(surveyQuestions)で団体ごとにカスタマイズ
+// 可能。未設定ならこれまで通りの固定6問にフォールバックする。
 
 // item 30のアンケート×人材データ組み合わせ分析（admin-analytics.tsx）が、
 // スコア集計対象をscale形式の設問のみに絞るために参照する
@@ -25,20 +19,20 @@ export const SURVEY_SCALE_QUESTION_IDS = ['q1', 'q2', 'q3', 'q4', 'q5']
 
 function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKey) => string): SurveyQuestion[] {
   return [
-    { id: 'q1', text: t('survey.q1.text'), type: 'scale', scaleMin: t('survey.q1.scaleMin'), scaleMax: t('survey.q1.scaleMax') },
-    { id: 'q2', text: t('survey.q2.text'), type: 'scale', scaleMin: t('survey.q2.scaleMin'), scaleMax: t('survey.q2.scaleMax') },
-    { id: 'q3', text: t('survey.q3.text'), type: 'scale', scaleMin: t('survey.q3.scaleMin'), scaleMax: t('survey.q3.scaleMax') },
-    { id: 'q4', text: t('survey.q4.text'), type: 'scale', scaleMin: t('survey.q4.scaleMin'), scaleMax: t('survey.q4.scaleMax') },
-    { id: 'q5', text: t('survey.q5.text'), type: 'scale', scaleMin: t('survey.q5.scaleMin'), scaleMax: t('survey.q5.scaleMax') },
+    { id: 'q1', text: t('survey.q1.text'), type: 'scale', scaleMinLabel: t('survey.q1.scaleMin'), scaleMaxLabel: t('survey.q1.scaleMax') },
+    { id: 'q2', text: t('survey.q2.text'), type: 'scale', scaleMinLabel: t('survey.q2.scaleMin'), scaleMaxLabel: t('survey.q2.scaleMax') },
+    { id: 'q3', text: t('survey.q3.text'), type: 'scale', scaleMinLabel: t('survey.q3.scaleMin'), scaleMaxLabel: t('survey.q3.scaleMax') },
+    { id: 'q4', text: t('survey.q4.text'), type: 'scale', scaleMinLabel: t('survey.q4.scaleMin'), scaleMaxLabel: t('survey.q4.scaleMax') },
+    { id: 'q5', text: t('survey.q5.text'), type: 'scale', scaleMinLabel: t('survey.q5.scaleMin'), scaleMaxLabel: t('survey.q5.scaleMax') },
     { id: 'q6', text: t('survey.q6.text'), type: 'text' },
   ]
 }
 
 export function SurveyScreen() {
-  const { currentUser, members, surveyInvitedIds, surveyResponses, submitSurveyResponse } = useOrbit()
+  const { currentUser, members, surveyInvitedIds, surveyResponses, submitSurveyResponse, surveyQuestions } = useOrbit()
   const { go } = useNav()
   const { t } = useI18n()
-  const DEFAULT_QUESTIONS = buildDefaultQuestions(t)
+  const DEFAULT_QUESTIONS = surveyQuestions.length > 0 ? surveyQuestions : buildDefaultQuestions(t)
   const [mode, setMode] = useState<'form' | 'history' | 'admin'>('form')
   const [answers, setAnswers] = useState<Record<string, number | string>>({})
   const [submitted, setSubmitted] = useState(false)
@@ -129,6 +123,10 @@ export function SurveyScreen() {
           {DEFAULT_QUESTIONS.map((q) => (
             <div key={q.id} className="rounded-xl border border-border bg-card p-4">
               <p className="mb-3 text-sm font-medium">{q.text}</p>
+              {q.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={q.imageUrl} alt="" className="mb-3 max-h-64 w-full rounded-lg object-contain" />
+              )}
               {q.type === 'scale' ? (
                 <div className="space-y-2">
                   <div className="flex justify-between gap-1">
@@ -147,8 +145,8 @@ export function SurveyScreen() {
                     ))}
                   </div>
                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>{q.scaleMin}</span>
-                    <span>{q.scaleMax}</span>
+                    <span>{q.scaleMinLabel}</span>
+                    <span>{q.scaleMaxLabel}</span>
                   </div>
                 </div>
               ) : (

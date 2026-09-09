@@ -3518,6 +3518,10 @@ function setExpenseStatus(applicationId, status, reason, actorId) {
 
 // ---- Phase 5: カスタムフォーム申請 -------------------------------------------
 
+// FRM-005: 1次承認者への通知。経費申請のsaveExpenseApplicationと同じ
+// パターンだが、フォーム定義(approvalSteps)はSettingsの
+// custom_form_defsから引く必要がある点が経費申請と異なる
+// (経費申請はapplication自体にステップのスナップショットを持つ)。
 function saveCustomFormSubmission(submission, acting) {
   var sheet = ensureFormSubmissionsSheet()
   sheet.appendRow([
@@ -3531,6 +3535,41 @@ function saveCustomFormSubmission(submission, acting) {
     submission.createdAt || new Date().toISOString(),
     '',
   ])
+
+  var customFormDefs = []
+  try {
+    var raw = getSettingValue('custom_form_defs')
+    if (raw) customFormDefs = JSON.parse(raw)
+  } catch (e) {}
+  var formDef = customFormDefs.filter(function (f) { return f.id === submission.formId })[0]
+  var steps = formDef ? (formDef.approvalSteps || []) : []
+  if (steps.length > 0) {
+    var firstStep = steps[0]
+    var emails = []
+    if (firstStep.type === 'member' && firstStep.memberId) {
+      emails = memberEmailsByIds([firstStep.memberId])
+    } else if (firstStep.type === 'role' && firstStep.role) {
+      try {
+        var mSheet = getSheet(SHEET_MEMBERS)
+        var mHeaders = headerRow(mSheet)
+        var mRoleCol = mHeaders.indexOf('role')
+        var mIdCol = mHeaders.indexOf('id')
+        if (mRoleCol >= 0 && mIdCol >= 0 && mSheet.getLastRow() > 1) {
+          var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, mHeaders.length).getValues()
+          var roleIds = []
+          mRows.forEach(function (r) {
+            if (String(r[mRoleCol]).trim() === firstStep.role) roleIds.push(String(r[mIdCol]))
+          })
+          emails = memberEmailsByIds(roleIds)
+        }
+      } catch (e2) {}
+    }
+    var formTitle = formDef ? formDef.title : ''
+    sendLocalizedEmail(emails, {
+      ja: { subject: 'Orbit: 申請フォームが届きました', body: '申請フォームが届きました。Orbitから確認・承認してください。\n\nフォーム: ' + formTitle },
+      en: { subject: 'Orbit: New form submission received', body: 'A new form submission has been received. Please review and approve it in Orbit.\n\nForm: ' + formTitle },
+    })
+  }
   return { id: submission.id }
 }
 
