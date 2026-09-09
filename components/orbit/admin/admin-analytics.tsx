@@ -212,18 +212,24 @@ export function AdminAnalytics() {
   const gradeYearRows = sortedCounts(gradeYearCounts)
   const maxGradeYear = Math.max(1, ...gradeYearRows.map(([, c]) => c))
 
+  // SKL-016: 保有率(%)の分母は休止中でないメンバー数(HRD-006の除外と
+  // 一貫性を持たせるため、分子側の保有人数集計も休止中メンバーは除く)
+  const activeMemberCount = members.filter((m) => !m.inactive).length
   const skillCounts = new Map<string, number>()
   const skillLevelSum = new Map<string, number>()
-  members.forEach((m) => {
-    ;(m.skillLevels ?? []).forEach((sl) => {
-      skillCounts.set(sl.skill, (skillCounts.get(sl.skill) ?? 0) + 1)
-      skillLevelSum.set(sl.skill, (skillLevelSum.get(sl.skill) ?? 0) + sl.level)
+  members
+    .filter((m) => !m.inactive)
+    .forEach((m) => {
+      ;(m.skillLevels ?? []).forEach((sl) => {
+        skillCounts.set(sl.skill, (skillCounts.get(sl.skill) ?? 0) + 1)
+        skillLevelSum.set(sl.skill, (skillLevelSum.get(sl.skill) ?? 0) + sl.level)
+      })
     })
-  })
   const skillRows = sortedCounts(skillCounts).map(([skill, count]) => ({
     skill,
     count,
     avg: skillLevelSum.get(skill)! / count,
+    rate: activeMemberCount > 0 ? (count / activeMemberCount) * 100 : 0,
   }))
 
   const ratingCounts = new Map<string, number>()
@@ -467,13 +473,13 @@ export function AdminAnalytics() {
           <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.skillDistribution.empty')}</p>
         ) : (
           <div className="mt-4 flex flex-col gap-2.5">
-            {skillRows.map(({ skill, count, avg }) => (
+            {skillRows.map(({ skill, count, avg, rate }) => (
               <BarRow
                 key={skill}
                 label={skill}
                 count={count}
                 max={maxSkill}
-                suffix={t('admin.analytics.skillDistribution.suffix', { count, avg: avg.toFixed(1) })}
+                suffix={t('admin.analytics.skillDistribution.suffix', { count, avg: avg.toFixed(1), rate: rate.toFixed(1) })}
               />
             ))}
           </div>
