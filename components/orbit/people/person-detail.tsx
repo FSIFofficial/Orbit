@@ -6,13 +6,14 @@ import { useNav } from '@/lib/orbit/nav'
 import { useToast } from '@/components/orbit/toast'
 import { Avatar, StatusBadge, DifficultyBadge, SectionLabel, AdminAccessNote } from '@/components/orbit/primitives'
 import { CalendarView } from '@/components/orbit/output/calendar-view'
+import { DependencyView } from '@/components/orbit/output/dependency-view'
 import { TaskDetailDrawer } from '@/components/orbit/output/task-detail-drawer'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { CareerTab } from '@/components/orbit/people/career-tab'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
 import { formatDeadlineFull, formatTenure, memberSkillFieldProgress, isLowWorkloadMember, recommendedTasksForMember } from '@/lib/orbit/utils'
-import { exportTasksToExcel } from '@/lib/orbit/export-excel'
+import { exportTasksToExcel, exportTasksToCsv } from '@/lib/orbit/export-excel'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
 import { useI18n, SUPPORTED_LOCALES, type TranslationKey } from '@/lib/orbit/i18n'
@@ -52,7 +53,7 @@ import {
 } from '@/lib/orbit/google-sheet-sync'
 
 type Tab = 'overview' | 'tasks' | 'growth' | 'career' | 'calendar'
-type TaskView = 'list' | 'board' | 'calendar'
+type TaskView = 'list' | 'board' | 'calendar' | 'dependency'
 
 // Downscales/crops an uploaded image to a square JPEG data URL so avatar
 // uploads stay small and consistent, regardless of the source photo's size.
@@ -935,7 +936,7 @@ export function PersonDetail({ id }: { id: string }) {
         <div className="mt-5 flex flex-col gap-4">
           {/* サブビュー切り替え */}
           <div className="flex items-center gap-1.5">
-            {(['list', 'board', 'calendar'] as TaskView[]).map((v) => (
+            {(['list', 'board', 'calendar', 'dependency'] as TaskView[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setTaskView(v)}
@@ -946,7 +947,13 @@ export function PersonDetail({ id }: { id: string }) {
                     : 'bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground',
                 )}
               >
-                {v === 'list' ? t('person.tasks.view.list') : v === 'board' ? t('person.tasks.view.board') : t('person.tasks.view.calendar')}
+                {v === 'list'
+                  ? t('person.tasks.view.list')
+                  : v === 'board'
+                    ? t('person.tasks.view.board')
+                    : v === 'calendar'
+                      ? t('person.tasks.view.calendar')
+                      : t('person.tasks.view.dependency')}
               </button>
             ))}
             <Button
@@ -959,6 +966,17 @@ export function PersonDetail({ id }: { id: string }) {
             >
               <FileSpreadsheet className="size-4" />
               {t('person.tasks.exportExcel')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={mine.length === 0}
+              onClick={() => exportTasksToCsv(mine, projects, members)}
+            >
+              <Download className="size-4" />
+              {t('person.tasks.exportCsv')}
             </Button>
           </div>
 
@@ -1065,6 +1083,12 @@ export function PersonDetail({ id }: { id: string }) {
               ※ Tab 5 "Calendar" タブのGCalカレンダーとは別物（こちらはタスク期限のみ） */}
           {taskView === 'calendar' && (
             <CalendarView tasks={mine} onOpenTask={setOpenTaskId} />
+          )}
+
+          {/* USR-011: 依存関係グラフ — output-screen.tsxの「自分」ターゲットと
+              同じく、このメンバーの担当タスク(mine)のみに絞り込んで表示する */}
+          {taskView === 'dependency' && (
+            <DependencyView tasks={mine} onOpenTask={setOpenTaskId} />
           )}
         </div>
       )}

@@ -43,6 +43,34 @@ function downloadWorkbook(wb: XLSX.WorkBook, filename: string) {
   XLSX.writeFile(wb, filename)
 }
 
+// USR-013: CSVフィールドのエスケープ — カンマ・改行・ダブルクォートを
+// 含む場合はダブルクォートで囲み、内部のダブルクォートは二重化する
+function escapeCsvField(value: unknown): string {
+  const str = value == null ? '' : String(value)
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+}
+
+function rowsToCsv(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return ''
+  const headers = Object.keys(rows[0])
+  const lines = [headers.map(escapeCsvField).join(',')]
+  rows.forEach((row) => {
+    lines.push(headers.map((h) => escapeCsvField(row[h])).join(','))
+  })
+  return lines.join('\r\n')
+}
+
+function downloadCsv(csv: string, filename: string) {
+  // 先頭にBOMを付けることで、ExcelでUTF-8のCSVとして正しく開ける
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // OUTPUT画面の一覧表示中のタスクをそのままExcelに書き出す（表示中のフィルタが反映される）
 export function exportTasksToExcel(tasks: Task[], projects: Project[], members: Member[]) {
   const rows = taskRows(tasks, projects, members)
@@ -52,6 +80,15 @@ export function exportTasksToExcel(tasks: Task[], projects: Project[], members: 
   XLSX.utils.book_append_sheet(wb, sheet, 'タスク')
   const today = new Date().toISOString().slice(0, 10)
   downloadWorkbook(wb, `Orbit_タスク一覧_${today}.xlsx`)
+}
+
+// USR-013: .xlsx出力に加えて軽量なCSV出力も選べるようにする。列はExcel版と
+// 同じ(taskRowsを共用)
+export function exportTasksToCsv(tasks: Task[], projects: Project[], members: Member[]) {
+  const rows = taskRows(tasks, projects, members)
+  const csv = rowsToCsv(rows)
+  const today = new Date().toISOString().slice(0, 10)
+  downloadCsv(csv, `Orbit_タスク一覧_${today}.csv`)
 }
 
 // プロジェクト単位でタスクをExcelに書き出す

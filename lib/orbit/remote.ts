@@ -9,6 +9,7 @@ import type {
   CareerHistoryEntry,
   Competency,
   Department,
+  DepartmentTreeNode,
   DevelopmentPlanEntry,
   Difficulty,
   EvaluationRecord,
@@ -439,6 +440,9 @@ export interface RemoteSettings {
   oneOnOneQuestions: string[]
   // 初ログイン時付与タスク — Settings キー "initial_tasks_json"
   initialTasks: { name: string; description: string }[]
+  // ORG-002: 部署ツリー構成 — Settings キー "department_tree_config"。
+  // 省略時はMembers.departmentPathの実データから動的導出される
+  departmentTreeConfig: DepartmentTreeNode[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -534,6 +538,9 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     initialTasks: (() => {
       try { const r = byKey.get('initial_tasks_json'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    departmentTreeConfig: (() => {
+      try { const r = byKey.get('department_tree_config'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
 }

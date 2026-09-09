@@ -19,6 +19,7 @@ import type {
   CustomFormSubmission,
   CustomMemberColumn,
   Department,
+  DepartmentTreeNode,
   DevelopmentPlanEntry,
   EvaluationRecord,
   ExpenseApplication,
@@ -202,6 +203,8 @@ interface OrbitContextValue extends OrbitState {
   setSkillFieldSkills: (field: string, skills: string[]) => void
   skillFieldThreshold: number
   setSkillFieldThreshold: (threshold: number) => void
+  departmentTreeConfig: DepartmentTreeNode[]
+  updateDepartmentTreeConfig: (nodes: DepartmentTreeNode[]) => void
   orgNotificationEmails: string[]
   addOrgNotificationEmail: (email: string) => void
   removeOrgNotificationEmail: (email: string) => void
@@ -676,6 +679,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [skillFieldThreshold, setSkillFieldThresholdState] = useState<number>(
     DEFAULT_SKILL_FIELD_THRESHOLD,
   )
+  // ORG-002: 部署ツリー構成。空配列(=未設定)ならMembers.departmentPathから
+  // 動的導出するフォールバックのまま(admin-org-tree.tsx側で判定)
+  const [departmentTreeConfig, setDepartmentTreeConfigState] = useState<DepartmentTreeNode[]>([])
   // 団体メール — 幹部/事業責任者(=full admin)がAdmin > Tagsから登録する共有
   // 配信先。個々のメンバーのnotify_new_task設定に関わらず常に通知される
   // （gas/Code.gsのnotifyAdmins()参照）
@@ -852,6 +858,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.customFormDefs) setCustomFormDefs(s.customFormDefs)
         if (s.oneOnOneQuestions.length) setOneOnOneQuestionsState(s.oneOnOneQuestions)
         if (s.initialTasks.length) setInitialTasksFromSettings(s.initialTasks)
+        if (s.departmentTreeConfig.length) setDepartmentTreeConfigState(s.departmentTreeConfig)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -917,6 +924,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.customFormDefs) setCustomFormDefs(settings.customFormDefs)
           if (settings.oneOnOneQuestions.length) setOneOnOneQuestionsState(settings.oneOnOneQuestions)
           if (settings.initialTasks.length) setInitialTasksFromSettings(settings.initialTasks)
+          if (settings.departmentTreeConfig.length) setDepartmentTreeConfigState(settings.departmentTreeConfig)
         }
         setRemoteError(null)
       })
@@ -1251,6 +1259,17 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       const v = Math.min(1, Math.max(0, threshold))
       setSkillFieldThresholdState(v)
       if (isSettingsConfigured) runRemote(remoteApi.updateSetting('skill_field_threshold', String(v)))
+    },
+    [runRemote],
+  )
+
+  // ORG-002: 部署ツリー構成の保存。空配列を渡すと明示的に「動的導出に戻す」
+  // ことになる(admin-org-tree.tsx側でconfigが空ならフォールバックする)
+  const updateDepartmentTreeConfig = useCallback(
+    (nodes: DepartmentTreeNode[]) => {
+      setDepartmentTreeConfigState(nodes)
+      if (isSettingsConfigured)
+        runRemote(remoteApi.updateSetting('department_tree_config', JSON.stringify(nodes)))
     },
     [runRemote],
   )
@@ -4264,6 +4283,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setSkillFieldSkills,
     skillFieldThreshold,
     setSkillFieldThreshold,
+    departmentTreeConfig,
+    updateDepartmentTreeConfig,
     orgNotificationEmails,
     addOrgNotificationEmail,
     removeOrgNotificationEmail,
