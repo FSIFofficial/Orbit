@@ -151,6 +151,8 @@ export function AdminMemberDb() {
 
   // filters per column key
   const [filters, setFilters] = useState<Record<string, string>>({})
+  // HRD-006: 休止中メンバーはデフォルトで一覧から除外する
+  const [showInactive, setShowInactive] = useState(false)
 
   // in-place editing
   const [editCell, setEditCell] = useState<{ memberId: string; colKey: string } | null>(null)
@@ -166,13 +168,14 @@ export function AdminMemberDb() {
   // filtered rows (applied on top of the already-scoped member list)
   const filteredMembers = useMemo(() => {
     return scopedMembers.filter((m) => {
+      if (!showInactive && m.inactive) return false
       return allowedCols.every((col) => {
         const f = filters[col.key]?.toLowerCase().trim()
         if (!f) return true
         return col.getValue(m).toLowerCase().includes(f)
       })
     })
-  }, [scopedMembers, allowedCols, filters])
+  }, [scopedMembers, allowedCols, filters, showInactive])
 
   // ---- commit cell edit ----
   const commitEdit = useCallback((memberId: string, colKey: string, val: string) => {
@@ -265,6 +268,16 @@ export function AdminMemberDb() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-lg font-semibold">{t('admin.memberDb.title')}</h2>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* HRD-006: 休止中メンバーの表示切替(デフォルトOFF) */}
+          <label className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            {t('admin.members.search.showInactive')}
+          </label>
+
           {/* Column visibility */}
           <div className="relative">
             <button

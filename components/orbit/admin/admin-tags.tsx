@@ -206,6 +206,9 @@ export function AdminTags() {
           </div>
         </div>
 
+      {/* SKL-010: スキルレベルアップ閾値 */}
+      <SkillLevelThresholdsEditor />
+
       {/* item 20: 1on1ワークシート質問項目 */}
       <OneOnOneQuestionsEditor />
 
@@ -674,6 +677,72 @@ function CustomMemberColumnsEditor() {
           <Plus className="size-3.5" />
           {t('common.add')}
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// SKL-010: スキルレベルアップ閾値 — awardSkillPoints/submitQuizResultの
+// レベル計算(累計ポイント÷閾値の切り捨て+1)で使われるskillLevelThresholds
+// を管理者が編集できるようにする。スキルごとに未設定の行は「デフォルト」の
+// 値をplaceholderとして薄く表示する（保存時点ではデフォルト値そのものは
+// 個別スキルのキーとしては書き込まない）。
+function SkillLevelThresholdsEditor() {
+  const { skillOptions, skillLevelThresholds, updateSkillLevelThresholds } = useOrbit()
+  const { t } = useI18n()
+  const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+
+  const commit = (key: string, raw: string) => {
+    const trimmed = raw.trim()
+    if (trimmed === '') {
+      if (key === 'デフォルト') return // デフォルトは空にできない（無視）
+      if (!(key in skillLevelThresholds)) return
+      const next = { ...skillLevelThresholds }
+      delete next[key]
+      updateSkillLevelThresholds(next)
+      return
+    }
+    const n = Number(trimmed)
+    if (!Number.isFinite(n) || n <= 0) return
+    updateSkillLevelThresholds({ ...skillLevelThresholds, [key]: n })
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <SectionLabel>{t('admin.tags.skillLevelThresholds.title')}</SectionLabel>
+      <p className="mt-1 text-xs text-muted-foreground">{t('admin.tags.skillLevelThresholds.desc')}</p>
+      <div className="mt-3 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="w-40 shrink-0 text-sm font-medium">
+            {t('admin.tags.skillLevelThresholds.defaultLabel')}
+          </span>
+          <input
+            type="number"
+            min={1}
+            defaultValue={defaultThreshold}
+            onBlur={(e) => commit('デフォルト', e.target.value)}
+            className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
+          />
+        </div>
+        {skillOptions.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">{t('admin.tags.addSkillsFirst')}</p>
+        ) : (
+          skillOptions.map((skill) => (
+            <div key={skill} className="flex items-center gap-2">
+              <span className="w-40 shrink-0 truncate text-sm" title={skill}>
+                {skill}
+              </span>
+              <input
+                type="number"
+                min={1}
+                defaultValue={skillLevelThresholds[skill] ?? ''}
+                placeholder={String(defaultThreshold)}
+                onBlur={(e) => commit(skill, e.target.value)}
+                className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm outline-none placeholder:text-muted-foreground/50 focus:border-primary"
+              />
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

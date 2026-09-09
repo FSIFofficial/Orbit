@@ -460,7 +460,22 @@ function submitQuizResult(quizId, memberId, answers, acting) {
     if (!existing || existing.level < targetLevel) {
       var nextLevels = currentLevels.filter(function(sl) { return sl.skill !== targetSkill })
       nextLevels.push({ skill: targetSkill, level: targetLevel })
-      updateMemberFields(memberId, { skill_levels_json: JSON.stringify(nextLevels) })
+      // SKL-009: skill_points_jsonもレベルと整合させる。computeAutoLevelsと
+      // 同じ閾値計算(pts/threshold切り捨て+1=レベル)から逆算すると、
+      // レベルLに達する最低ポイントはthreshold*(L-1)
+      var thresholds = getSkillLevelThresholds()
+      var defaultThreshold = thresholds['デフォルト'] || 100
+      var threshold = thresholds[targetSkill] || defaultThreshold
+      var currentPoints = {}
+      try { currentPoints = JSON.parse((memberRow && memberRow.skill_points_json) || '{}') } catch (_) {}
+      var minPointsForLevel = threshold * (targetLevel - 1)
+      if ((currentPoints[targetSkill] || 0) < minPointsForLevel) {
+        currentPoints[targetSkill] = minPointsForLevel
+      }
+      updateMemberFields(memberId, {
+        skill_levels_json: JSON.stringify(nextLevels),
+        skill_points_json: JSON.stringify(currentPoints),
+      })
       newLevel = targetLevel
     }
   }

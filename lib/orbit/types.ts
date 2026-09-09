@@ -845,6 +845,10 @@ export interface CustomFormField {
   type: CustomFormFieldType
   options?: string[] // type='select' 用
   required: boolean
+  // FRM-003: 項目単位の補足説明(例: 「領収書がない場合は上長に確認済みの
+  // 旨を記載してください」等)。フォーム全体のdescriptionとは別に、
+  // 項目ごとに個別の説明を出せるようにする
+  description?: string
 }
 
 export interface CustomFormDef {
