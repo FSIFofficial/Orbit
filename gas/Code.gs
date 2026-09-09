@@ -602,6 +602,7 @@ function authorizeAction(acting, action, body) {
     'updateOneOnOnes',           // 1on1記録（班長は担当メンバーのみ）
     'updateCompetencies',        // コンピテンシー評価（班長は担当メンバーのみ）
     'triggerOverdueReminders',   // NTF-005: 期限超過リマインドの手動発火
+    'uploadSurveyImage',         // FRM-007: アンケート設問の画像は管理者操作
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     // 一般ロールでも、未アサインのタスクに自分だけを追加する「自己アサイン」
@@ -1348,6 +1349,9 @@ function doPost(e) {
         break
       case 'uploadExpenseReceipt':
         result = uploadExpenseReceipt(body.dataUrl, body.filename, body.folderId)
+        break
+      case 'uploadSurveyImage':
+        result = uploadSurveyImage(body.dataUrl, body.filename, body.folderId)
         break
       case 'submitCustomForm':
         result = saveCustomFormSubmission(body.submission, actingMember)
@@ -2576,6 +2580,30 @@ function uploadExpenseReceipt(dataUrl, filename, folderId) {
 
   var url = file.getUrl()
   console.log('uploadExpenseReceipt: url=' + url)
+  return { url: url }
+}
+
+// FRM-007: アンケート設問の画像をDriveにアップロードする。
+// uploadExpenseReceiptと同じパターン(複数枚アップロードされうるため
+// 既存ファイルの削除はしない)。ただしこちらは画像専用なので、
+// アバターと同じgoogleusercontent.comホットリンク形式のURLを返す。
+function uploadSurveyImage(dataUrl, filename, folderId) {
+  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
+  if (!match) throw new Error('Expected a base64 data URL')
+  var mimeType = match[1]
+  var base64Data = match[2]
+
+  var folder = DriveApp.getFolderById(folderId)
+  var namePrefix = 'survey_image_'
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename)
+  var file = folder.createFile(blob)
+  file.setName(namePrefix + Date.now())
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+
+  var url = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w512-h512-c'
+  console.log('uploadSurveyImage: url=' + url)
   return { url: url }
 }
 

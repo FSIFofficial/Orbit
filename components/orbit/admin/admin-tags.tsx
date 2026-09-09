@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel, Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
 import type { AdminSection, CustomMemberColumn, SurveyQuestion } from '@/lib/orbit/types'
-import { Plus, Check, ChevronUp, ChevronDown, X, Trash2 } from 'lucide-react'
+import { Plus, Check, ChevronUp, ChevronDown, X, Trash2, ImageUp, Loader2 } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 // dashboard always stays visible (it's the redirect target for a
@@ -554,13 +554,10 @@ function SurveyQuestionsEditor() {
                     </>
                   )}
                 </div>
-                {/* FRM-007: 設問に添える画像(任意) */}
-                <input
-                  type="url"
-                  value={q.imageUrl ?? ''}
-                  onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value || undefined })}
-                  placeholder={t('admin.tags.surveyQuestions.imageUrlPlaceholder')}
-                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                {/* FRM-007: 設問に添える画像(任意) — URL手入力 or Driveアップロード */}
+                <SurveyQuestionImageInput
+                  imageUrl={q.imageUrl}
+                  onChange={(url) => updateQuestion(q.id, { imageUrl: url || undefined })}
                 />
               </div>
               <button
@@ -589,6 +586,77 @@ function SurveyQuestionsEditor() {
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// FRM-007: アンケート設問の画像URL入力欄+Driveアップロードボタン。
+// expense-application-modal.tsx(EXP-003)と同じ考え方: ファイルをdata URL
+// に変換→uploadSurveyImageを呼ぶ→返ってきたURLを反映する。isDriveConfigured
+// が false の環境ではボタンを出さず、URL手入力のみ案内する
+// (person-detail.tsx/expense-application-modal.tsxと同じフォールバック方式)。
+function SurveyQuestionImageInput({
+  imageUrl,
+  onChange,
+}: {
+  imageUrl?: string
+  onChange: (url: string) => void
+}) {
+  const { uploadSurveyImage, driveEnabled } = useOrbit()
+  const { t } = useI18n()
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = async (file: File | undefined) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      const url = await uploadSurveyImage(dataUrl, file.name)
+      onChange(url)
+    } catch {
+      // best-effort: 失敗時は既存のimageUrlをそのまま残す
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <input
+          type="url"
+          value={imageUrl ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t('admin.tags.surveyQuestions.imageUrlPlaceholder')}
+          className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        />
+        {driveEnabled && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFileSelect(e.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 shrink-0 text-xs"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageUp className="size-3.5" />}
+              {uploading ? t('admin.tags.surveyQuestions.imageUploading') : t('admin.tags.surveyQuestions.imageUploadButton')}
+            </Button>
+          </>
+        )}
+      </div>
+      {!driveEnabled && (
+        <p className="text-xs text-muted-foreground">{t('admin.tags.surveyQuestions.imageUploadDriveDisabled')}</p>
+      )}
     </div>
   )
 }
