@@ -91,6 +91,25 @@ export function exportTasksToCsv(tasks: Task[], projects: Project[], members: Me
   downloadCsv(csv, `Orbit_タスク一覧_${today}.csv`)
 }
 
+// SKL-004: 既存のスキルCSV出力(exportSkillCsv、admin-member-db.tsx)と
+// 同じデータをxlsxで出力する
+export function exportSkillExcel(members: Member[], skillOptions: string[]) {
+  const rows = members.map((m) => {
+    const row: Record<string, string> = { 氏名: m.name }
+    skillOptions.forEach((sk) => {
+      const sl = m.skillLevels?.find((s) => s.skill === sk)
+      row[sk] = sl ? String(sl.level) : ''
+    })
+    return row
+  })
+  const sheet = XLSX.utils.json_to_sheet(rows)
+  sheet['!cols'] = autoWidth(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, sheet, 'スキル')
+  const today = new Date().toISOString().slice(0, 10)
+  downloadWorkbook(wb, `Orbit_スキル一覧_${today}.xlsx`)
+}
+
 // プロジェクト単位でタスクをExcelに書き出す
 export function exportProjectTasksToExcel(project: Project, tasks: Task[], projects: Project[], members: Member[]) {
   const projectTasks = tasks.filter((t) => t.projectId === project.id)

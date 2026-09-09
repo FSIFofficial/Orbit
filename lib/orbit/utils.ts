@@ -266,6 +266,22 @@ export function findSimilarTasks(
     .slice(0, 3)
 }
 
+// SKL-014: カテゴリが同じ完了タスクにおける、このタスクの要求スキル
+// (task.skills)ごとの平均付与ポイント(参考値)。task-detail-drawer.tsxの
+// SkillAwardModalの初期計算式と同じもので、参考値が無いスキルはnull
+export function computeAvgSkillPoints(task: Task, allTasks: Task[]): Record<string, number | null> {
+  return Object.fromEntries(
+    task.skills.map((skill) => {
+      const similar = allTasks.filter(
+        (t) => t.id !== task.id && t.status === 'done' && t.category === task.category && t.awardedPoints?.[skill] != null,
+      )
+      if (similar.length === 0) return [skill, null]
+      const avg = similar.reduce((sum, t) => sum + (t.awardedPoints![skill] ?? 0), 0) / similar.length
+      return [skill, Math.round(avg)]
+    }),
+  )
+}
+
 // TSK-030: 要求スキル候補表示の改善 — 生成AIは使わず、同じカテゴリの既存
 // タスクで実際に使われているスキルの頻度から推薦する(内容解析ではなく、
 // 過去実績に基づくヒューリスティック)。

@@ -5,7 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { useToast } from '@/components/orbit/toast'
 import { Avatar, ProjectTag } from '@/components/orbit/primitives'
-import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth } from '@/lib/orbit/utils'
+import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth, computeAvgSkillPoints } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { STATUS_LABEL } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
@@ -23,6 +23,7 @@ import {
   HeartPulse,
   FileSpreadsheet,
   Send,
+  Award,
 } from 'lucide-react'
 
 export function AdminDashboard() {
@@ -36,6 +37,7 @@ export function AdminDashboard() {
     currentUser,
     updateProjectHealth,
     triggerOverdueReminders,
+    awardSkillPoints,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
   const toast = useToast()
@@ -59,6 +61,10 @@ export function AdminDashboard() {
     const d = daysSince(t.lastActivity)
     return d !== null && d >= 3
   })
+  // SKL-014: 完了したがまだスキルポイントが付与されていないタスク
+  const pendingPoints = tasks.filter(
+    (t) => t.status === 'done' && (!t.awardedPoints || Object.keys(t.awardedPoints).length === 0),
+  )
 
   // item 18: プロジェクト健全性の説明型ダッシュボード — per-project rollup
   // of the same signals above (期限超過/確認待ち/Blocked/負荷), so an admin
@@ -259,6 +265,66 @@ export function AdminDashboard() {
           />
         </div>
       </div>
+
+      {/* SKL-014: 推定ポイントの承認待ち */}
+      {pendingPoints.length > 0 && (
+        <div className="mt-8">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            <Award className="size-4 text-muted-foreground" />
+            {tr('admin.dashboard.pendingPoints.title')}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {tr('admin.dashboard.pendingPoints.desc')}
+          </p>
+          <div className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border">
+              {pendingPoints.slice(0, 6).map((t) => {
+                const avgPoints = computeAvgSkillPoints(t, tasks)
+                const finalPoints = Object.fromEntries(
+                  t.skills.map((skill) => [skill, avgPoints[skill] ?? 10]),
+                )
+                const assigneeId = t.assigneeIds[0]
+                return (
+                  <li key={t.id} className="flex items-center gap-3 px-4 py-3">
+                    <button
+                      onClick={() => openTask(t.id)}
+                      className="min-w-0 flex-1 text-left transition-colors hover:text-primary"
+                    >
+                      <div className="truncate text-sm font-medium">{t.name}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <ProjectTag name={getProject(t.projectId)?.name ?? ''} />
+                        <span>
+                          {t.skills
+                            .map((skill) => `${skill}: ${finalPoints[skill]}${tr('admin.dashboard.pendingPoints.pointsSuffix')}`)
+                            .join('、')}
+                        </span>
+                      </div>
+                    </button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!assigneeId}
+                      onClick={() => {
+                        if (!assigneeId) return
+                        awardSkillPoints(t.id, assigneeId, finalPoints)
+                        toast(tr('admin.dashboard.pendingPoints.awardedToast', { name: t.name }))
+                      }}
+                    >
+                      <Award className="size-3.5" />
+                      {tr('admin.dashboard.pendingPoints.approveButton')}
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          {pendingPoints.length > 6 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {tr('admin.dashboard.pendingPoints.moreCount', { count: pendingPoints.length - 6 })}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* プロジェクト健全性 (item 18) */}
       {projectHealth.length > 0 && (

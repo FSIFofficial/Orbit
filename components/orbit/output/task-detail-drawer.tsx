@@ -37,7 +37,7 @@ import {
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, computeAvgSkillPoints, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
@@ -840,21 +840,9 @@ function SkillAwardModal({
   // 確認済みかを色分けするための状態
   const [confirmedSkills, setConfirmedSkills] = useState<Set<string>>(new Set())
 
-  // Compute average awarded points for each skill from similar-category done tasks
-  const avgPoints = Object.fromEntries(
-    task.skills.map((skill) => {
-      const similar = allTasks.filter(
-        (t) =>
-          t.id !== task.id &&
-          t.status === 'done' &&
-          t.category === task.category &&
-          t.awardedPoints?.[skill] != null,
-      )
-      if (similar.length === 0) return [skill, null]
-      const avg = similar.reduce((sum, t) => sum + (t.awardedPoints![skill] ?? 0), 0) / similar.length
-      return [skill, Math.round(avg)]
-    }),
-  )
+  // Compute average awarded points for each skill from similar-category done
+  // tasks — SKL-014: admin-dashboard.tsxの推定値ワンクリック承認とも共有する
+  const avgPoints = computeAvgSkillPoints(task, allTasks)
 
   const setPoint = (skill: string, value: number) => {
     setPointsMap((prev) => ({ ...prev, [skill]: Math.max(0, value) }))

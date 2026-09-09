@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useRef, useCallback, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 import { useOrbit } from '@/lib/orbit/store'
+import { Modal } from '@/components/orbit/modal'
+import { Button } from '@/components/ui/button'
 import { Download, Upload, Eye, Search } from 'lucide-react'
 import type { CustomMemberColumn, Member } from '@/lib/orbit/types'
 import { BASE_ROLE } from '@/lib/orbit/types'
+import { exportSkillExcel } from '@/lib/orbit/export-excel'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type TranslationFn = (key: TranslationKey, vars?: Record<string, string | number>) => string
@@ -24,6 +28,37 @@ interface ColDef {
 function skillLevelText(m: Member, skill: string): string {
   const sl = m.skillLevels?.find((s) => s.skill === skill)
   return sl ? String(sl.level) : ''
+}
+
+// SKL-003: CSV/xlsxのどちらも、同じ「1行目=氏名,スキル1,スキル2,...、
+// 2行目以降=メンバー名+レベル(1〜5)」の2次元配列に正規化してから、
+// この共通ロジックでbulkUpdateSkills向けの更新配列に変換する
+function parseSkillRows(
+  rows2d: string[][],
+  members: Member[],
+): { memberId: string; skill: string; level: number }[] {
+  if (rows2d.length < 2) return []
+  const headers = [...rows2d[0]]
+  if (headers[0]?.toLowerCase().includes('氏名') || headers[0]?.toLowerCase().includes('name')) {
+    headers.shift() // remove name column header
+  }
+  const skillCols = headers
+  const updates: { memberId: string; skill: string; level: number }[] = []
+  for (let i = 1; i < rows2d.length; i++) {
+    const cols = rows2d[i]
+    const nameVal = cols[0]
+    const member = members.find((m) => m.name === nameVal || m.displayName === nameVal)
+    if (!member) continue
+    for (let j = 0; j < skillCols.length; j++) {
+      const skill = skillCols[j]
+      const raw = cols[j + 1]
+      if (!raw || raw === '') continue
+      const level = Number(raw)
+      if (isNaN(level) || level < 1 || level > 5) continue
+      updates.push({ memberId: member.id, skill, level })
+    }
+  }
+  return updates
 }
 
 function buildBaseCols(t: TranslationFn): ColDef[] {
@@ -59,6 +94,38 @@ function buildCustomCols(columns: CustomMemberColumn[]): ColDef[] {
     editable: true,
     width: 140,
   }))
+}
+
+// SKL-006: スキル表グリッド(skill-grid-screen.tsx)を人材DBのテーブルに
+// 統合する。列名はスキル名そのもの(skill-grid-screen.tsxのヘッダーと同じ、
+// 自由記述のためi18nキー化はしない)
+const SKILL_COL_PREFIX = 'skill:'
+
+function buildSkillCols(skillOptions: string[]): ColDef[] {
+  return skillOptions.map((skill) => ({
+    key: SKILL_COL_PREFIX + skill,
+    label: skill,
+    getValue: (m) => skillLevelText(m, skill),
+    editable: true,
+    width: 70,
+  }))
+}
+
+// skill-grid-screen.tsxのrequiredLevelGapと同じロジック(そちらは一切
+// 変更しない方針のため、あえて共有せずこちらに個別実装する)。そのメンバーが
+// 担当中で未完了のタスクのうち、このスキルについてtask.requiredSkillLevels
+// が現在のレベルを上回っているものの最大値を返す
+function requiredLevelGap(member: Member, skill: string, tasks: import('@/lib/orbit/types').Task[]): number | undefined {
+  const current = Number(skillLevelText(member, skill)) || 0
+  let max: number | undefined
+  for (const task of tasks) {
+    if (task.status === 'done' || !task.assigneeIds.includes(member.id)) continue
+    const required = task.requiredSkillLevels?.[skill]
+    if (required && required > current && (max === undefined || required > max)) {
+      max = required
+    }
+  }
+  return max
 }
 
 // Keys that must not be shown to non-admin (一般) viewers.
@@ -103,10 +170,12 @@ export function AdminMemberDb() {
   const {
     members,
     skillOptions,
+    visibleTasks,
     updateSearchProfile,
     updateCareerGoals,
     updateJoinedAt,
     bulkUpdateSkills,
+    updateSkillLevels,
     currentUser,
     isFullAdmin,
     adminProjects,
@@ -126,13 +195,13 @@ export function AdminMemberDb() {
   // Columns the current viewer is allowed to see/export — fixed cols +
   // dynamically-defined custom cols (Admin > Tags「カスタム項目」)
   const allCols = useMemo(() => {
-    const cols = [...buildBaseCols(t), ...buildCustomCols(customMemberColumns)]
+    const cols = [...buildBaseCols(t), ...buildCustomCols(customMemberColumns), ...buildSkillCols(skillOptions)]
     if (!isDaihyo) {
       const joinedAtCol = cols.find((c) => c.key === 'joinedAt')
       if (joinedAtCol) joinedAtCol.tooltip = t('admin.accessNote.daihyo')
     }
     return cols
-  }, [t, customMemberColumns, isDaihyo])
+  }, [t, customMemberColumns, skillOptions, isDaihyo])
   const allowedCols = useMemo(() => filterColsForViewer(allCols, isAnyAdmin), [allCols, isAnyAdmin])
 
   // Members scoped to this viewer's access:
@@ -149,6 +218,21 @@ export function AdminMemberDb() {
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
   const [colPanelOpen, setColPanelOpen] = useState(false)
 
+  // SKL-006: スキル列は数が多くなりうるため、デフォルトでは先頭N件のみ
+  // 表示し、それ以外は列非表示UIから個別にON/OFFできるようにする。
+  // hiddenColsとは別のmapで管理し、明示的に触られたスキル列だけ上書きする
+  const SKILL_COLS_DEFAULT_VISIBLE = 3
+  const [skillColOverrides, setSkillColOverrides] = useState<Record<string, boolean>>({})
+  const isSkillColVisible = useCallback(
+    (colKey: string) => {
+      const override = skillColOverrides[colKey]
+      if (override !== undefined) return override
+      const skill = colKey.slice(SKILL_COL_PREFIX.length)
+      return skillOptions.indexOf(skill) < SKILL_COLS_DEFAULT_VISIBLE
+    },
+    [skillColOverrides, skillOptions],
+  )
+
   // filters per column key
   const [filters, setFilters] = useState<Record<string, string>>({})
   // HRD-006: 休止中メンバーはデフォルトで一覧から除外する
@@ -163,7 +247,13 @@ export function AdminMemberDb() {
   const [skillCsvError, setSkillCsvError] = useState('')
   const [skillCsvOk, setSkillCsvOk] = useState(false)
 
-  const visibleCols = allowedCols.filter((c) => !hiddenCols.has(c.key))
+  // SKL-006: 要求スキルレベル不足のハイライト+ワンクリック承認
+  // (skill-grid-screen.tsxの仕組みをこの統合テーブル向けに個別実装)
+  const [approving, setApproving] = useState<{ memberId: string; memberName: string; skill: string; level: number } | null>(null)
+
+  const visibleCols = allowedCols.filter((c) =>
+    c.key.startsWith(SKILL_COL_PREFIX) ? isSkillColVisible(c.key) : !hiddenCols.has(c.key),
+  )
 
   // filtered rows (applied on top of the already-scoped member list)
   const filteredMembers = useMemo(() => {
@@ -198,9 +288,21 @@ export function AdminMemberDb() {
         desiredFutureRole: colKey === 'desiredFutureRole' ? val : (member.desiredFutureRole ?? ''),
         careerPlan: member.careerPlan ?? '',
       })
+    } else if (colKey.startsWith(SKILL_COL_PREFIX)) {
+      const skill = colKey.slice(SKILL_COL_PREFIX.length)
+      if (val === '') {
+        // bulkUpdateSkillsはレベル解除に対応していないため、本人分の配列を
+        // 組み立ててupdateSkillLevelsで送る(skill-grid-screen.tsxと同じ考え方)
+        updateSkillLevels(memberId, (member.skillLevels ?? []).filter((s) => s.skill !== skill))
+      } else {
+        const level = Number(val)
+        if (!isNaN(level) && level >= 1 && level <= 5) {
+          bulkUpdateSkills([{ memberId, skill, level }])
+        }
+      }
     }
     setEditCell(null)
-  }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt, updateCustomField])
+  }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt, updateCustomField, updateSkillLevels, bulkUpdateSkills])
 
   // ---- member CSV export (uses viewer-scoped cols and members) ----
   const exportMemberCsv = () => {
@@ -219,43 +321,57 @@ export function AdminMemberDb() {
     downloadCsv('skills.csv', [headers, ...rows])
   }
 
-  // ---- skill level CSV import ----
-  const handleSkillCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ---- skill level CSV/xlsx import ----
+  // SKL-003: 拡張子で分岐 — .xlsxはSheetJS(xlsx)で最初のシートを読み込み、
+  // .csvは既存のテキスト解析のまま。どちらも同じparseSkillRowsに渡す
+  const handleBulkSkillUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     setSkillCsvError('')
     setSkillCsvOk(false)
+
+    const finish = (rows2d: string[][]) => {
+      try {
+        if (rows2d.length < 2) { setSkillCsvError(t('admin.memberDb.skillCsvError.noDataRows')); return }
+        const updates = parseSkillRows(rows2d, members)
+        if (updates.length === 0) { setSkillCsvError(t('admin.memberDb.skillCsvError.noUpdates')); return }
+        bulkUpdateSkills(updates)
+        setSkillCsvOk(true)
+      } catch {
+        setSkillCsvError(t('admin.memberDb.skillCsvError.parseFailed'))
+      }
+    }
+
+    if (/\.xlsx$/i.test(file.name)) {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const data = ev.target?.result as ArrayBuffer
+          const wb = XLSX.read(data, { type: 'array' })
+          const sheet = wb.Sheets[wb.SheetNames[0]]
+          if (!sheet) { setSkillCsvError(t('admin.memberDb.skillCsvError.parseFailed')); return }
+          const rows2d = XLSX.utils
+            .sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
+            .map((cols) => cols.map((c) => String(c ?? '').trim()))
+          finish(rows2d)
+        } catch {
+          setSkillCsvError(t('admin.memberDb.skillCsvError.parseFailed'))
+        }
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
         const text = ev.target?.result as string
-        const lines = text.split(/\r?\n/).filter((l) => l.trim())
-        if (lines.length < 2) { setSkillCsvError(t('admin.memberDb.skillCsvError.noDataRows')); return }
-        const parse = (line: string) => line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
-        const headers = parse(lines[0])
-        if (headers[0].toLowerCase().includes('氏名') || headers[0].toLowerCase().includes('name')) {
-          headers.shift() // remove name column header
-        }
-        const skillCols = headers
-        const updates: { memberId: string; skill: string; level: number }[] = []
-        for (let i = 1; i < lines.length; i++) {
-          const cols = parse(lines[i])
-          const nameVal = cols[0]
-          const member = members.find((m) => m.name === nameVal || m.displayName === nameVal)
-          if (!member) continue
-          for (let j = 0; j < skillCols.length; j++) {
-            const skill = skillCols[j]
-            const raw = cols[j + 1]
-            if (!raw || raw === '') continue
-            const level = Number(raw)
-            if (isNaN(level) || level < 1 || level > 5) continue
-            updates.push({ memberId: member.id, skill, level })
-          }
-        }
-        if (updates.length === 0) { setSkillCsvError(t('admin.memberDb.skillCsvError.noUpdates')); return }
-        bulkUpdateSkills(updates)
-        setSkillCsvOk(true)
+        const rows2d = text
+          .split(/\r?\n/)
+          .filter((l) => l.trim())
+          .map((line) => line.split(',').map((c) => c.trim().replace(/^"|"$/g, '')))
+        finish(rows2d)
       } catch {
         setSkillCsvError(t('admin.memberDb.skillCsvError.parseFailed'))
       }
@@ -288,24 +404,32 @@ export function AdminMemberDb() {
               {t('admin.memberDb.colVisibility')}
             </button>
             {colPanelOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 rounded-md border border-border bg-card shadow-md p-3 space-y-1 min-w-[160px]">
-                {allowedCols.map((col) => (
-                  <label key={col.key} className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={!hiddenCols.has(col.key)}
-                      onChange={() => {
-                        setHiddenCols((prev) => {
-                          const next = new Set(prev)
-                          if (next.has(col.key)) next.delete(col.key)
-                          else next.add(col.key)
-                          return next
-                        })
-                      }}
-                    />
-                    {col.label}
-                  </label>
-                ))}
+              <div className="absolute right-0 top-full z-50 mt-1 max-h-80 overflow-auto orbit-scroll rounded-md border border-border bg-card shadow-md p-3 space-y-1 min-w-[160px]">
+                {allowedCols.map((col) => {
+                  const isSkill = col.key.startsWith(SKILL_COL_PREFIX)
+                  const checked = isSkill ? isSkillColVisible(col.key) : !hiddenCols.has(col.key)
+                  return (
+                    <label key={col.key} className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          if (isSkill) {
+                            setSkillColOverrides((prev) => ({ ...prev, [col.key]: !checked }))
+                          } else {
+                            setHiddenCols((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(col.key)) next.delete(col.key)
+                              else next.add(col.key)
+                              return next
+                            })
+                          }
+                        }}
+                      />
+                      {col.label}
+                    </label>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -328,15 +452,24 @@ export function AdminMemberDb() {
             {t('admin.memberDb.skillCsv')}
           </button>
 
-          {/* Skill CSV import */}
+          {/* SKL-004: Skill Excel export */}
+          <button
+            onClick={() => exportSkillExcel(scopedMembers, skillOptions)}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent"
+          >
+            <Download className="size-3.5" />
+            {t('admin.memberDb.skillExcel')}
+          </button>
+
+          {/* Skill CSV/xlsx import */}
           <label className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent cursor-pointer">
             <Upload className="size-3.5" />
             {t('admin.memberDb.skillCsvImport')}
             <input
               ref={skillCsvRef}
               type="file"
-              accept=".csv,text/csv"
-              onChange={handleSkillCsvUpload}
+              accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={handleBulkSkillUpload}
               className="sr-only"
             />
           </label>
@@ -396,6 +529,35 @@ export function AdminMemberDb() {
                 {visibleCols.map((col) => {
                   const isEditing = editCell?.memberId === m.id && editCell?.colKey === col.key
                   const val = col.getValue(m)
+
+                  // SKL-006: 要求スキルレベル不足のハイライト+クリックで承認
+                  // (skill-grid-screen.tsxと同じ挙動。不足がある間は通常の
+                  // インライン編集ではなく、この承認導線のみを提供する)
+                  if (col.key.startsWith(SKILL_COL_PREFIX) && !isEditing) {
+                    const skill = col.key.slice(SKILL_COL_PREFIX.length)
+                    const gap = requiredLevelGap(m, skill, visibleTasks)
+                    if (gap !== undefined) {
+                      return (
+                        <td
+                          key={col.key}
+                          className="border-b border-border/50 px-2 py-1 text-center align-top"
+                          style={{ width: col.width, maxWidth: col.width ?? 200 }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setApproving({ memberId: m.id, memberName: m.displayName || m.name, skill, level: gap })
+                            }
+                            title={t('admin.memberDb.skillGap.tooltip', { level: gap })}
+                            className="inline-flex size-6 items-center justify-center rounded-md bg-amber-100 text-[11px] font-semibold text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
+                          >
+                            {val || '—'}
+                          </button>
+                        </td>
+                      )
+                    }
+                  }
+
                   return (
                     <td
                       key={col.key}
@@ -447,6 +609,35 @@ export function AdminMemberDb() {
       <p className="text-[11px] text-muted-foreground">
         {t('admin.memberDb.skillCsvFormatHint')}
       </p>
+
+      {/* SKL-006: 要求スキルレベル不足の承認確認(skill-grid-screen.tsxの
+          approveModalと同じ考え方) */}
+      <Modal open={!!approving} onClose={() => setApproving(null)}>
+        <h2 className="text-base font-semibold">{t('admin.memberDb.skillGap.approveModal.title')}</h2>
+        {approving && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t('admin.memberDb.skillGap.approveModal.desc', {
+              name: approving.memberName,
+              skill: approving.skill,
+              level: approving.level,
+            })}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" className="h-9" onClick={() => setApproving(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            className="h-9"
+            onClick={() => {
+              if (approving) bulkUpdateSkills([{ memberId: approving.memberId, skill: approving.skill, level: approving.level }])
+              setApproving(null)
+            }}
+          >
+            {t('admin.memberDb.skillGap.approveModal.confirm')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
