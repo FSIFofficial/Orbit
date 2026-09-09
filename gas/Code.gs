@@ -114,7 +114,7 @@ function setupOrbit() {
     'awarded_points_json', // 完了時付与スキルポイント {"デザイン":30}
     'required_approvals',  // 承認に必要な確認者数 (数値 or "all")
     'required_skill_levels_json', // 必要スキルレベル(item 10/11) {"デザイン":3}
-    'review_approvals_json', // 複数確認者の承認記録 [{"memberId","at"}]
+    'review_approvals_json', // 複数確認者の承認記録 [{"memberId","at","comment"}]
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 
@@ -1059,7 +1059,7 @@ function doPost(e) {
         })
         break
       case 'approveTaskReview':
-        result = approveTaskReview(body.taskId, actingMember.id)
+        result = approveTaskReview(body.taskId, actingMember.id, body.comment)
         break
       case 'setBlocker':
         result = updateTaskFields(body.taskId, {
@@ -1434,14 +1434,17 @@ function updateTaskFields(taskId, fields) {
 // 確認者ごとの承認を記録し、requiredApprovals(必要承認数、'all'なら
 // 確認者全員)に達したら自動的にstatus: '完了'にする。既に承認済みの
 // actorIdが再度呼んでも重複追加しない（冪等）。
-function approveTaskReview(taskId, actorId) {
+// TSK-062+TSK-067統合: commentはレビューフィードバック兼次回への申し送り
+// メモとして任意で残せる。既に承認済みの場合は(冪等のため)commentを
+// 上書きしない。
+function approveTaskReview(taskId, actorId, comment) {
   var task = findRow(SHEET_TASKS, taskId)
   if (!task) throw new Error('タスクが見つかりません: ' + taskId)
   var approvals = []
   try { approvals = JSON.parse(task.review_approvals_json || '[]') } catch (_) {}
   var already = approvals.some(function (a) { return a.memberId === actorId })
   if (!already) {
-    approvals.push({ memberId: actorId, at: new Date().toISOString() })
+    approvals.push({ memberId: actorId, at: new Date().toISOString(), comment: comment || undefined })
   }
   var reviewerIds = String(task.reviewer_ids || task.reviewer_id || '')
     .split(',').map(function (s) { return s.trim() }).filter(Boolean)

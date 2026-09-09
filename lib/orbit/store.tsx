@@ -396,7 +396,7 @@ interface OrbitContextValue extends OrbitState {
   rejectFormSubmission: (submissionId: string, reason: string) => void
   // タスク確認ターゲット更新
   updateReviewers: (id: string, reviewerIds: string[], requiredApprovals?: number | 'all') => void
-  approveTaskReview: (taskId: string) => void
+  approveTaskReview: (taskId: string, comment?: string) => void
   // Phase 6: スキル一括更新
   bulkUpdateSkills: (updates: { memberId: string; skill: string; level: number }[]) => void
   // ---- 採用支援（候補者） --------------------------------------------------
@@ -3082,7 +3082,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // 'all'なら確認者全員)に達したらローカルでも楽観的にstatus: 'done'へ
   // 進める。同じ確認者が重複して承認しても追加しない（冪等）。
   const approveTaskReview = useCallback(
-    (taskId: string) => {
+    (taskId: string, comment?: string) => {
       if (!currentUserId) return
       setTasks((prev) =>
         prev.map((t) => {
@@ -3090,7 +3090,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           const already = (t.reviewApprovals ?? []).some((a) => a.memberId === currentUserId)
           const nextApprovals = already
             ? t.reviewApprovals!
-            : [...(t.reviewApprovals ?? []), { memberId: currentUserId, at: new Date().toISOString() }]
+            : [...(t.reviewApprovals ?? []), { memberId: currentUserId, at: new Date().toISOString(), comment }]
           const reviewerIds = t.reviewerIds ?? (t.reviewerId ? [t.reviewerId] : [])
           const needed = t.requiredApprovals === 'all' ? reviewerIds.length : (t.requiredApprovals ?? 1)
           if (nextApprovals.length >= needed) {
@@ -3100,7 +3100,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           return { ...t, reviewApprovals: nextApprovals }
         }),
       )
-      if (isRemoteConfigured) runRemote(remoteApi.approveTaskReview(taskId))
+      if (isRemoteConfigured) runRemote(remoteApi.approveTaskReview(taskId, comment))
     },
     [currentUserId, runRemote],
   )

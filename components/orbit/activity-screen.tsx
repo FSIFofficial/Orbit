@@ -90,7 +90,11 @@ export function ActivityScreen() {
             kind: 'review',
             taskId: task.id,
             taskName: task.name,
-            text: t('activity.review.approved'),
+            // TSK-062+TSK-067統合: 承認時のコメント(レビューフィードバック
+            // 兼申し送りメモ)があれば併せて表示する
+            text: ra.comment
+              ? t('activity.review.approvedWithComment', { comment: ra.comment })
+              : t('activity.review.approved'),
             at: ra.at,
           })
         })

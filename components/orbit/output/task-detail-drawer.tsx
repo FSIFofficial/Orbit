@@ -228,7 +228,7 @@ export function TaskDetailDrawer({
             onOpenDelete={() => setConfirmDelete(true)}
             onOpenDepends={() => setDependsOpen(true)}
             onOpenReviewer={() => setReviewerOpen(true)}
-            onApproveReview={() => approveTaskReview(task.id)}
+            onApproveReview={(comment) => approveTaskReview(task.id, comment)}
             onOpenBlocker={() => setBlockerOpen(true)}
             onClearBlocker={() => {
               setBlocker(task.id, null)
@@ -1530,7 +1530,7 @@ function DrawerBody({
   onOpenSchedule: () => void
   onOpenDepends: () => void
   onOpenReviewer: () => void
-  onApproveReview: () => void
+  onApproveReview: (comment?: string) => void
   onOpenBlocker: () => void
   onClearBlocker: () => void
   onOpenHandoff: () => void
@@ -1571,6 +1571,9 @@ function DrawerBody({
   const [deliverableUrl, setDeliverableUrl] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  // TSK-062+TSK-067統合: 確認者が承認時に残すコメント(任意)。レビュー
+  // フィードバック兼次回への申し送りメモとして機能する
+  const [reviewComment, setReviewComment] = useState('')
 
   // 確認者が設定されている場合、「完了」への変更は確認者本人のみ可（item 17）。
   // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
@@ -1939,21 +1942,38 @@ function DrawerBody({
               {t('taskDrawer.reviewApproval.progress', { count: reviewApprovals.length, needed: neededApprovals })}
             </p>
             {reviewApprovals.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-col gap-1.5">
                 {reviewApprovals.map((a) => {
                   const m = members.find((mm) => mm.id === a.memberId)
                   return (
-                    <span key={a.memberId} className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs">
-                      <Avatar member={m ?? null} size={18} />
-                      {m?.displayName || m?.name || a.memberId}
-                    </span>
+                    <div key={a.memberId} className="flex flex-col gap-1">
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs">
+                        <Avatar member={m ?? null} size={18} />
+                        {m?.displayName || m?.name || a.memberId}
+                      </span>
+                      {a.comment && (
+                        <p className="ml-1 whitespace-pre-wrap text-xs text-muted-foreground">{a.comment}</p>
+                      )}
+                    </div>
                   )
                 })}
               </div>
             )}
+            {canApproveReview && !alreadyApproved && (
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder={t('taskDrawer.reviewApproval.commentPlaceholder')}
+                className="mt-2 w-full rounded-md border border-border bg-background p-2 text-sm outline-none focus:border-primary"
+                rows={2}
+              />
+            )}
             {canApproveReview && (
               <button
-                onClick={onApproveReview}
+                onClick={() => {
+                  onApproveReview(reviewComment.trim() || undefined)
+                  setReviewComment('')
+                }}
                 disabled={alreadyApproved}
                 className={cn(
                   'mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
