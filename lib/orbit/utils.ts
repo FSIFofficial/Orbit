@@ -1,4 +1,5 @@
 import type { Member, Project, ProjectHealthLevel, RadarAxis, Task } from './types'
+import { DIFFICULTY_LABEL } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
 export function parseDepartmentPath(path: string): string[] {
@@ -282,6 +283,45 @@ export function computeAvgSkillPoints(task: Task, allTasks: Task[]): Record<stri
   )
 }
 
+export interface TaskPerformanceScore {
+  completedCount: number
+  onTimeRate: number | null // 0-100、対象(期限設定済み)タスクが無ければnull
+  avgDifficulty: number | null // DIFFICULTY_LABELのインデックス平均、無ければnull
+}
+
+// ANL-004: 実績ベース評価の参考スコア。評価そのものを自動で確定させる
+// のではなく、評価者が参考にできる直近の実績値を算出するだけ
+// (SkillAwardModalの「参考値」ボタンと同じ考え方)。直近(デフォルト90日)の
+// 完了タスク数・期限内完了率(deadline設定済みタスクのみ対象)・平均難易度
+export function computeTaskPerformanceScore(
+  memberId: string,
+  allTasks: Task[],
+  windowDays = 90,
+): TaskPerformanceScore {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - windowDays)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+  const recentDone = allTasks.filter(
+    (t) =>
+      t.assigneeIds.includes(memberId) &&
+      t.status === 'done' &&
+      t.completedDate != null &&
+      t.completedDate >= cutoffStr,
+  )
+
+  const withDeadline = recentDone.filter((t) => t.deadline != null)
+  const onTime = withDeadline.filter((t) => t.completedDate! <= t.deadline!)
+  const onTimeRate = withDeadline.length > 0 ? (onTime.length / withDeadline.length) * 100 : null
+
+  const avgDifficulty =
+    recentDone.length > 0
+      ? recentDone.reduce((sum, t) => sum + DIFFICULTY_LABEL.indexOf(t.difficulty), 0) / recentDone.length
+      : null
+
+  return { completedCount: recentDone.length, onTimeRate, avgDifficulty }
+}
+
 // TSK-030: 要求スキル候補表示の改善 — 生成AIは使わず、同じカテゴリの既存
 // タスクで実際に使われているスキルの頻度から推薦する(内容解析ではなく、
 // 過去実績に基づくヒューリスティック)。
@@ -479,6 +519,38 @@ export function isLowWorkloadMember(memberId: string, allTasks: Task[]): boolean
   ).length
   if (activeCount > LOW_WORKLOAD_TASK_THRESHOLD) return false
   return memberWorkloadCapacity(memberId, allTasks) === 'available'
+}
+
+// DEV-006: 本人の取得希望スキル(desiredSkills)を起点にしたタスク推薦。
+// 生成AIは使わず、一致するスキル数・現在のレベルとの差・難易度による
+// 単純なスコアリング/ソートのみ(rankCandidates等と同じヒューリスティック
+// 方針)。本人が既に担当しているタスクは対象外
+export function recommendGrowthTasks(member: Member, tasks: Task[], limit = 5): Task[] {
+  const desired = member.desiredSkills ?? []
+  if (desired.length === 0) return []
+  const currentLevel = (skill: string) => member.skillLevels?.find((s) => s.skill === skill)?.level
+  return tasks
+    .filter((t) => t.status !== 'done' && !t.assigneeIds.includes(member.id))
+    .map((t) => ({ task: t, matched: t.skills.filter((s) => desired.includes(s)) }))
+    .filter(({ matched }) => matched.length > 0)
+    .map(({ task, matched }) => {
+      // 「今のレベルでは物足りないが、挑戦することで伸ばせる」タスクを
+      // 優先する — 現在のレベルが未設定、またはタスクの要求レベルが
+      // 現在のレベルを上回っているスキルが一致に含まれる場合
+      const stretch = matched.some((skill) => {
+        const level = currentLevel(skill)
+        const required = task.requiredSkillLevels?.[skill]
+        return level == null || (required != null && required > level)
+      })
+      return { task, matchedCount: matched.length, stretch }
+    })
+    .sort((a, b) => {
+      if (b.matchedCount !== a.matchedCount) return b.matchedCount - a.matchedCount
+      if (a.stretch !== b.stretch) return a.stretch ? -1 : 1
+      return DIFFICULTY_LABEL.indexOf(a.task.difficulty) - DIFFICULTY_LABEL.indexOf(b.task.difficulty)
+    })
+    .slice(0, limit)
+    .map((r) => r.task)
 }
 
 // P16: 稼働に余裕があるメンバー向けに、未アサインの公募タスクをスキル

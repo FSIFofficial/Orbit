@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/orbit/modal'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
+import { computeTaskPerformanceScore } from '@/lib/orbit/utils'
+import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
 import { cn } from '@/lib/utils'
 import { X, Plus, GraduationCap, CheckCircle2 } from 'lucide-react'
 import type {
@@ -1219,8 +1221,27 @@ function EvaluationHistorySection({
   }
 
   const { t } = useI18n()
+  // ANL-004: 実績ベースの参考スコア — 評価入力欄は自動で埋めない、あくまで
+  // 評価者向けの参考表示
+  const { visibleTasks } = useOrbit()
+  const perf = editable ? computeTaskPerformanceScore(member.id, visibleTasks) : null
+
   return (
     <Section title={t('career.evaluation.title')} description={t('career.adminOnlyDesc')}>
+      {editable && perf && (
+        <p className="mb-3 rounded-md bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+          {perf.onTimeRate != null
+            ? t('career.evaluation.performanceRef', {
+                count: perf.completedCount,
+                rate: perf.onTimeRate.toFixed(1),
+              })
+            : t('career.evaluation.performanceRefNoDeadline', { count: perf.completedCount })}
+          {perf.avgDifficulty != null &&
+            t('career.evaluation.performanceRefDifficulty', {
+              difficulty: DIFFICULTY_LABEL[Math.round(perf.avgDifficulty)],
+            })}
+        </p>
+      )}
       <EntryList emptyText={t('career.noRecords')}>
         {items
           .slice()

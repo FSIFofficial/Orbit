@@ -24,6 +24,7 @@ import type {
   EvaluationRecord,
   ExpenseApplication,
   ExpenseCategory,
+  LearningContent,
   Member,
   OneOnOneRecord,
   Project,
@@ -310,6 +311,9 @@ interface OrbitContextValue extends OrbitState {
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
   updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
   updateRadarAxes: (axes: RadarAxis[]) => void
+  // LRN-001: 学習コンテンツ
+  learningContents: LearningContent[]
+  updateLearningContents: (contents: LearningContent[]) => void
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) => Promise<{ passed: boolean; score: number }>
   // 人材DBのカスタム列（団体ごとに追加可能）
   customMemberColumns: import('./types').CustomMemberColumn[]
@@ -717,6 +721,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     skill: string
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
+  const [learningContents, setLearningContents] = useState<LearningContent[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
   const [customMemberColumns, setCustomMemberColumns] = useState<CustomMemberColumn[]>([])
   // Slack Incoming Webhook URL — 書き込み専用（Discordと同様、GAS PropertiesServiceに保存）
@@ -859,6 +864,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.oneOnOneQuestions.length) setOneOnOneQuestionsState(s.oneOnOneQuestions)
         if (s.initialTasks.length) setInitialTasksFromSettings(s.initialTasks)
         if (s.departmentTreeConfig.length) setDepartmentTreeConfigState(s.departmentTreeConfig)
+        if (s.learningContents.length) setLearningContents(s.learningContents)
         setRemoteError(null)
         setSettingsReady(true)
       })
@@ -925,6 +931,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.oneOnOneQuestions.length) setOneOnOneQuestionsState(settings.oneOnOneQuestions)
           if (settings.initialTasks.length) setInitialTasksFromSettings(settings.initialTasks)
           if (settings.departmentTreeConfig.length) setDepartmentTreeConfigState(settings.departmentTreeConfig)
+          if (settings.learningContents.length) setLearningContents(settings.learningContents)
         }
         setRemoteError(null)
       })
@@ -1424,6 +1431,15 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (quizzes: QuizDefinition[]) => {
       setQuizDefinitions(quizzes)
       if (isSettingsConfigured) runRemote(remoteApi.updateQuizDefinitions(quizzes))
+    },
+    [runRemote],
+  )
+
+  // LRN-001: 学習コンテンツ定義の更新（Admin）
+  const updateLearningContents = useCallback(
+    (contents: LearningContent[]) => {
+      setLearningContents(contents)
+      if (isSettingsConfigured) runRemote(remoteApi.updateLearningContents(contents))
     },
     [runRemote],
   )
@@ -4363,6 +4379,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateQuizDefinitions,
     updateRadarAxes,
     submitQuizResult,
+    learningContents,
+    updateLearningContents,
     customMemberColumns,
     updateCustomMemberColumns,
     updateCustomField,

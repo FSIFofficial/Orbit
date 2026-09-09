@@ -32,6 +32,8 @@ export type Screen =
   | { name: 'org-settings' }
   // item 10/11: スキル表グリッド（縦軸=メンバー、横軸=スキル）
   | { name: 'skillgrid' }
+  // LRN-001: 学習コンテンツ一覧（メンバー向け閲覧画面）
+  | { name: 'learning' }
 
 interface NavValue {
   screen: Screen

@@ -12,7 +12,7 @@ import { EditableTags } from '@/components/orbit/editable-tags'
 import { CareerTab } from '@/components/orbit/people/career-tab'
 import { Modal } from '@/components/orbit/modal'
 import { Button } from '@/components/ui/button'
-import { formatDeadlineFull, formatTenure, memberSkillFieldProgress, isLowWorkloadMember, recommendedTasksForMember } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatTenure, memberSkillFieldProgress, isLowWorkloadMember, recommendedTasksForMember, recommendGrowthTasks } from '@/lib/orbit/utils'
 import { exportTasksToExcel, exportTasksToCsv } from '@/lib/orbit/export-excel'
 import { isAdminRole, BASE_ROLE, DIFFICULTY_LABEL, type NotifyKind, type NotifyFrequency, type Member } from '@/lib/orbit/types'
 import { AVATAR_PALETTE } from '@/lib/orbit/remote'
@@ -309,6 +309,10 @@ export function PersonDetail({ id }: { id: string }) {
     .sort((a, b) => b[1].length - a[1].length)
   const mentorsFor = (skill: string) =>
     members.filter((m) => m.id !== member.id && m.skills.includes(skill))
+
+  // DEV-006: 取得希望スキル(desiredSkills)起点のタスク推薦
+  const desiredSkills = member.desiredSkills ?? []
+  const growthTasks = recommendGrowthTasks(member, tasks)
 
   // item 16: スキル獲得経路 — order missing skills easiest-first (average
   // difficulty of the tasks that demand them), as a suggested learning order
@@ -762,6 +766,55 @@ export function PersonDetail({ id }: { id: string }) {
                           ))}
                         </div>
                       )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* DEV-006: 取得希望スキル起点のタスク推薦 */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              <SectionLabel>{t('person.growth.recommendedTasks.title')}</SectionLabel>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('person.growth.recommendedTasks.desc')}
+            </p>
+            {desiredSkills.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                {t('person.growth.recommendedTasks.noDesiredSkills')}
+              </p>
+            ) : growthTasks.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                {t('person.growth.recommendedTasks.empty')}
+              </p>
+            ) : (
+              <ul className="mt-3 flex flex-col gap-2">
+                {growthTasks.map((task) => {
+                  const matched = task.skills.filter((s) => desiredSkills.includes(s))
+                  return (
+                    <li key={task.id}>
+                      <button
+                        onClick={() => setOpenTaskId(task.id)}
+                        className="flex w-full items-center gap-3 rounded-lg border border-border/60 bg-secondary/30 p-3 text-left transition-colors hover:bg-secondary/60"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{task.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {matched.map((skill) => (
+                              <span
+                                key={skill}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary-muted px-1.5 py-0.5 text-[11px] font-semibold text-accent-foreground"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <DifficultyBadge difficulty={task.difficulty} />
+                      </button>
                     </li>
                   )
                 })}

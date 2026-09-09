@@ -15,6 +15,7 @@ import type {
   EvaluationRecord,
   Member,
   OneOnOneRecord,
+  LearningContent,
   ParsedTask,
   Priority,
   Project,
@@ -443,6 +444,8 @@ export interface RemoteSettings {
   // ORG-002: 部署ツリー構成 — Settings キー "department_tree_config"。
   // 省略時はMembers.departmentPathの実データから動的導出される
   departmentTreeConfig: DepartmentTreeNode[]
+  // LRN-001: 学習コンテンツ一覧 — Settings キー "learning_contents"
+  learningContents: LearningContent[]
 }
 
 // Reads the optional "Settings" sheet (key,value rows) — see
@@ -541,6 +544,9 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     departmentTreeConfig: (() => {
       try { const r = byKey.get('department_tree_config'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    learningContents: (() => {
+      try { const r = byKey.get('learning_contents'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
   }
 }
@@ -864,6 +870,9 @@ export const remoteApi = {
   // ---- 検定 ----
   updateQuizDefinitions: (quizzes: QuizDefinition[]) =>
     postToGas('updateSetting', { key: 'quiz_definitions', value: JSON.stringify(quizzes) }),
+  // ---- 学習コンテンツ (LRN-001) ----
+  updateLearningContents: (contents: LearningContent[]) =>
+    postToGas('updateSetting', { key: 'learning_contents', value: JSON.stringify(contents) }),
   submitQuizResult: (quizId: string, memberId: string, answers: number[]) =>
     postToGas<{ passed: boolean; score: number; newLevel?: number }>('submitQuizResult', { quizId, memberId, answers }),
   // ---- レーダーチャート軸 ----
