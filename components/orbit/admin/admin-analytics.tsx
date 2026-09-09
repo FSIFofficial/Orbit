@@ -6,8 +6,8 @@ import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { DIFFICULTY_LABEL, type Member } from '@/lib/orbit/types'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
-import { memberWorkloadCapacity, matchSkills, tenureYears, computeTaskPerformanceScore, type WorkloadCapacity } from '@/lib/orbit/utils'
-import { SURVEY_SCALE_QUESTION_IDS } from '@/components/orbit/survey-screen'
+import { memberWorkloadCapacity, matchSkills, tenureYears, computeTaskPerformanceScore, computeReviewTurnaroundDays, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { buildDefaultQuestions } from '@/components/orbit/survey-screen'
 
 function BarRow({
   label,
@@ -166,8 +166,19 @@ const WORKLOAD_LABEL_KEY: Record<WorkloadCapacity, TranslationKey> = {
 }
 
 export function AdminAnalytics() {
-  const { members, visibleTasks, archivedTasks, surveyResponses } = useOrbit()
+  const { members, visibleTasks, archivedTasks, surveyResponses, surveyQuestions } = useOrbit()
   const { t } = useI18n()
+
+  // ANL-012/014/015: カスタム設問も組み合わせ分析の対象に含めるため、
+  // 固定配列ではなくsurveyQuestions(未設定なら固定6問)からscale型の
+  // 設問idを動的に導出する
+  const scaleQuestionIds = useMemo(
+    () =>
+      (surveyQuestions.length > 0 ? surveyQuestions : buildDefaultQuestions(t))
+        .filter((q) => q.type === 'scale')
+        .map((q) => q.id),
+    [surveyQuestions, t],
+  )
 
   const roleCounts = new Map<string, number>()
   const affiliationCounts = new Map<string, number>()
@@ -283,6 +294,28 @@ export function AdminAnalytics() {
       .sort((a, b) => b.count - a.count)
   }, [allTasks])
 
+  // ANL-013: レビュー速度分析(客観指標) — 完了済みタスクのうち、実際に
+  // review(確認待ち)を経由したものだけを対象に、computeReviewTurnaroundDays
+  // (history上の「確認待ちになった日時」〜「完了になった日時」の差分)を
+  // カテゴリ別に平均する。確認者が設定されておらずreviewを経由しなかった
+  // タスクはnullが返るため自然に除外される。
+  const reviewTurnaroundRows = useMemo(() => {
+    const byCategory = new Map<string, { sum: number; count: number }>()
+    allTasks
+      .filter((t) => t.status === 'done')
+      .forEach((t) => {
+        const days = computeReviewTurnaroundDays(t)
+        if (days === null) return
+        const entry = byCategory.get(t.category) ?? { sum: 0, count: 0 }
+        entry.sum += days
+        entry.count += 1
+        byCategory.set(t.category, entry)
+      })
+    return Array.from(byCategory.entries())
+      .map(([category, e]) => ({ category, count: e.count, avgDays: e.sum / e.count }))
+      .sort((a, b) => b.count - a.count)
+  }, [allTasks])
+
   // ANL-010: 部門別比較 — affiliation(所属)ごとに、メンバー数・平均担当中
   // タスク数(稼働量の目安)・平均完了タスク数・期限内完了率を比較する。
   // 期限内完了率の算出はANL-004のcomputeTaskPerformanceScoreを部門単位で
@@ -387,7 +420,7 @@ export function AdminAnalytics() {
   )
 
   // item 30: アンケート×人材データ組み合わせ分析 — 各メンバーの全アンケート
-  // 回答からscale形式の設問(SURVEY_SCALE_QUESTION_IDS)の回答をプールした
+  // 回答からscale形式の設問(scaleQuestionIds)の回答をプールした
   // 平均値をそのメンバーの「スコア」とする。回答が1件も無いメンバーは
   // マップに含めない（0点として平均を下げないようにするため）。
   const [surveyComboAxis, setSurveyComboAxis] = useState<SurveyComboAxis>('workload')
@@ -398,7 +431,7 @@ export function AdminAnalytics() {
       surveyResponses
         .filter((r) => r.memberId === m.id)
         .forEach((r) => {
-          SURVEY_SCALE_QUESTION_IDS.forEach((qid) => {
+          scaleQuestionIds.forEach((qid) => {
             const v = r.answers[qid]
             if (typeof v === 'number') vals.push(v)
           })
@@ -406,7 +439,7 @@ export function AdminAnalytics() {
       if (vals.length > 0) map.set(m.id, vals.reduce((a, b) => a + b, 0) / vals.length)
     })
     return map
-  }, [members, surveyResponses])
+  }, [members, surveyResponses, scaleQuestionIds])
 
   const surveyComboRows = useMemo(() => {
     const groups = new Map<string, number[]>()
@@ -686,6 +719,35 @@ export function AdminAnalytics() {
                     <td className="py-1 text-right tabular-nums">
                       {row.avgEstimated != null ? `${row.avgEstimated.toFixed(1)}h` : '—'}
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+        <SectionLabel>{t('admin.analytics.reviewTurnaround.title')}</SectionLabel>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.analytics.reviewTurnaround.desc')}</p>
+        {reviewTurnaroundRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('admin.analytics.reviewTurnaround.empty')}</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-1 pr-3 font-medium">{t('admin.analytics.reviewTurnaround.colCategory')}</th>
+                  <th className="py-1 pr-3 text-right font-medium">{t('admin.analytics.reviewTurnaround.colCount')}</th>
+                  <th className="py-1 text-right font-medium">{t('admin.analytics.reviewTurnaround.colAvgDays')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviewTurnaroundRows.map((row) => (
+                  <tr key={row.category} className="border-t border-border/30">
+                    <td className="py-1 pr-3 font-medium">{row.category}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{row.count}</td>
+                    <td className="py-1 text-right tabular-nums">{t('admin.analytics.reviewTurnaround.daysValue', { days: row.avgDays.toFixed(1) })}</td>
                   </tr>
                 ))}
               </tbody>

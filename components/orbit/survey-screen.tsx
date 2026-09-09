@@ -13,11 +13,11 @@ import type { SurveyQuestion } from '@/lib/orbit/types'
 // FRM-006: 質問項目はSettings(surveyQuestions)で団体ごとにカスタマイズ
 // 可能。未設定ならこれまで通りの固定6問にフォールバックする。
 
-// item 30のアンケート×人材データ組み合わせ分析（admin-analytics.tsx）が、
-// スコア集計対象をscale形式の設問のみに絞るために参照する
-export const SURVEY_SCALE_QUESTION_IDS = ['q1', 'q2', 'q3', 'q4', 'q5']
-
-function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKey) => string): SurveyQuestion[] {
+// item 30/ANL-012/014/015: アンケート×人材データ組み合わせ分析
+// （admin-analytics.tsx）が、surveyQuestions未設定の団体向けに固定6問を
+// 参照するためexportする（scale設問idの絞り込みはsurveyQuestions/この
+// 関数の戻り値からtype==='scale'を動的に導出する形に統一した）
+export function buildDefaultQuestions(t: (key: import('@/lib/orbit/i18n').TranslationKey) => string): SurveyQuestion[] {
   return [
     { id: 'q1', text: t('survey.q1.text'), type: 'scale', scaleMinLabel: t('survey.q1.scaleMin'), scaleMaxLabel: t('survey.q1.scaleMax') },
     { id: 'q2', text: t('survey.q2.text'), type: 'scale', scaleMinLabel: t('survey.q2.scaleMin'), scaleMaxLabel: t('survey.q2.scaleMax') },

@@ -603,6 +603,7 @@ function authorizeAction(acting, action, body) {
     'updateCompetencies',        // コンピテンシー評価（班長は担当メンバーのみ）
     'triggerOverdueReminders',   // NTF-005: 期限超過リマインドの手動発火
     'uploadSurveyImage',         // FRM-007: アンケート設問の画像は管理者操作
+    'fetchDailyReports',         // REP-005: 日報・週報の閲覧は管理者操作
   ]
   if (daihyoOrLeader.indexOf(action) >= 0) {
     // 一般ロールでも、未アサインのタスクに自分だけを追加する「自己アサイン」
@@ -831,6 +832,7 @@ function authorizeAction(acting, action, body) {
     'resubmitExpense',         // EXP-008: 再提出は本人（下層でチェック）
     'uploadExpenseReceipt',    // EXP-003: 領収書アップロードはログイン済み誰でも
     'submitCustomForm',        // フォーム申請はログイン済み誰でも
+    'submitDailyReport',       // REP-004: 日報・週報の保存はログイン済み誰でも
     'updateLastLogin',         // ログイン日時更新は誰でも（本人のみ実質的）
     'translateText',           // 自由入力テキストの自動翻訳は読み取り専用、誰でも
     'submitSurveyResponse',    // アンケート回答の送信はログイン済み誰でも（本人のみ実質的）
@@ -1362,6 +1364,12 @@ function doPost(e) {
         break
       case 'rejectFormSubmission':
         result = setFormSubmissionStatus(body.submissionId, 'rejected', body.reason)
+        break
+      case 'submitDailyReport':
+        result = saveDailyReport(body.report, actingMember)
+        break
+      case 'fetchDailyReports':
+        result = fetchDailyReports()
         break
       case 'bulkUpdateSkills':
         result = bulkUpdateSkillLevels(body.updates || [])
@@ -3725,6 +3733,70 @@ function setFormSubmissionStatus(submissionId, status, reason) {
   }
 
   return { ok: true }
+}
+
+// ---- 日報・週報 (REP-004/REP-005) -------------------------------------------
+// daily-report-screen.tsxはこれまでlocalStorageのみに保存しており、他の
+// メンバー・管理者と共有されなかった。Expenses/FormSubmissionsと同じ
+// ensureSheetHeadersパターンで専用シートを新設し、保存(submitDailyReport)
+// と読み取り(fetchDailyReports)を分ける — 経費申請のように「書き込みは
+// GASにあるが読み取りはローカルstateのみ」という状態を繰り返さないよう、
+// 管理者の閲覧画面が明示的にfetchDailyReportsを呼ぶ設計にする。
+
+var SHEET_DAILY_REPORTS = 'DailyReports'
+var DAILY_REPORTS_HEADERS = ['id', 'member_id', 'type', 'report_date', 'done_text', 'todo_text', 'issues_text', 'created_at']
+
+function ensureDailyReportsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  ensureSheetHeaders(ss, SHEET_DAILY_REPORTS, DAILY_REPORTS_HEADERS)
+  return ss.getSheetByName(SHEET_DAILY_REPORTS)
+}
+
+// REP-004: 日報・週報の保存(追記のみ)。
+function saveDailyReport(report, acting) {
+  var sheet = ensureDailyReportsSheet()
+  sheet.appendRow([
+    report.id,
+    report.memberId,
+    report.type,
+    report.date,
+    report.done || '',
+    report.todo || '',
+    report.issues || '',
+    report.createdAt || new Date().toISOString(),
+  ])
+  return { id: report.id }
+}
+
+// REP-005: 管理者が日報・週報の閲覧画面を開いたときに呼ぶ読み取り専用action。
+function fetchDailyReports() {
+  var sheet = ensureDailyReportsSheet()
+  var headers = headerRow(sheet)
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return []
+
+  var idCol = headers.indexOf('id')
+  var memberCol = headers.indexOf('member_id')
+  var typeCol = headers.indexOf('type')
+  var dateCol = headers.indexOf('report_date')
+  var doneCol = headers.indexOf('done_text')
+  var todoCol = headers.indexOf('todo_text')
+  var issuesCol = headers.indexOf('issues_text')
+  var createdCol = headers.indexOf('created_at')
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+  return rows.map(function (r) {
+    return {
+      id: String(r[idCol]),
+      memberId: String(r[memberCol]),
+      type: r[typeCol],
+      date: r[dateCol],
+      done: r[doneCol],
+      todo: r[todoCol],
+      issues: r[issuesCol],
+      createdAt: r[createdCol],
+    }
+  })
 }
 
 // ---- 採用支援（入会前の履歴書・面談メモ） -----------------------------------

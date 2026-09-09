@@ -37,9 +37,10 @@ function saveReports(userId: string, reports: SavedReport[]) {
 }
 
 // item 23: 日報・週報を書ける画面。localStorageに保存し、過去のレポートも閲覧可能。
-// GAS連携が設定されている場合はGASにも送信（addReport action）。
+// REP-004: GAS連携が設定されている場合はsubmitDailyReportでDailyReports
+// シートにも送信し、管理者側(admin-daily-reports.tsx)から閲覧できるようにする。
 export function DailyReportScreen() {
-  const { currentUser } = useOrbit()
+  const { currentUser, submitDailyReport } = useOrbit()
   const { goBack } = useNav()
   const { t } = useI18n()
   const [type, setType] = useState<ReportType>('daily')
@@ -72,6 +73,16 @@ export function DailyReportScreen() {
     const next = [report, ...reports]
     setReports(next)
     saveReports(currentUser.id, next)
+    submitDailyReport({
+      id: report.id,
+      memberId: currentUser.id,
+      type: report.type,
+      date: report.date,
+      done: report.done,
+      todo: report.todo,
+      issues: report.issues,
+      createdAt: report.createdAt,
+    })
     setDone('')
     setTodo('')
     setIssues('')

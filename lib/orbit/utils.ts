@@ -1,5 +1,5 @@
 import type { Member, Project, ProjectHealthLevel, RadarAxis, Task } from './types'
-import { DIFFICULTY_LABEL } from './types'
+import { DIFFICULTY_LABEL, STATUS_LABEL } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
 export function parseDepartmentPath(path: string): string[] {
@@ -320,6 +320,30 @@ export function computeTaskPerformanceScore(
       : null
 
   return { completedCount: recentDone.length, onTimeRate, avgDifficulty }
+}
+
+// ANL-013: レビュー速度測定(客観指標) — history(field==='status')から
+// 「確認待ち(review)になった日時」と「完了(done)になった日時」の差分を
+// 日数で返す。差し戻し(review→fix→review→...)後に再度reviewを経由した
+// 場合も、完了直前の(=最後の)review遷移を起点にする。該当する遷移が
+// history上に無ければ(確認者未設定で一度もreviewを経由していない等)nullを返す。
+// history[].to にはstore.tsxのupdateTaskStatusがSTATUS_LABEL経由で書き込む
+// 日本語ラベル('完了'/'確認待ち')が保存されているため、内部enum値
+// ('done'/'review')ではなくSTATUS_LABEL.done/STATUS_LABEL.reviewと比較する。
+export function computeReviewTurnaroundDays(task: Task): number | null {
+  const history = task.history ?? []
+  const doneEntries = history.filter((h) => h.field === 'status' && h.to === STATUS_LABEL.done)
+  if (doneEntries.length === 0) return null
+  const doneAt = new Date(doneEntries[doneEntries.length - 1].at).getTime()
+
+  const reviewEntries = history
+    .filter((h) => h.field === 'status' && h.to === STATUS_LABEL.review)
+    .map((h) => new Date(h.at).getTime())
+    .filter((t) => t <= doneAt)
+  if (reviewEntries.length === 0) return null
+  const reviewAt = Math.max(...reviewEntries)
+
+  return (doneAt - reviewAt) / 86400000
 }
 
 // TSK-030: 要求スキル候補表示の改善 — 生成AIは使わず、同じカテゴリの既存
