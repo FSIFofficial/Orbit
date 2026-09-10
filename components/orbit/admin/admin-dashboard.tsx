@@ -5,7 +5,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { useToast } from '@/components/orbit/toast'
 import { Avatar, ProjectTag } from '@/components/orbit/primitives'
-import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth, computeAvgSkillPoints } from '@/lib/orbit/utils'
+import { isOverdue, daysSince, formatDeadline, computeProjectAutoHealth, computeAvgSkillPoints, suggestWorkloadRebalance } from '@/lib/orbit/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/orbit/timezone'
 import { STATUS_LABEL } from '@/lib/orbit/types'
 import { useI18n } from '@/lib/orbit/i18n'
@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   Send,
   Award,
+  Shuffle,
 } from 'lucide-react'
 
 export function AdminDashboard() {
@@ -38,6 +39,7 @@ export function AdminDashboard() {
     updateProjectHealth,
     triggerOverdueReminders,
     awardSkillPoints,
+    assignTask,
   } = useOrbit()
   const { openTask } = useTaskDrawer()
   const toast = useToast()
@@ -65,6 +67,11 @@ export function AdminDashboard() {
   const pendingPoints = tasks.filter(
     (t) => t.status === 'done' && (!t.awardedPoints || Object.keys(t.awardedPoints).length === 0),
   )
+
+  // MAT-011: 負荷分散の提案 — 稼働過多なメンバーの担当タスクを、スキルが
+  // 一致する稼働余力のあるメンバーへ再配分する提案。生成AIは使わず、
+  // suggestWorkloadRebalance(既存のワークロード判定+スキルマッチング)のみで構成
+  const rebalanceSuggestions = suggestWorkloadRebalance(members, tasks)
 
   // item 18: プロジェクト健全性の説明型ダッシュボード — per-project rollup
   // of the same signals above (期限超過/確認待ち/Blocked/負荷), so an admin
@@ -321,6 +328,62 @@ export function AdminDashboard() {
           {pendingPoints.length > 6 && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               {tr('admin.dashboard.pendingPoints.moreCount', { count: pendingPoints.length - 6 })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* MAT-011: 負荷分散の提案 */}
+      {rebalanceSuggestions.length > 0 && (
+        <div className="mt-8">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            <Shuffle className="size-4 text-muted-foreground" />
+            {tr('admin.dashboard.rebalance.title')}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {tr('admin.dashboard.rebalance.desc')}
+          </p>
+          <div className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border">
+              {rebalanceSuggestions.slice(0, 6).map((s) => (
+                <li key={s.task.id} className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    onClick={() => openTask(s.task.id)}
+                    className="min-w-0 flex-1 text-left transition-colors hover:text-primary"
+                  >
+                    <div className="truncate text-sm font-medium">{s.task.name}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <ProjectTag name={getProject(s.task.projectId)?.name ?? ''} />
+                      <span>
+                        {tr('admin.dashboard.rebalance.suggestionLine', {
+                          from: s.from.displayName || s.from.name,
+                          to: s.to.displayName || s.to.name,
+                          skills: s.matchedSkills.join('、'),
+                        })}
+                      </span>
+                    </div>
+                  </button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const nextAssignees = Array.from(
+                        new Set(s.task.assigneeIds.filter((id) => id !== s.from.id).concat(s.to.id)),
+                      )
+                      assignTask(s.task.id, nextAssignees)
+                      toast(tr('admin.dashboard.rebalance.reassignedToast', { name: s.task.name, to: s.to.displayName || s.to.name }))
+                    }}
+                  >
+                    <Shuffle className="size-3.5" />
+                    {tr('admin.dashboard.rebalance.reassignButton')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          {rebalanceSuggestions.length > 6 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {tr('admin.dashboard.rebalance.moreCount', { count: rebalanceSuggestions.length - 6 })}
             </p>
           )}
         </div>

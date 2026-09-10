@@ -884,7 +884,7 @@ function TrainingHistorySection({
   onDecide: CareerTabProps['notifyTrainingDecision']
   rid: () => string
 }) {
-  const { currentUser } = useOrbit()
+  const { currentUser, trainingPrograms } = useOrbit()
   const { t: trHint } = useI18n()
   // notifyTrainingDecisionはGAS側で常にisDaihyo固定（研修承認の記録自体
   // =updateTrainingHistoryはselfOrAdminで成功するが、通知メールだけ失敗する）
@@ -893,6 +893,16 @@ function TrainingHistorySection({
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
   const [provider, setProvider] = useState('')
+  const [programId, setProgramId] = useState('')
+
+  // LRN-006: MemberにはtargetSegmentsに相当する専用フィールドが無いため、
+  // 唯一の既存の「層」概念であるroleとのゆるい部分一致で候補を絞る
+  // (完全一致は要求されていない — targetSegmentsが空のプログラムは無条件で対象)
+  const matchingPrograms = trainingPrograms.filter(
+    (p) =>
+      p.targetSegments.length === 0 ||
+      p.targetSegments.some((seg) => member.role.includes(seg) || seg.includes(member.role)),
+  )
 
   // 管理者が直接記録する場合は即時「承認済み」、本人が申請する場合は
   // 「承認待ち」で作成され、管理者に通知が飛ぶ（研修申請の承認フロー）
@@ -908,6 +918,7 @@ function TrainingHistorySection({
     setName('')
     setDate('')
     setProvider('')
+    setProgramId('')
   }
 
   const decide = (t: TrainingRecord, approved: boolean) => {
@@ -918,6 +929,16 @@ function TrainingHistorySection({
     onDecide(member.id, t.name, approved)
   }
 
+  // LRN-007: 承認済み・開催日が過去のレコードについて、管理者が実際の
+  // 出席可否を記録する。updateTrainingHistoryをそのまま使って更新する。
+  const today = new Date().toISOString().slice(0, 10)
+  const setAttendance = (t: TrainingRecord, attendanceStatus: NonNullable<TrainingRecord['attendanceStatus']>) => {
+    onSave(
+      member.id,
+      items.map((x) => (x.id === t.id ? { ...x, attendanceStatus } : x)),
+    )
+  }
+
   const { t: tr } = useI18n()
   return (
     <Section title={tr('career.training.title')} description={!isAdmin ? tr('career.training.desc') : undefined}>
@@ -925,6 +946,7 @@ function TrainingHistorySection({
         {items.map((t) => {
           const status = t.status ?? 'approved'
           const badge = TRAINING_STATUS_BADGE[status]
+          const canConfirmAttendance = isAdmin && status === 'approved' && t.date <= today
           return (
             <EntryRow key={t.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== t.id))}>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -936,6 +958,16 @@ function TrainingHistorySection({
                 {status !== 'approved' && (
                   <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold', badge.className)}>
                     {tr(badge.labelKey)}
+                  </span>
+                )}
+                {t.attendanceStatus && (
+                  <span
+                    className={cn(
+                      'rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+                      t.attendanceStatus === 'attended' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700',
+                    )}
+                  >
+                    {tr(t.attendanceStatus === 'attended' ? 'career.training.attendance.attended' : 'career.training.attendance.absent')}
                   </span>
                 )}
                 {isAdmin && status === 'pending' && (
@@ -961,24 +993,58 @@ function TrainingHistorySection({
                     </button>
                   </div>
                 )}
+                {canConfirmAttendance && !t.attendanceStatus && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setAttendance(t, 'attended')}
+                      className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      {tr('career.training.attendance.markAttended')}
+                    </button>
+                    <button
+                      onClick={() => setAttendance(t, 'absent')}
+                      className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                    >
+                      {tr('career.training.attendance.markAbsent')}
+                    </button>
+                  </div>
+                )}
               </div>
             </EntryRow>
           )
         })}
       </EntryList>
       {editable && (
-        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('career.training.namePlaceholder')} className={fieldClass} />
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={tr('career.training.providerPlaceholder')} className={fieldClass} />
-          <button
-            onClick={add}
-            disabled={!name.trim() || !date}
-            className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
-          >
-            <Plus className="size-3.5" />
-            {isAdmin ? tr('common.add') : tr('career.training.apply')}
-          </button>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {matchingPrograms.length > 0 && (
+            <select
+              value={programId}
+              onChange={(e) => {
+                setProgramId(e.target.value)
+                const program = trainingPrograms.find((p) => p.id === e.target.value)
+                if (program) setName(program.name)
+              }}
+              className={cn(fieldClass, 'cursor-pointer')}
+            >
+              <option value="">{tr('career.training.programSelectPlaceholder')}</option>
+              {matchingPrograms.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('career.training.namePlaceholder')} className={fieldClass} />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
+            <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={tr('career.training.providerPlaceholder')} className={fieldClass} />
+            <button
+              onClick={add}
+              disabled={!name.trim() || !date}
+              className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
+            >
+              <Plus className="size-3.5" />
+              {isAdmin ? tr('common.add') : tr('career.training.apply')}
+            </button>
+          </div>
         </div>
       )}
     </Section>

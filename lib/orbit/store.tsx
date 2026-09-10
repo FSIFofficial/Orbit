@@ -26,6 +26,7 @@ import type {
   ExpenseApplication,
   ExpenseCategory,
   LearningContent,
+  LearningCourse,
   Member,
   OneOnOneRecord,
   Project,
@@ -55,6 +56,7 @@ import type {
   TaskSetTemplate,
   TaskSetTemplateItem,
   TaskStatus,
+  TrainingProgram,
   TrainingRecord,
   TransferRecord,
   Priority,
@@ -316,6 +318,12 @@ interface OrbitContextValue extends OrbitState {
   // LRN-001: 学習コンテンツ
   learningContents: LearningContent[]
   updateLearningContents: (contents: LearningContent[]) => void
+  // LRN-002: 学習コース
+  learningCourses: LearningCourse[]
+  updateLearningCourses: (courses: LearningCourse[]) => void
+  // LRN-006: 研修プログラム
+  trainingPrograms: TrainingProgram[]
+  updateTrainingPrograms: (programs: TrainingProgram[]) => void
   // FRM-006: アンケート設問（未設定なら固定6問にフォールバック）
   surveyQuestions: SurveyQuestion[]
   updateSurveyQuestions: (questions: SurveyQuestion[]) => void
@@ -747,6 +755,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   } | null>(null)
   const [quizDefinitions, setQuizDefinitions] = useState<QuizDefinition[]>([])
   const [learningContents, setLearningContents] = useState<LearningContent[]>([])
+  const [learningCourses, setLearningCourses] = useState<LearningCourse[]>([])
+  const [trainingPrograms, setTrainingPrograms] = useState<TrainingProgram[]>([])
   // FRM-006: アンケート設問リスト — 空ならsurvey-screen.tsxが固定6問にフォールバックする
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([])
   const [radarAxes, setRadarAxes] = useState<RadarAxis[]>([])
@@ -892,6 +902,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (s.initialTasks.length) setInitialTasksFromSettings(s.initialTasks)
         if (s.departmentTreeConfig.length) setDepartmentTreeConfigState(s.departmentTreeConfig)
         if (s.learningContents.length) setLearningContents(s.learningContents)
+        if (s.learningCourses.length) setLearningCourses(s.learningCourses)
+        if (s.trainingPrograms.length) setTrainingPrograms(s.trainingPrograms)
         if (s.surveyQuestions.length) setSurveyQuestions(s.surveyQuestions)
         setRemoteError(null)
         setSettingsReady(true)
@@ -960,6 +972,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           if (settings.initialTasks.length) setInitialTasksFromSettings(settings.initialTasks)
           if (settings.departmentTreeConfig.length) setDepartmentTreeConfigState(settings.departmentTreeConfig)
           if (settings.learningContents.length) setLearningContents(settings.learningContents)
+          if (settings.learningCourses.length) setLearningCourses(settings.learningCourses)
+          if (settings.trainingPrograms.length) setTrainingPrograms(settings.trainingPrograms)
           if (settings.surveyQuestions.length) setSurveyQuestions(settings.surveyQuestions)
         }
         setRemoteError(null)
@@ -1489,6 +1503,24 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (contents: LearningContent[]) => {
       setLearningContents(contents)
       if (isSettingsConfigured) runRemote(remoteApi.updateLearningContents(contents))
+    },
+    [runRemote],
+  )
+
+  // LRN-002: 学習コース定義の更新（Admin）
+  const updateLearningCourses = useCallback(
+    (courses: LearningCourse[]) => {
+      setLearningCourses(courses)
+      if (isSettingsConfigured) runRemote(remoteApi.updateLearningCourses(courses))
+    },
+    [runRemote],
+  )
+
+  // LRN-006: 研修プログラム定義の更新（Admin）
+  const updateTrainingPrograms = useCallback(
+    (programs: TrainingProgram[]) => {
+      setTrainingPrograms(programs)
+      if (isSettingsConfigured) runRemote(remoteApi.updateTrainingPrograms(programs))
     },
     [runRemote],
   )
@@ -4571,6 +4603,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     submitQuizResult,
     learningContents,
     updateLearningContents,
+    learningCourses,
+    updateLearningCourses,
+    trainingPrograms,
+    updateTrainingPrograms,
     surveyQuestions,
     updateSurveyQuestions,
     customMemberColumns,

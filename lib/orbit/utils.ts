@@ -545,6 +545,42 @@ export function isLowWorkloadMember(memberId: string, allTasks: Task[]): boolean
   return memberWorkloadCapacity(memberId, allTasks) === 'available'
 }
 
+export interface WorkloadRebalanceSuggestion {
+  task: Task
+  from: Member
+  to: Member
+  matchedSkills: string[]
+}
+
+// MAT-011: 負荷分散提案 — 稼働過多(full)なメンバーの担当タスクのうち、
+// 稼働に余裕がある(available)他メンバーとスキルが一致するものを、
+// 再配分候補として抽出する。生成AIは使わず、既存のワークロード判定
+// (memberWorkloadCapacity)+スキルマッチング(matchSkills)のみで構成する。
+// 1タスクにつき提案は1件(最初にスキルが一致したavailableメンバー) —
+// 複数担当者の一部入れ替えまでは考慮しない、1対1の単純な付け替え提案。
+export function suggestWorkloadRebalance(members: Member[], tasks: Task[]): WorkloadRebalanceSuggestion[] {
+  const capacityByMember = new Map(members.map((m) => [m.id, memberWorkloadCapacity(m.id, tasks)]))
+  const overloaded = members.filter((m) => capacityByMember.get(m.id) === 'full')
+  const available = members.filter((m) => capacityByMember.get(m.id) === 'available')
+  if (overloaded.length === 0 || available.length === 0) return []
+
+  const suggestions: WorkloadRebalanceSuggestion[] = []
+  overloaded.forEach((fromMember) => {
+    tasks
+      .filter((t) => t.status !== 'done' && t.assigneeIds.includes(fromMember.id))
+      .forEach((task) => {
+        for (const toMember of available) {
+          const matchedSkills = matchSkills(task, toMember)
+          if (matchedSkills.length > 0) {
+            suggestions.push({ task, from: fromMember, to: toMember, matchedSkills })
+            break
+          }
+        }
+      })
+  })
+  return suggestions
+}
+
 // DEV-006: 本人の取得希望スキル(desiredSkills)を起点にしたタスク推薦。
 // 生成AIは使わず、一致するスキル数・現在のレベルとの差・難易度による
 // 単純なスコアリング/ソートのみ(rankCandidates等と同じヒューリスティック

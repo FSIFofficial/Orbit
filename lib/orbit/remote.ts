@@ -16,6 +16,7 @@ import type {
   Member,
   OneOnOneRecord,
   LearningContent,
+  LearningCourse,
   ParsedTask,
   Priority,
   Project,
@@ -39,6 +40,7 @@ import type {
   TaskSchedule,
   TaskSetTemplate,
   TaskStatus,
+  TrainingProgram,
   TrainingRecord,
   TransferRecord,
   NotifyFrequency,
@@ -447,6 +449,10 @@ export interface RemoteSettings {
   departmentTreeConfig: DepartmentTreeNode[]
   // LRN-001: 学習コンテンツ一覧 — Settings キー "learning_contents"
   learningContents: LearningContent[]
+  // LRN-002: 学習コース一覧 — Settings キー "learning_courses"
+  learningCourses: LearningCourse[]
+  // LRN-006: 研修プログラム一覧 — Settings キー "training_programs"
+  trainingPrograms: TrainingProgram[]
   // FRM-006: アンケート設問リスト — Settings キー "survey_questions"。
   // 空配列なら survey-screen.tsx はこれまで通りの固定6問にフォールバックする
   surveyQuestions: SurveyQuestion[]
@@ -551,6 +557,12 @@ export async function fetchSettings(): Promise<RemoteSettings> {
     })(),
     learningContents: (() => {
       try { const r = byKey.get('learning_contents'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    learningCourses: (() => {
+      try { const r = byKey.get('learning_courses'); return r ? JSON.parse(r) : [] } catch { return [] }
+    })(),
+    trainingPrograms: (() => {
+      try { const r = byKey.get('training_programs'); return r ? JSON.parse(r) : [] } catch { return [] }
     })(),
     surveyQuestions: (() => {
       try { const r = byKey.get('survey_questions'); return r ? JSON.parse(r) : [] } catch { return [] }
@@ -892,6 +904,12 @@ export const remoteApi = {
   // ---- 学習コンテンツ (LRN-001) ----
   updateLearningContents: (contents: LearningContent[]) =>
     postToGas('updateSetting', { key: 'learning_contents', value: JSON.stringify(contents) }),
+  // ---- 学習コース (LRN-002) ----
+  updateLearningCourses: (courses: LearningCourse[]) =>
+    postToGas('updateSetting', { key: 'learning_courses', value: JSON.stringify(courses) }),
+  // ---- 研修プログラム (LRN-006) ----
+  updateTrainingPrograms: (programs: TrainingProgram[]) =>
+    postToGas('updateSetting', { key: 'training_programs', value: JSON.stringify(programs) }),
   // ---- アンケート設問 (FRM-006) ----
   updateSurveyQuestions: (questions: SurveyQuestion[]) =>
     postToGas('updateSetting', { key: 'survey_questions', value: JSON.stringify(questions) }),

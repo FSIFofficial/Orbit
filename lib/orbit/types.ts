@@ -335,6 +335,17 @@ export interface TrainingRecord {
   // 承認済み扱い。自己申請すると 'pending' で作成され、管理者の承認/却下
   // を待つ（person-detail.tsx の人材育成タブ／career-tab.tsx）
   status?: 'pending' | 'approved' | 'rejected'
+  // LRN-007: 承認された研修について、実際に参加したかどうかの記録
+  attendanceStatus?: 'attended' | 'absent'
+}
+
+// LRN-006: 管理者が定義する研修プログラム。対象層を区分できる
+// (Settings キー: "training_programs" の配列要素)
+export interface TrainingProgram {
+  id: string
+  name: string
+  description?: string
+  targetSegments: string[] // 例: ['新人', '経験者', '管理職候補']。空なら全員対象
 }
 
 export interface DevelopmentPlanEntry {
@@ -509,6 +520,16 @@ export interface LearningContent {
   relatedSkill?: string // skillOptionsのいずれか、任意
   relatedQuizId?: string // QuizDefinition.id、任意(この資料で学んだ後この検定を受ける、等の紐付け)
   createdAt: string
+}
+
+// LRN-002: 複数のLearningContentを順序付きでまとめたコース
+// (Settings キー: "learning_courses" の配列要素)
+export interface LearningCourse {
+  id: string
+  title: string
+  description?: string
+  contentIds: string[] // LearningContent.idの配列、この順序で表示する
+  relatedQuizId?: string // コース修了後に受ける検定(任意)
 }
 
 // ---- レーダーチャート軸 ---------------------------------------------------
