@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { getCalendarToken, requestCalendarToken, isGoogleOAuthConfigured } from '@/lib/orbit/google-sheet-sync'
 import { createCalendarEvent } from '@/lib/orbit/google-calendar'
 import { Drawer, Modal } from '../modal'
+import { ScheduleCandidateInput } from '../schedule-candidate-input'
 import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
@@ -28,6 +29,7 @@ import {
   type Member,
   type Priority,
   type Project,
+  type ScheduleCandidate,
   type ScheduleResponseValue,
   type SkillLevelValue,
   type SkillPoints,
@@ -1537,7 +1539,7 @@ function DrawerBody({
   onUpdateEstimatedHours: (hours: number | null) => void
   onUpdateActualHours: (hours: number | null) => void
   onSaveRetrospective: (retrospective: TaskRetrospective | null) => void
-  onSetSchedule: (candidates: { id: string; label: string }[], invitedIds: string[]) => void
+  onSetSchedule: (candidates: ScheduleCandidate[], invitedIds: string[]) => void
   onRespondSchedule: (responses: Record<string, ScheduleResponseValue>) => void
   onSetForm: (fields: FormFieldDef[], invitedIds: string[]) => void
   onRespondForm: (responses: Record<string, FormAnswerValue>) => void
@@ -2514,16 +2516,15 @@ function ScheduleSection({
   currentUserId: string | null
   isAdmin: boolean
   members: Member[]
-  onSetSchedule: (candidates: { id: string; label: string }[], invitedIds: string[]) => void
+  onSetSchedule: (candidates: ScheduleCandidate[], invitedIds: string[]) => void
   onRespondSchedule: (responses: Record<string, ScheduleResponseValue>) => void
 }) {
   const { t } = useI18n()
   const schedule = task.schedule
   const canConfigure = isAdmin || task.createdById === currentUserId
   const [configOpen, setConfigOpen] = useState(false)
-  const [candidateDraft, setCandidateDraft] = useState<{ id: string; label: string }[]>([])
+  const [candidateDraft, setCandidateDraft] = useState<ScheduleCandidate[]>([])
   const [inviteDraft, setInviteDraft] = useState<string[]>([])
-  const [dateTimeInput, setDateTimeInput] = useState('')
   const [responseDraft, setResponseDraft] = useState<Record<string, ScheduleResponseValue>>({})
 
   useEffect(() => {
@@ -2539,16 +2540,8 @@ function ScheduleSection({
     setConfigOpen(true)
   }
 
-  const addCandidate = () => {
-    if (!dateTimeInput) return
-    const d = new Date(dateTimeInput)
-    const weekdays = t('taskDrawer.schedule.weekdayShort').split(',')
-    const label = `${d.getMonth() + 1}/${d.getDate()}(${weekdays[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    setCandidateDraft((prev) => [
-      ...prev,
-      { id: `sc-${Math.random().toString(36).slice(2, 9)}`, label },
-    ])
-    setDateTimeInput('')
+  const addCandidate = (candidate: ScheduleCandidate) => {
+    setCandidateDraft((prev) => [...prev, candidate])
   }
 
   const saveConfig = () => {
@@ -2732,21 +2725,8 @@ function ScheduleSection({
               </li>
             ))}
           </ul>
-          <div className="mb-3 flex items-center gap-1.5">
-            <input
-              type="datetime-local"
-              value={dateTimeInput}
-              onChange={(e) => setDateTimeInput(e.target.value)}
-              className="h-8 flex-1 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-primary"
-            />
-            <button
-              onClick={addCandidate}
-              disabled={!dateTimeInput}
-              className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong px-2 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            >
-              <Plus className="size-3.5" />
-              {t('common.add')}
-            </button>
+          <div className="mb-3">
+            <ScheduleCandidateInput onAdd={addCandidate} />
           </div>
 
           <p className="mb-1.5 text-xs font-medium text-muted-foreground">{t('taskDrawer.schedule.inviteMembersLabel')}</p>

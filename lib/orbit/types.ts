@@ -691,7 +691,12 @@ export type ScheduleResponseValue = '○' | '×' | '△'
 
 export interface ScheduleCandidate {
   id: string
-  label: string // 自由記述（例: "8/30(土) 14:00〜"）— 細かい日時表現に対応するため
+  label: string // 表示用。日付+時刻入力からの自動生成、または自由記述の手動入力
+  // 「調整さん」的な日付+開始/終了時刻の個別入力(任意 — 自由記述のみの
+  // 候補には設定されない。labelの自動生成元として使う)
+  date?: string // YYYY-MM-DD
+  startTime?: string // HH:MM
+  endTime?: string // HH:MM
 }
 
 export interface TaskSchedule {

@@ -2228,7 +2228,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         createdById: currentUserId ?? undefined,
         createdAt: new Date().toISOString(),
         progressHistory: [],
-        pendingApproval: false, // admin-initiated, same as project-type templates
+        // 業務テンプレート適用も通常のタスク登録と同様、承認フローを経由させる
+        pendingApproval: true,
         dependsOnIds: (item.dependsOn ?? [])
           .map((localId) => tempIdByItemId.get(localId))
           .filter((id): id is string => !!id),
@@ -2248,7 +2249,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           priority: t.priority,
           deadline: null,
           creatorId: currentUserId ?? undefined,
-          pendingApproval: false,
+          pendingApproval: true,
         }))
         remoteApi
           .createTasks(payloads)

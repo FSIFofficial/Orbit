@@ -278,6 +278,7 @@ export const en = {
   'admin.projects.applyModal.title': 'Apply a template to “{name}”',
   'admin.projects.applyModal.desc': 'The chosen template’s tasks, including their prerequisite structure, will be added to this project.',
   'admin.projects.applyModal.toast': 'Applied “{template}” to “{project}” and added {count} tasks',
+  'admin.projects.applyModal.approvalNote': 'Added tasks go into pending approval, same as regular task registration (visible under Admin → Approvals).',
   'admin.projects.importModal.title': 'Import past tasks into “{name}”',
   'admin.projects.importModal.desc': 'Choose a source project to see its tasks. Unchecked tasks won’t be imported. Assignee, status, and deadline are reset for the new tasks.',
   'admin.projects.importModal.sourceLabel': 'Source project',
@@ -891,6 +892,8 @@ export const en = {
   'input.error.noProjects': 'No projects are registered yet. Add one from Admin → Projects first.',
   'input.error.parseFailed': 'Could not classify this. Please review and edit manually.',
   'input.excelImport': 'Import from Excel file',
+  'input.excelImport.dropHint': 'You can also drag & drop an Excel (.xlsx) file here',
+  'input.excelImport.dropActive': 'Drop to import',
   'input.demoHint': 'Use example:',
   'input.demo.buttonLabel': 'Enter 4 event-prep tasks',
   'input.parsingStatus': 'Orbit is organizing your tasks…',
@@ -947,6 +950,8 @@ export const en = {
   'input.scheduleQuickAdd.candidatesLabel': 'Candidate dates',
   'input.scheduleQuickAdd.inviteesLabel': 'Members to invite',
   'input.schedule.weekdayChars': 'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
+  'input.schedule.labelPlaceholder': 'Display label (auto-filled, editable)',
+  'input.schedule.timeRangeError': 'Start time must be before end time',
   'input.inviteToast': 'Created "{name}". It will complete automatically once all {count} invited member(s) respond.',
 
   'input.formQuickAdd.buttonLabel': 'Create a form task',
@@ -964,6 +969,10 @@ export const en = {
   'input.formQuickAdd.fieldType.select': 'Single choice',
   'input.formQuickAdd.fieldType.image': 'Image upload',
   'input.formQuickAdd.fieldType.checkbox': 'Multiple choice',
+  'input.formQuickAdd.editTab': 'Edit',
+  'input.formQuickAdd.previewTab': 'Preview',
+  'input.formQuickAdd.moveUp': 'Move up',
+  'input.formQuickAdd.moveDown': 'Move down',
 
   // ---- feedback-screen (option values themselves are not translated —
   // they must match the Google Form's submission values verbatim) ------------
