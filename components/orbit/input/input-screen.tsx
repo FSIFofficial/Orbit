@@ -23,6 +23,7 @@ import type {
 } from '@/lib/orbit/types'
 import { ParsedTaskCard } from './parsed-task-card'
 import { ExcelColumnMapping } from './excel-column-mapping'
+import { ScheduleCandidateInput } from '../schedule-candidate-input'
 import { Avatar, OrbitMark, SectionLabel, StatusBadge } from '../primitives'
 import { useI18n, DEPARTMENT_KEY, DIFFICULTY_KEY, PRIORITY_KEY } from '@/lib/orbit/i18n'
 import type { TranslationKey } from '@/lib/orbit/i18n'
@@ -40,10 +41,14 @@ import {
   ArrowRight,
   CalendarClock,
   Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
   FileSpreadsheet,
   FileText,
   History,
   LayoutTemplate,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -102,6 +107,7 @@ export function InputScreen() {
   const [sheetData, setSheetData] = useState<SheetData | null>(null)
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({})
   const [valueMaps, setValueMaps] = useState<ValueMaps>({})
+  const [isDraggingExcel, setIsDraggingExcel] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const myInputs = inputs.filter((i) => i.createdById === currentUser?.id)
@@ -164,6 +170,24 @@ export function InputScreen() {
     } catch {
       setImportError(t('input.excelImport.readError'))
     }
+  }
+
+  // ドラッグ&ドロップされた.xlsx/.xlsをボタン経由の取り込みと同じ
+  // handleExcelFile にそのまま渡す（取り込み処理自体は共通化する）
+  const handleExcelDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingExcel(false)
+    if (projects.length === 0) return
+    const file = Array.from(e.dataTransfer.files).find((f) => /\.xlsx?$/i.test(f.name))
+    if (file) void handleExcelFile(file)
+  }
+  const handleExcelDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (e.dataTransfer.types.includes('Files')) setIsDraggingExcel(true)
+  }
+  const handleExcelDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDraggingExcel(false)
   }
 
   const handleMappingChange = (field: ImportField, header: string | undefined) => {
@@ -347,7 +371,15 @@ export function InputScreen() {
           {/* Excelインポート — 列の並び・型は保証されないので、ヘッダー文字列を
               手がかりにタスク名・プロジェクトなどを判別する（lib/orbit/import-excel.ts） */}
           {phase === 'input' && projects.length > 0 && (
-            <div className="mt-3 flex justify-center">
+            <div
+              onDragOver={handleExcelDragOver}
+              onDragLeave={handleExcelDragLeave}
+              onDrop={handleExcelDrop}
+              className={cn(
+                'mt-3 flex flex-col items-center gap-1 rounded-xl border border-dashed px-3 py-2.5 transition-colors',
+                isDraggingExcel ? 'border-primary bg-primary-muted' : 'border-transparent',
+              )}
+            >
               <input
                 ref={fileInputRef}
                 type="file"
@@ -367,6 +399,9 @@ export function InputScreen() {
                 <FileSpreadsheet className="size-3.5" />
                 {t('input.excelImport')}
               </button>
+              <p className="text-[11px] text-muted-foreground">
+                {isDraggingExcel ? t('input.excelImport.dropActive') : t('input.excelImport.dropHint')}
+              </p>
             </div>
           )}
 
@@ -862,28 +897,16 @@ function ScheduleQuickAdd({
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
   const [candidates, setCandidates] = useState<ScheduleCandidate[]>([])
-  const [dateTimeInput, setDateTimeInput] = useState('')
   const [invitedIds, setInvitedIds] = useState<string[]>([])
 
-  const addCandidate = () => {
-    if (!dateTimeInput) return
-    const d = new Date(dateTimeInput)
-    const weekdayChars = t('input.schedule.weekdayChars').split(',')
-    const label = `${d.getMonth() + 1}/${d.getDate()}(${weekdayChars[d.getDay()]}) ${String(
-      d.getHours(),
-    ).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    setCandidates((prev) => [
-      ...prev,
-      { id: `sc-${Math.random().toString(36).slice(2, 9)}`, label },
-    ])
-    setDateTimeInput('')
+  const addCandidate = (candidate: ScheduleCandidate) => {
+    setCandidates((prev) => [...prev, candidate])
   }
 
   const reset = () => {
     setProjectId('')
     setName('')
     setCandidates([])
-    setDateTimeInput('')
     setInvitedIds([])
   }
 
@@ -969,22 +992,7 @@ function ScheduleQuickAdd({
               ))}
             </ul>
           )}
-          <div className="flex items-center gap-1.5">
-            <input
-              type="datetime-local"
-              value={dateTimeInput}
-              onChange={(e) => setDateTimeInput(e.target.value)}
-              className="h-9 flex-1 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-            />
-            <button
-              onClick={addCandidate}
-              disabled={!dateTimeInput}
-              className="flex h-9 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border-strong px-2.5 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            >
-              <Plus className="size-3.5" />
-              {t('input.add')}
-            </button>
-          </div>
+          <ScheduleCandidateInput onAdd={addCandidate} />
         </div>
 
         <div>
@@ -1059,6 +1067,17 @@ function FormQuickAdd({
   const [newOptions, setNewOptions] = useState('')
   const [newRequired, setNewRequired] = useState(true)
   const [invitedIds, setInvitedIds] = useState<string[]>([])
+  const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+
+  const moveField = (index: number, dir: -1 | 1) => {
+    setFields((prev) => {
+      const target = index + dir
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
 
   const addField = () => {
     if (!newLabel.trim()) return
@@ -1093,6 +1112,7 @@ function FormQuickAdd({
     setNewOptions('')
     setNewRequired(true)
     setInvitedIds([])
+    setTab('edit')
   }
 
   const submit = () => {
@@ -1157,80 +1177,183 @@ function FormQuickAdd({
         </div>
 
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">{tr('input.formQuickAdd.questionsLabel')}</p>
-          {fields.length > 0 && (
-            <ul className="mb-1.5 flex flex-col gap-1">
-              {fields.map((f) => (
-                <li
-                  key={f.id}
-                  className="flex items-center justify-between gap-2 rounded-md bg-secondary/60 px-2 py-1 text-sm"
-                >
-                  <span>
-                    {f.label}
-                    <span className="ml-1.5 text-xs text-muted-foreground">
-                      {tr('input.formQuickAdd.fieldMeta', {
-                        type: tr(FORM_FIELD_TYPE_KEY[f.type]),
-                        required: f.required ? tr('input.formQuickAdd.requiredSuffix') : '',
-                      })}
-                    </span>
-                  </span>
-                  <button
-                    onClick={() => setFields((prev) => prev.filter((x) => x.id !== f.id))}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={tr('input.delete')}
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border-strong p-2">
-            <input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder={tr('input.formQuickAdd.questionPlaceholder')}
-              className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-            />
-            <div className="flex items-center gap-1.5">
-              <select
-                value={newType}
-                onChange={(e) => setNewType(e.target.value as FormFieldType)}
-                className="h-9 flex-1 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">{tr('input.formQuickAdd.questionsLabel')}</p>
+            <div className="flex overflow-hidden rounded-md border border-border text-xs">
+              <button
+                type="button"
+                onClick={() => setTab('edit')}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1',
+                  tab === 'edit' ? 'bg-primary-muted text-primary' : 'text-muted-foreground hover:bg-secondary',
+                )}
               >
-                {(Object.keys(FORM_FIELD_TYPE_KEY) as FormFieldType[]).map((type) => (
-                  <option key={type} value={type}>
-                    {tr(FORM_FIELD_TYPE_KEY[type])}
-                  </option>
-                ))}
-              </select>
-              <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={newRequired}
-                  onChange={(e) => setNewRequired(e.target.checked)}
-                  className="size-3.5 cursor-pointer accent-primary"
-                />
-                {tr('input.formQuickAdd.required')}
-              </label>
+                <Pencil className="size-3" />
+                {tr('input.formQuickAdd.editTab')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('preview')}
+                disabled={fields.length === 0}
+                className={cn(
+                  'flex items-center gap-1 border-l border-border px-2 py-1 disabled:opacity-40',
+                  tab === 'preview' ? 'bg-primary-muted text-primary' : 'text-muted-foreground hover:bg-secondary',
+                )}
+              >
+                <Eye className="size-3" />
+                {tr('input.formQuickAdd.previewTab')}
+              </button>
             </div>
-            {(newType === 'select' || newType === 'checkbox') && (
-              <input
-                value={newOptions}
-                onChange={(e) => setNewOptions(e.target.value)}
-                placeholder={tr('input.formQuickAdd.optionsPlaceholder')}
-                className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-              />
-            )}
-            <button
-              onClick={addField}
-              disabled={!newLabel.trim()}
-              className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-dashed border-border-strong px-2.5 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
-            >
-              <Plus className="size-3.5" />
-              {tr('input.formQuickAdd.addQuestionButton')}
-            </button>
           </div>
+
+          {tab === 'edit' && (
+            <>
+              {fields.length > 0 && (
+                <ul className="mb-1.5 flex flex-col gap-1">
+                  {fields.map((f, i) => (
+                    <li
+                      key={f.id}
+                      className="flex items-center justify-between gap-2 rounded-md bg-secondary/60 px-2 py-1 text-sm"
+                    >
+                      <span>
+                        {f.label}
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          {tr('input.formQuickAdd.fieldMeta', {
+                            type: tr(FORM_FIELD_TYPE_KEY[f.type]),
+                            required: f.required ? tr('input.formQuickAdd.requiredSuffix') : '',
+                          })}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={() => moveField(i, -1)}
+                          disabled={i === 0}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                          aria-label={tr('input.formQuickAdd.moveUp')}
+                        >
+                          <ChevronUp className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => moveField(i, 1)}
+                          disabled={i === fields.length - 1}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                          aria-label={tr('input.formQuickAdd.moveDown')}
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setFields((prev) => prev.filter((x) => x.id !== f.id))}
+                          className="ml-1 text-muted-foreground hover:text-destructive"
+                          aria-label={tr('input.delete')}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border-strong p-2">
+                <input
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder={tr('input.formQuickAdd.questionPlaceholder')}
+                  className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                />
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value as FormFieldType)}
+                    className="h-9 flex-1 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                  >
+                    {(Object.keys(FORM_FIELD_TYPE_KEY) as FormFieldType[]).map((type) => (
+                      <option key={type} value={type}>
+                        {tr(FORM_FIELD_TYPE_KEY[type])}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={newRequired}
+                      onChange={(e) => setNewRequired(e.target.checked)}
+                      className="size-3.5 cursor-pointer accent-primary"
+                    />
+                    {tr('input.formQuickAdd.required')}
+                  </label>
+                </div>
+                {(newType === 'select' || newType === 'checkbox') && (
+                  <input
+                    value={newOptions}
+                    onChange={(e) => setNewOptions(e.target.value)}
+                    placeholder={tr('input.formQuickAdd.optionsPlaceholder')}
+                    className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                  />
+                )}
+                <button
+                  onClick={addField}
+                  disabled={!newLabel.trim()}
+                  className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-dashed border-border-strong px-2.5 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
+                >
+                  <Plus className="size-3.5" />
+                  {tr('input.formQuickAdd.addQuestionButton')}
+                </button>
+              </div>
+            </>
+          )}
+
+          {tab === 'preview' && (
+            <div className="rounded-lg border border-border bg-secondary/40 p-3">
+              <p className="mb-3 text-sm font-medium">{name.trim() || tr('input.formQuickAdd.taskNamePlaceholder')}</p>
+              <div className="flex flex-col gap-3">
+                {fields.map((f) => (
+                  <div key={f.id}>
+                    <p className="mb-1 text-sm">
+                      {f.label}
+                      {f.required && <span className="ml-0.5 text-destructive">*</span>}
+                    </p>
+                    {f.type === 'text' && (
+                      <input
+                        disabled
+                        className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm outline-none"
+                      />
+                    )}
+                    {f.type === 'textarea' && (
+                      <textarea
+                        disabled
+                        rows={3}
+                        className="w-full resize-none rounded-md border border-border bg-card px-2 py-1.5 text-sm outline-none"
+                      />
+                    )}
+                    {f.type === 'select' && (
+                      <select disabled className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm outline-none">
+                        <option>{tr('common.selectPlaceholder')}</option>
+                        {(f.options ?? []).map((o) => (
+                          <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    )}
+                    {f.type === 'checkbox' && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(f.options ?? []).map((o) => (
+                          <span
+                            key={o}
+                            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
+                          >
+                            {o}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {f.type === 'image' && <input type="file" disabled accept="image/*" className="text-sm" />}
+                  </div>
+                ))}
+              </div>
+              <Button className="mt-3 h-8 w-full" disabled>
+                {tr('taskDrawer.submitResponse')}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div>

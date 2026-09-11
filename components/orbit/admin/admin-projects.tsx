@@ -615,6 +615,9 @@ export function AdminProjects() {
         <p className="mt-1 text-sm text-muted-foreground">
           {t('admin.projects.applyModal.desc')}
         </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('admin.projects.applyModal.approvalNote')}
+        </p>
         <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto orbit-scroll">
           {taskSetTemplates.map((tst) => (
             <button

@@ -278,6 +278,7 @@ export const ja = {
   'admin.projects.applyModal.title': '「{name}」にテンプレートを適用',
   'admin.projects.applyModal.desc': '選んだテンプレートのタスクが、前提タスク構造ごとこのプロジェクトに追加されます。',
   'admin.projects.applyModal.toast': '「{template}」を「{project}」に適用し、{count}件のタスクを追加しました',
+  'admin.projects.applyModal.approvalNote': '追加されたタスクは通常のタスク登録と同様、承認待ちの状態になります（Admin → 承認で確認できます）。',
   'admin.projects.importModal.title': '「{name}」に過去のタスクを取り込む',
   'admin.projects.importModal.desc': '取込元のプロジェクトを選ぶと、そのタスク一覧が表示されます。チェックを外したタスクは取り込まれません。担当・状態・期限は新規タスクとしてリセットされます。',
   'admin.projects.importModal.sourceLabel': '取込元プロジェクト',
@@ -891,6 +892,8 @@ export const ja = {
   'input.error.noProjects': 'プロジェクトが1件も登録されていません。先にAdmin → Projectsから登録してください。',
   'input.error.parseFailed': '分類できませんでした。内容を確認して手動で編集してください。',
   'input.excelImport': 'Excelファイルから読み込む',
+  'input.excelImport.dropHint': 'ここにExcelファイル（.xlsx）をドラッグ&ドロップもできます',
+  'input.excelImport.dropActive': 'ドロップして読み込む',
   'input.demoHint': '例文を使う:',
   'input.demo.buttonLabel': 'イベント準備の4タスクを入力',
   'input.parsingStatus': 'Orbitがタスクを整理しています…',
@@ -947,6 +950,8 @@ export const ja = {
   'input.scheduleQuickAdd.candidatesLabel': '候補日時',
   'input.scheduleQuickAdd.inviteesLabel': '招待するメンバー',
   'input.schedule.weekdayChars': '日,月,火,水,木,金,土',
+  'input.schedule.labelPlaceholder': '候補の表示名（自動入力・編集可）',
+  'input.schedule.timeRangeError': '開始時刻は終了時刻より前にしてください',
   'input.inviteToast': '「{name}」を作成しました。招待した{count}人が全員回答すると自動的に完了します',
 
   'input.formQuickAdd.buttonLabel': 'フォームタスクを作成',
@@ -964,6 +969,10 @@ export const ja = {
   'input.formQuickAdd.fieldType.select': '単一選択',
   'input.formQuickAdd.fieldType.image': '画像アップロード',
   'input.formQuickAdd.fieldType.checkbox': '複数選択',
+  'input.formQuickAdd.editTab': '編集',
+  'input.formQuickAdd.previewTab': 'プレビュー',
+  'input.formQuickAdd.moveUp': '上に移動',
+  'input.formQuickAdd.moveDown': '下に移動',
 
   // ---- feedback-screen（選択肢の値自体はGoogleフォームの送信値と一致させる
   // 必要があるため翻訳対象外。固定UI文言のみ翻訳する）--------------------------
