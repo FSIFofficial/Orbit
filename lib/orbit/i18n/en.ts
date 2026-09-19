@@ -1551,7 +1551,6 @@ export const en = {
   'admin.memberDb.col.joinedAt': 'Join date',
   'admin.memberDb.col.careerAspiration': 'Career goal',
   'admin.memberDb.col.desiredFutureRole': 'Desired role',
-  'admin.memberDb.col.email': 'Email',
   'admin.memberDb.col.university': 'University',
   'admin.memberDb.col.faculty': 'Faculty',
   'admin.memberDb.col.departmentName': 'Department',

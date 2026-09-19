@@ -89,7 +89,7 @@ const SCREEN_OPTION_KEY: Record<string, TranslationKey> = {
 const ORG_NAME_KEY = 'orbit_feedback_org_name'
 
 export function FeedbackScreen() {
-  const { currentUser } = useOrbit()
+  const { currentUser, myEmail } = useOrbit()
   const { goBack } = useNav()
   const { t } = useI18n()
 
@@ -383,7 +383,7 @@ export function FeedbackScreen() {
                     setWantReply(r)
                     if (r === '返信してほしい' && currentUser) {
                       if (!yourName) setYourName(currentUser.displayName || currentUser.name || '')
-                      if (!email) setEmail(currentUser.email ?? '')
+                      if (!email) setEmail(myEmail || '')
                     }
                   }}
                   className="size-4 accent-primary"

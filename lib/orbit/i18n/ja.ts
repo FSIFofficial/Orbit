@@ -1554,7 +1554,6 @@ export const ja = {
   'admin.memberDb.col.joinedAt': '所属開始日',
   'admin.memberDb.col.careerAspiration': 'キャリア目標',
   'admin.memberDb.col.desiredFutureRole': '希望役職',
-  'admin.memberDb.col.email': 'メール',
   'admin.memberDb.col.university': '大学名',
   'admin.memberDb.col.faculty': '学部',
   'admin.memberDb.col.departmentName': '学科',
