@@ -20,7 +20,6 @@ var SHEET_TASKS = 'Tasks'
 // Membersシートからemail列を分離した意味が無くなる。email列をMembersシートから
 // 分離し、認証済みのGASアクション(resolveLogin/getMyEmails/updateEmail)経由
 // でのみ読み書きすることで、公開CSV経由での全員分メアド漏洩を防ぐ。
-// 既存データの移行は migrateMemberEmailsToPrivateSheet() を参照。
 var SHEET_MEMBER_EMAILS = 'MemberEmails'
 var MEMBER_EMAILS_HEADERS = ['id', 'email']
 // optional 4th tab — key/value rows syncing the skill/category/role-level
@@ -77,9 +76,7 @@ function setupOrbit() {
   // --- ヘッダー行の確認・追加 ---
   var MEMBERS_HEADERS = [
     // email列はここにはもう無い(MemberEmailsという非公開シートに分離した —
-    // このシートは公開CSVとして配信されるため)。既存スプレッドシートで
-    // まだMembers.emailに値が残っている場合は migrateMemberEmailsToPrivateSheet()
-    // を一度実行して移行すること。
+    // このシートは公開CSVとして配信されるため)。
     'id', 'name', 'role', 'notify_new_task', 'display_name',
     'avatar_url', 'avatar_color', 'avatar_initials',
     'will_tags', 'judgment_tags',
@@ -141,8 +138,6 @@ function setupOrbit() {
   ensureSheetHeaders(ss, SHEET_SETTINGS,      SETTINGS_HEADERS)
   // MemberEmailsは新規作成した場合デフォルトで非公開(「ウェブに公開」未設定)
   // なので、ここで作成するだけでMembersのemail列を分離した効果が出る。
-  // 既存スプレッドシートでMembers.emailに値が残っている場合は、この後
-  // migrateMemberEmailsToPrivateSheet() を一度実行すること。
   ensureSheetHeaders(ss, SHEET_MEMBER_EMAILS, MEMBER_EMAILS_HEADERS)
 
   // --- Settings の初期キーを確保（上書きはしない）---
@@ -1747,7 +1742,7 @@ function debugNotifyTest() {
   )
 
   if (Object.keys(emailMap).length === 0) {
-    console.warn('MemberEmailsシートにメールが1件もありません。移行(migrateMemberEmailsToPrivateSheet)を実行したか確認してください。')
+    console.warn('MemberEmailsシートにメールが1件も登録されていません。個人ページの「アカウント設定」でメンバー各自が登録する必要があります。')
   } else if (idCol !== -1) {
     var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
     rows.forEach(function (r, i) {
@@ -2636,74 +2631,6 @@ function findMemberIdByEmail(email) {
     if (emails.indexOf(normalized) !== -1) return String(values[i][idCol])
   }
   return null
-}
-
-// ---- 一括移行: Membersシートのemail列 → MemberEmails(非公開シート) -----------
-//
-// セキュリティ対応: Membersシートは「ウェブに公開」されたCSVとして配信されて
-// おり(gas/README.md参照)、メンバーのメールアドレスをそこに置いたままだと
-// 誰でも読めてしまう。この関数は既存のemail列の値をすべて非公開の
-// MemberEmailsシートへコピーし、コピーを確認できた行だけ元のemail列を空にする。
-//
-// 実行方法: GASエディタ上部の関数ドロップダウンで
-// "migrateMemberEmailsToPrivateSheet" を選び、▶ 実行する(1回でOK)。
-// 何度実行しても安全(既に移行済みの行はコピーをスキップし、空にする処理のみ行う)。
-function migrateMemberEmailsToPrivateSheet() {
-  var membersSheet = getSheet(SHEET_MEMBERS)
-  var headers = headerRow(membersSheet)
-  var idCol = headers.indexOf('id')
-  var emailCol = headers.indexOf('email')
-  if (idCol < 0) {
-    console.error('❌ Membersシートに id 列がありません')
-    return
-  }
-  if (emailCol < 0) {
-    console.log('✅ Membersシートに email 列はもうありません(移行済み)')
-    return
-  }
-
-  var lastRow = membersSheet.getLastRow()
-  if (lastRow < 2) {
-    console.log('対象行なし')
-    return
-  }
-  var values = membersSheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
-
-  var emailSheet = getMemberEmailsSheet()
-  var emailHeaders = headerRow(emailSheet)
-  var eIdCol = emailHeaders.indexOf('id')
-  var existingIds = {}
-  var eLastRow = emailSheet.getLastRow()
-  if (eLastRow > 1) {
-    var eValues = emailSheet.getRange(2, 1, eLastRow - 1, emailHeaders.length).getValues()
-    eValues.forEach(function (r) {
-      existingIds[String(r[eIdCol])] = true
-    })
-  }
-
-  var migrated = 0
-  var alreadyMigrated = 0
-  var blanked = 0
-  for (var i = 0; i < values.length; i++) {
-    var memberId = String(values[i][idCol])
-    var email = String(values[i][emailCol] || '')
-    if (!email) continue
-    if (!existingIds[memberId]) {
-      emailSheet.appendRow([memberId, email])
-      existingIds[memberId] = true
-      migrated++
-    } else {
-      alreadyMigrated++
-    }
-    // この時点でMemberEmails側に値がある(今コピーしたか、既に移行済み)ため、
-    // Membersシート側は空にして公開CSVに載らないようにする。
-    membersSheet.getRange(i + 2, emailCol + 1).setValue('')
-    blanked++
-  }
-  console.log(
-    '✅ 移行完了: ' + migrated + '件コピー、' + alreadyMigrated + '件は既に移行済み、' +
-    blanked + '件のMembers.email列を空にしました',
-  )
 }
 
 // Saves a profile picture (sent as a data: URL, already resized client-side)
