@@ -224,7 +224,9 @@ interface OrbitContextValue extends OrbitState {
   setOrgLogoUrl: (url: string) => void
   themeColor: string
   setThemeColor: (color: string) => void
-  setDiscordWebhookUrl: (url: string) => void
+  // 保存だけでなく実際にテストメッセージを送って接続確認する
+  // (「保存しました」表示だけでは本当に届くかは分からないため)
+  setDiscordWebhookUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
   addRecurringRule: (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   removeRecurringRule: (ruleId: string) => void
   toggleRecurringRule: (ruleId: string) => void
@@ -239,7 +241,7 @@ interface OrbitContextValue extends OrbitState {
   clearSkillCertifiedEvent: () => void
   markMentionSeen: (commentId: string) => void
   dismissNotification: (notificationId: string) => void
-  setSlackWebhookUrl: (url: string) => void
+  setSlackWebhookUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
   toggleMemberInactive: (memberId: string) => void
   updateMemberDepartmentPath: (memberId: string, departmentPath: string) => void
   updateAbsentDates: (memberId: string, dates: string[]) => void
@@ -1478,11 +1480,28 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // Webhook URLはApps ScriptのPropertiesService（非公開）に保存され、
   // Settingsシート（公開CSV）には一切乗らないので、クライアント側で読み
   // 返す手段は意図的に用意していない（gas/README.md §4.7）。
+  // 保存しただけでは本当にDiscordに届くか分からない(URLの入力ミス等が
+  // 「保存しました」表示のまま気づかれない)ため、保存直後に実際にテスト
+  // メッセージを送信し、成否をUI側に返す(org-settings-screen.tsxでトースト表示)
   const setDiscordWebhookUrl = useCallback(
-    (url: string) => {
-      if (isRemoteConfigured) runRemote(remoteApi.updateDiscordWebhookUrl(url))
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!isRemoteConfigured) return { ok: false, error: 'GASが未接続です' }
+      try {
+        await remoteApi.updateDiscordWebhookUrl(url)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        reportRemoteError(err)
+        return { ok: false, error: message }
+      }
+      if (!url) return { ok: true }
+      try {
+        await remoteApi.testDiscordWebhook()
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
     },
-    [runRemote],
+    [reportRemoteError],
   )
 
   // SKL-010: スキルレベルアップ閾値の設定（Admin > Tags）。awardSkillPoints・
@@ -4131,13 +4150,28 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [currentUserId],
   )
 
-  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存
+  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存。
+  // 保存直後に実際にテストメッセージを送信して接続確認する（setDiscordWebhookUrlと同じ理由）
   const setSlackWebhookUrl = useCallback(
-    (url: string) => {
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
       setSlackWebhookUrlState(url)
-      if (isRemoteConfigured) runRemote(remoteApi.updateSlackWebhookUrl(url))
+      if (!isRemoteConfigured) return { ok: false, error: 'GASが未接続です' }
+      try {
+        await remoteApi.updateSlackWebhookUrl(url)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        reportRemoteError(err)
+        return { ok: false, error: message }
+      }
+      if (!url) return { ok: true }
+      try {
+        await remoteApi.testSlackWebhook()
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
     },
-    [runRemote],
+    [reportRemoteError],
   )
 
   // item 20: 1on1質問項目を更新

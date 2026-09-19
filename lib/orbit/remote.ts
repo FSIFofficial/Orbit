@@ -778,6 +778,11 @@ export const remoteApi = {
   // public read path — write-only from the client's perspective.
   updateDiscordWebhookUrl: (url: string) => postToGas('updateDiscordWebhookUrl', { url }),
   updateSlackWebhookUrl: (url: string) => postToGas('updateSlackWebhookUrl', { url }),
+  // 保存済みのWebhook URLへ実際にテストメッセージを送信し、HTTPレスポンス
+  // コードで成否を判定する(send*Messageと違いここでは失敗を握りつぶさない —
+  // 失敗時はGAS側がエラーを投げ、postToGas経由でここもrejectする)
+  testDiscordWebhook: () => postToGas('testDiscordWebhook', {}),
+  testSlackWebhook: () => postToGas('testSlackWebhook', {}),
   updateMemberInactive: (memberId: string, inactive: boolean) =>
     postToGas('updateMemberInactive', { memberId, inactive }),
   updateMemberDepartmentPath: (memberId: string, departmentPath: string) =>

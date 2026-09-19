@@ -577,7 +577,7 @@ function authorizeAction(acting, action, body) {
   // restricted_roles に含まれないロール) であれば許可。「事業責任者を代表と
   // 同格にするか」は団体ごとのrestricted_roles設定で選べるようにするため、
   // daihyoOnly固定ではなくこちらを使う。
-  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'updateProjectHealth') {
+  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'testDiscordWebhook' || action === 'testSlackWebhook' || action === 'updateProjectHealth') {
     if (isActingFullAdmin(acting)) return
     if (checkPermissionOverride(acting, action, body)) return
     throw new Error('この操作は代表または全権管理者のみ実行できます。')
@@ -1283,6 +1283,12 @@ function doPost(e) {
         break
       case 'updateSlackWebhookUrl':
         result = updateSlackWebhookUrl(body.url)
+        break
+      case 'testDiscordWebhook':
+        result = testDiscordWebhook()
+        break
+      case 'testSlackWebhook':
+        result = testSlackWebhook()
         break
       case 'updateMemberProjects':
         result = updateMemberFields(body.memberId, {
@@ -3365,6 +3371,54 @@ function sendSlackMessage(content) {
 function notifyChat(content) {
   sendDiscordMessage(content)
   sendSlackMessage(content)
+}
+
+// ---- Webhook接続テスト ------------------------------------------------------
+//
+// send*Message()はタスク通知に相乗りするbest-effort実装で、例外もHTTPの
+// 失敗レスポンスも握りつぶす(muteHttpExceptions:true + try/catchで無視)ため、
+// 「本当につながっているか」の確認には使えない。こちらは実際にテスト
+// メッセージを送信し、HTTPレスポンスコードを見て成否を判定・例外化する
+// (呼び出し元のAdmin → Tags画面で保存直後に呼ばれ、結果がそのままトースト
+// 表示される)。
+
+function testDiscordWebhook() {
+  var url = getDiscordWebhookUrl()
+  if (!url) throw new Error('Discord Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      content: '✅ Orbitとの連携テストです。このメッセージが届いていればDiscordへの通知設定は正常です。',
+      allowed_mentions: { parse: [] },
+    }),
+    muteHttpExceptions: true,
+  })
+  var code = resp.getResponseCode()
+  // Discordの正常応答は204 No Content
+  if (code < 200 || code >= 300) {
+    throw new Error('Discordへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+  }
+  return { tested: true }
+}
+
+function testSlackWebhook() {
+  var url = getSlackWebhookUrl()
+  if (!url) throw new Error('Slack Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      text: '✅ Orbitとの連携テストです。このメッセージが届いていればSlackへの通知設定は正常です。',
+    }),
+    muteHttpExceptions: true,
+  })
+  var code = resp.getResponseCode()
+  // Slack Incoming Webhookの正常応答は200(本文 "ok")
+  if (code < 200 || code >= 300) {
+    throw new Error('Slackへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+  }
+  return { tested: true }
 }
 
 // タスク名・説明など自由入力テキストの自動翻訳（多言語対応、item: i18n）。
