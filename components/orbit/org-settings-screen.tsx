@@ -52,6 +52,36 @@ export function OrgSettingsScreen() {
   const [orgEmailDraft, setOrgEmailDraft] = useState('')
   const [discordDraft, setDiscordDraft] = useState('')
   const [slackDraft, setSlackDraft] = useState('')
+  const [discordTesting, setDiscordTesting] = useState(false)
+  const [slackTesting, setSlackTesting] = useState(false)
+
+  // 保存するだけでなく実際にテストメッセージを送って接続確認する
+  // (URLの入力ミス等があっても「保存しました」しか出ないと気づけないため)
+  const handleSaveDiscord = async () => {
+    const url = discordDraft.trim()
+    setDiscordTesting(true)
+    const result = await setDiscordWebhookUrl(url)
+    setDiscordTesting(false)
+    if (result.ok) {
+      setDiscordDraft('')
+      toast(url ? t('orgSettings.discord.testSuccessToast') : t('orgSettings.discord.savedToast'))
+    } else {
+      toast(t('orgSettings.discord.testFailToast', { error: result.error ?? '' }))
+    }
+  }
+
+  const handleSaveSlack = async () => {
+    const url = slackDraft.trim()
+    setSlackTesting(true)
+    const result = await setSlackWebhookUrl(url)
+    setSlackTesting(false)
+    if (result.ok) {
+      setSlackDraft('')
+      toast(url ? t('orgSettings.slack.testSuccessToast') : t('orgSettings.slack.savedToast'))
+    } else {
+      toast(t('orgSettings.slack.testFailToast', { error: result.error ?? '' }))
+    }
+  }
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoFileRef = useRef<HTMLInputElement>(null)
 
@@ -252,8 +282,13 @@ export function OrgSettingsScreen() {
               placeholder="https://discord.com/api/webhooks/..."
               className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             />
-            <Button className="h-9 shrink-0" disabled={!discordDraft.trim() || !remoteOk} onClick={() => { setDiscordWebhookUrl(discordDraft.trim()); setDiscordDraft(''); toast(t('orgSettings.discord.savedToast')) }}>
-              {t('orgSettings.nameLogo.save')}
+            <Button
+              className="h-9 shrink-0"
+              disabled={!discordDraft.trim() || !remoteOk || discordTesting}
+              onClick={handleSaveDiscord}
+            >
+              {discordTesting && <Loader2 className="size-3.5 animate-spin" />}
+              {discordTesting ? t('orgSettings.discord.testingLabel') : t('orgSettings.nameLogo.save')}
             </Button>
           </div>
           {/* setDiscordWebhookUrlはupdateSetting相当・isActingFullAdmin基準 */}
@@ -278,8 +313,13 @@ export function OrgSettingsScreen() {
               placeholder="https://hooks.slack.com/services/..."
               className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
             />
-            <Button className="h-9 shrink-0" disabled={!slackDraft.trim() || !remoteOk} onClick={() => { setSlackWebhookUrl(slackDraft.trim()); setSlackDraft(''); toast(t('orgSettings.slack.savedToast')) }}>
-              {t('orgSettings.nameLogo.save')}
+            <Button
+              className="h-9 shrink-0"
+              disabled={!slackDraft.trim() || !remoteOk || slackTesting}
+              onClick={handleSaveSlack}
+            >
+              {slackTesting && <Loader2 className="size-3.5 animate-spin" />}
+              {slackTesting ? t('orgSettings.slack.testingLabel') : t('orgSettings.nameLogo.save')}
             </Button>
           </div>
           {/* setSlackWebhookUrlはupdateSetting相当・isActingFullAdmin基準 */}

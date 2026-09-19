@@ -147,7 +147,9 @@ export function exportAllDataToExcel(tasks: Task[], projects: Project[], members
     氏名: m.displayName || m.name,
     所属: m.affiliation,
     役割: m.role,
-    メール: m.email ?? '',
+    // メール列はここには無い — セキュリティ対応でMembersの公開CSVから
+    // 分離し、認証済みのGASアクション経由でしか読めなくなったため、
+    // 一括Excel出力の対象からも外している
     要求スキル: m.skills.join('、'),
     スキルレベル: (m.skillLevels ?? []).map((sl) => `${sl.skill}:Lv${sl.level}`).join('、'),
     所属開始日: m.joinedAt ?? '',

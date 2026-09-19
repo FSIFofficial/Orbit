@@ -14,7 +14,7 @@ import {
 } from '@/lib/orbit/google-sheet-sync'
 
 export function LoginScreen() {
-  const { login, members } = useOrbit()
+  const { login, resolveLoginMember } = useOrbit()
   const { t } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
@@ -36,15 +36,9 @@ export function LoginScreen() {
       // for server-side authentication without re-prompting the user.
       setGasAuthToken(token)
       const userInfo = await fetchGoogleUserInfo(token)
-      const email = userInfo.email.toLowerCase()
-      const matched = members.find((m) =>
-        (m.email ?? '')
-          .split(',')
-          .map((e) => e.trim().toLowerCase())
-          .includes(email),
-      )
-      if (matched) {
-        login(matched.id)
+      const matchedId = await resolveLoginMember(userInfo.email)
+      if (matchedId) {
+        login(matchedId)
       } else {
         setGasAuthToken(null)
         setLoginError(t('login.notRegistered', { email: userInfo.email }))

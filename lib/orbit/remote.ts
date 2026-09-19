@@ -212,7 +212,10 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     // Talent matching (design doc §7) scores on will+judgment tags; skills
     // is derived from the same two so the existing matching UI keeps working.
     skills: [...will, ...judgment],
-    email: r.email || undefined,
+    // email はここでは読まない — セキュリティ対応でMembersシート(公開CSV)から
+    // 分離し、非公開のMemberEmailsシートへ移した(resolveLogin/getMyEmails/
+    // updateEmail経由でのみ扱う)。ここで拾ってしまうと全メンバー分のメール
+    // アドレスがまた一括で全クライアントに配信されてしまう
     notify: /^(true|1|yes)$/i.test((r.notify_new_task || '').trim()),
     notifySettings: parseJsonObject<Partial<Record<NotifyKind, NotifyFrequency>>>(r.notify_settings),
     displayName: r.display_name || undefined,
@@ -759,6 +762,13 @@ export const remoteApi = {
   addMember: (name: string, email: string, affiliation: string, role: Role) =>
     postToGas<{ id: string }>('addMember', { name, email, affiliation, role }),
   updateEmail: (memberId: string, email: string) => postToGas('updateEmail', { memberId, email }),
+  // ログイン時にGoogleでログインしたメールアドレス(送信済みauthToken)から
+  // 該当メンバーIdを解決する。メール自体はやり取りせず、サーバー側の
+  // 非公開MemberEmailsシートと突き合わせた結果(memberId、無ければnull)のみ返す
+  resolveLogin: () => postToGas<{ memberId: string | null }>('resolveLogin', {}),
+  // 自分自身の登録メール(カンマ区切り)を取得する。actingMember基準で
+  // サーバー側が自分の分のみ返すため、他人のメールを取得する手段にはならない
+  getMyEmails: () => postToGas<{ email: string }>('getMyEmails', {}),
   updateSetting: (key: string, value: string) => postToGas('updateSetting', { key, value }),
   // Discord Webhook 連携 — deliberately NOT part of updateSetting/Settings
   // シート同期: that sheet is published as a public CSV like the other
@@ -768,6 +778,11 @@ export const remoteApi = {
   // public read path — write-only from the client's perspective.
   updateDiscordWebhookUrl: (url: string) => postToGas('updateDiscordWebhookUrl', { url }),
   updateSlackWebhookUrl: (url: string) => postToGas('updateSlackWebhookUrl', { url }),
+  // 保存済みのWebhook URLへ実際にテストメッセージを送信し、HTTPレスポンス
+  // コードで成否を判定する(send*Messageと違いここでは失敗を握りつぶさない —
+  // 失敗時はGAS側がエラーを投げ、postToGas経由でここもrejectする)
+  testDiscordWebhook: () => postToGas('testDiscordWebhook', {}),
+  testSlackWebhook: () => postToGas('testSlackWebhook', {}),
   updateMemberInactive: (memberId: string, inactive: boolean) =>
     postToGas('updateMemberInactive', { memberId, inactive }),
   updateMemberDepartmentPath: (memberId: string, departmentPath: string) =>

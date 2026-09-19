@@ -15,6 +15,14 @@
 var SHEET_MEMBERS = 'Members'
 var SHEET_PROJECTS = 'Projects'
 var SHEET_TASKS = 'Tasks'
+// メンバーのメールアドレス専用の非公開シート。Members/Projects/Tasksと違い、
+// 「ウェブに公開」は絶対にしないこと — このシートだけ公開してしまうと、
+// Membersシートからemail列を分離した意味が無くなる。email列をMembersシートから
+// 分離し、認証済みのGASアクション(resolveLogin/getMyEmails/updateEmail)経由
+// でのみ読み書きすることで、公開CSV経由での全員分メアド漏洩を防ぐ。
+// 既存データの移行は migrateMemberEmailsToPrivateSheet() を参照。
+var SHEET_MEMBER_EMAILS = 'MemberEmails'
+var MEMBER_EMAILS_HEADERS = ['id', 'email']
 // optional 4th tab — key/value rows syncing the skill/category/role-level
 // option pools and project templates; see gas/README.md. Missing sheet is
 // fine, updateSetting() creates it on first write.
@@ -68,7 +76,11 @@ function setupOrbit() {
 
   // --- ヘッダー行の確認・追加 ---
   var MEMBERS_HEADERS = [
-    'id', 'name', 'email', 'role', 'notify_new_task', 'display_name',
+    // email列はここにはもう無い(MemberEmailsという非公開シートに分離した —
+    // このシートは公開CSVとして配信されるため)。既存スプレッドシートで
+    // まだMembers.emailに値が残っている場合は migrateMemberEmailsToPrivateSheet()
+    // を一度実行して移行すること。
+    'id', 'name', 'role', 'notify_new_task', 'display_name',
     'avatar_url', 'avatar_color', 'avatar_initials',
     'will_tags', 'judgment_tags',
     'reports_to_id', 'mentor_id', 'joined_at', 'unavailable_dates', 'project_ids',
@@ -123,10 +135,15 @@ function setupOrbit() {
   ]
   var SETTINGS_HEADERS = ['key', 'value']
 
-  ensureSheetHeaders(ss, SHEET_MEMBERS,  MEMBERS_HEADERS)
-  ensureSheetHeaders(ss, SHEET_PROJECTS, PROJECTS_HEADERS)
-  ensureSheetHeaders(ss, SHEET_TASKS,    TASKS_HEADERS)
-  ensureSheetHeaders(ss, SHEET_SETTINGS, SETTINGS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_MEMBERS,       MEMBERS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_PROJECTS,      PROJECTS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_TASKS,         TASKS_HEADERS)
+  ensureSheetHeaders(ss, SHEET_SETTINGS,      SETTINGS_HEADERS)
+  // MemberEmailsは新規作成した場合デフォルトで非公開(「ウェブに公開」未設定)
+  // なので、ここで作成するだけでMembersのemail列を分離した効果が出る。
+  // 既存スプレッドシートでMembers.emailに値が残っている場合は、この後
+  // migrateMemberEmailsToPrivateSheet() を一度実行すること。
+  ensureSheetHeaders(ss, SHEET_MEMBER_EMAILS, MEMBER_EMAILS_HEADERS)
 
   // --- Settings の初期キーを確保（上書きはしない）---
   var DEFAULT_SETTINGS = [
@@ -248,19 +265,21 @@ function verifyToken(accessToken) {
  * Returns { id, role, project_ids } or throws if not found.
  */
 function getActingMember(email) {
+  // メール→メンバーIDの解決は非公開のMemberEmailsシート側で行う(Membersシートは
+  // 公開CSVなのでemail列を置いていない — SHEET_MEMBER_EMAILS参照)。
+  var memberId = findMemberIdByEmail(email)
+  if (!memberId) throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+
   var sheet = getSheet(SHEET_MEMBERS)
   var headers = headerRow(sheet)
-  var emailCol = headers.indexOf('email')
   var idCol = headers.indexOf('id')
   var roleCol = headers.indexOf('role')
   var projectIdsCol = headers.indexOf('project_ids')
   var overridesCol = headers.indexOf('permission_overrides_json')
-  if (emailCol < 0 || idCol < 0) throw new Error('Membersシートの構造が不正です。')
+  if (idCol < 0) throw new Error('Membersシートの構造が不正です。')
   var data = sheet.getDataRange().getValues()
-  var lc = email.toLowerCase()
   for (var i = 1; i < data.length; i++) {
-    var rowEmails = String(data[i][emailCol] || '').split(',').map(function (e) { return e.trim().toLowerCase() })
-    if (rowEmails.indexOf(lc) >= 0) {
+    if (String(data[i][idCol]) === memberId) {
       var overrides = []
       if (overridesCol >= 0) {
         try { overrides = JSON.parse(data[i][overridesCol] || '[]') } catch (_) {}
@@ -273,6 +292,8 @@ function getActingMember(email) {
       }
     }
   }
+  // MemberEmails側には行があるがMembers側に対応する行が無い(データ不整合) —
+  // 通常起こらないはずだが、安全側に倒して「見つからない」として扱う
   throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
 }
 
@@ -556,7 +577,7 @@ function authorizeAction(acting, action, body) {
   // restricted_roles に含まれないロール) であれば許可。「事業責任者を代表と
   // 同格にするか」は団体ごとのrestricted_roles設定で選べるようにするため、
   // daihyoOnly固定ではなくこちらを使う。
-  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'updateProjectHealth') {
+  if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'testDiscordWebhook' || action === 'testSlackWebhook' || action === 'updateProjectHealth') {
     if (isActingFullAdmin(acting)) return
     if (checkPermissionOverride(acting, action, body)) return
     throw new Error('この操作は代表または全権管理者のみ実行できます。')
@@ -839,6 +860,7 @@ function authorizeAction(acting, action, body) {
     'approveTaskReview',       // 複数確認者の承認（本人が確認者かどうかは下記でチェック）
     'checkAndGenerateRecurringTasks', // item 2/TSK-051: 生成はルール定義に従うだけなので誰でも呼べる
     'applyToOpenBid',          // TSK-027: 担当者未定タスクへの自己応募。既存の自己アサインと同等の緩さでよい
+    'getMyEmails',             // 自分自身のメールを読むだけ(常にacting.id基準、bodyのmemberIdは見ない)なので誰でも呼べる
   ]
   if (anyLoggedIn.indexOf(action) >= 0) {
     // updateTaskStatus: 全権管理者は制限なし。「完了」は確認者のみ可。それ以外は担当者のみ可。
@@ -893,6 +915,21 @@ function doPost(e) {
   var result
   try {
     var body = JSON.parse(e.postData.contents)
+
+    // resolveLogin: ログイン処理そのもの — まだ「自分がどのメンバーか」が
+    // 分かっていない状態で呼ばれる特別な読み取り専用アクションなので、他の
+    // アクションのようなactingMember解決/authorizeActionの前提チェックを
+    // 経由せず、ここで完結させる。トークンからメールを検証・抽出し、
+    // 非公開のMemberEmailsシートと突き合わせるだけで、メール自体は
+    // クライアントに返さずmemberIdのみ返す。
+    if (body.action === 'resolveLogin') {
+      try {
+        var loginEmail = verifyToken(body.authToken || '').email
+        return jsonOutput({ ok: true, result: { memberId: findMemberIdByEmail(loginEmail) } })
+      } catch (loginErr) {
+        return jsonOutput({ ok: false, error: String(loginErr) })
+      }
+    }
 
     // ---- Token verification & authorization --------------------------------
     // Every write must carry an authToken (Google access token obtained at
@@ -1226,7 +1263,14 @@ function doPost(e) {
         })
         break
       case 'updateEmail':
-        result = updateMemberFields(body.memberId, { email: body.email || '' })
+        setMemberEmail(body.memberId, body.email || '')
+        result = { updated: true }
+        break
+      case 'getMyEmails':
+        // 自分自身のメールのみ返す(actingMember.idはトークン検証済みなので、
+        // クライアントが送るmemberIdを信用する必要が無い — 他人のメールを
+        // 覗く抜け道にならない)
+        result = { email: getMemberEmailValue(actingMember.id) }
         break
       case 'updateSetting':
         result = updateSetting(body.key, body.value)
@@ -1239,6 +1283,12 @@ function doPost(e) {
         break
       case 'updateSlackWebhookUrl':
         result = updateSlackWebhookUrl(body.url)
+        break
+      case 'testDiscordWebhook':
+        result = testDiscordWebhook()
+        break
+      case 'testSlackWebhook':
+        result = testSlackWebhook()
         break
       case 'updateMemberProjects':
         result = updateMemberFields(body.memberId, {
@@ -1687,23 +1737,27 @@ function debugNotifyTest() {
   var headers = headerRow(sheet)
   console.log('Members sheet headers: ' + headers.join(', '))
 
-  var emailCol = headers.indexOf('email')
+  var idCol = headers.indexOf('id')
   var notifyCol = headers.indexOf('notify_new_task')
   var roleCol = headers.indexOf('role')
+  var emailMap = getAllMemberEmails()
   console.log(
-    'email col idx=' + emailCol + ', notify_new_task col idx=' + notifyCol + ', role col idx=' + roleCol,
+    'MemberEmails件数=' + Object.keys(emailMap).length +
+    ', notify_new_task col idx=' + notifyCol + ', role col idx=' + roleCol,
   )
 
-  if (emailCol === -1) {
-    console.warn('"email" 列が見つかりません。Membersシートのヘッダー名を確認してください。')
-  } else {
+  if (Object.keys(emailMap).length === 0) {
+    console.warn('MemberEmailsシートにメールが1件もありません。移行(migrateMemberEmailsToPrivateSheet)を実行したか確認してください。')
+  } else if (idCol !== -1) {
     var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
     rows.forEach(function (r, i) {
+      var mid = String(r[idCol])
       console.log(
         'row ' +
           (i + 2) +
-          ': email=' +
-          JSON.stringify(r[emailCol]) +
+          ': id=' + mid +
+          ', email=' +
+          JSON.stringify(emailMap[mid] || '') +
           (notifyCol !== -1 ? ', notify_new_task=' + JSON.stringify(r[notifyCol]) : '') +
           (roleCol !== -1 ? ', role=' + JSON.stringify(r[roleCol]) : ''),
       )
@@ -1859,19 +1913,20 @@ function notifyAdmins(subject, body, preferredEmails) {
     var sheet = getSheet(SHEET_MEMBERS)
     var headers = headerRow(sheet)
     var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
-    var emailCol = headers.indexOf('email')
+    var idCol = headers.indexOf('id')
     var notifyCol = headers.indexOf('notify_new_task')
     var roleCol = headers.indexOf('role')
-    if (emailCol === -1 && orgEmails.length === 0) {
-      console.warn('notifyAdmins: Members sheet has no "email" column and no org emails configured — nothing sent')
+    var emailMap = getAllMemberEmails()
+    if (Object.keys(emailMap).length === 0 && orgEmails.length === 0) {
+      console.warn('notifyAdmins: no member emails on file (MemberEmails) and no org emails configured — nothing sent')
       return
     }
 
     var opted = []
     var reps = []
-    if (emailCol !== -1) {
+    if (idCol !== -1) {
       rows.forEach(function (r) {
-        var email = String(r[emailCol] || '').trim()
+        var email = emailMap[String(r[idCol])]
         if (!email) return
         var notify = notifyCol !== -1 && /^(true|1|yes)$/i.test(String(r[notifyCol] || ''))
         if (notify) opted.push(email)
@@ -1907,23 +1962,23 @@ function reportsToEmails(assigneeIds) {
     var sheet = getSheet(SHEET_MEMBERS)
     var headers = headerRow(sheet)
     var idCol = headers.indexOf('id')
-    var emailCol = headers.indexOf('email')
     var reportsToCol = headers.indexOf('reports_to_id')
-    if (idCol === -1 || emailCol === -1 || reportsToCol === -1) return []
+    if (idCol === -1 || reportsToCol === -1) return []
     var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+    var emailMap = getAllMemberEmails()
 
     var byId = {}
     rows.forEach(function (r) {
-      byId[String(r[idCol])] = { email: String(r[emailCol] || '').trim(), reportsTo: String(r[reportsToCol] || '').trim() }
+      byId[String(r[idCol])] = { reportsTo: String(r[reportsToCol] || '').trim() }
     })
 
     var emails = []
     ;(assigneeIds || []).forEach(function (aid) {
       var m = byId[String(aid)]
       var managerId = m && m.reportsTo
-      var manager = managerId && byId[managerId]
-      if (manager && manager.email && emails.indexOf(manager.email) === -1) {
-        emails.push(manager.email)
+      var managerEmail = managerId && emailMap[managerId]
+      if (managerEmail && emails.indexOf(managerEmail) === -1) {
+        emails.push(managerEmail)
       }
     })
     return emails
@@ -1937,23 +1992,11 @@ function reportsToEmails(assigneeIds) {
 // email on file). Used by notifyMention.
 function memberEmailsByIds(memberIds) {
   try {
-    var sheet = getSheet(SHEET_MEMBERS)
-    var headers = headerRow(sheet)
-    var idCol = headers.indexOf('id')
-    var emailCol = headers.indexOf('email')
-    if (idCol === -1 || emailCol === -1) {
-      console.warn('memberEmailsByIds: Members sheet missing "id" or "email" column')
-      return []
-    }
-    var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
-    var wanted = {}
-    ;(memberIds || []).forEach(function (id) {
-      wanted[String(id)] = true
-    })
+    var emailMap = getAllMemberEmails()
     var emails = []
-    rows.forEach(function (r) {
-      var email = String(r[emailCol] || '').trim()
-      if (wanted[String(r[idCol])] && email) emails.push(email)
+    ;(memberIds || []).forEach(function (id) {
+      var email = emailMap[String(id)]
+      if (email) emails.push(email)
     })
     return emails
   } catch (err) {
@@ -1972,18 +2015,41 @@ function localesByEmails(emails) {
   var wanted = {}
   emails.forEach(function (e) { wanted[e.toLowerCase()] = true })
   try {
-    var sheet = getSheet(SHEET_MEMBERS)
-    var headers = headerRow(sheet)
-    var emailCol = headers.indexOf('email')
-    var localeCol = headers.indexOf('locale')
-    if (emailCol === -1) return result
-    var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
-    rows.forEach(function (r) {
-      String(r[emailCol] || '').split(',').map(function (e) { return e.trim() }).filter(Boolean).forEach(function (e) {
+    // まずMemberEmails側で「wantedなメールを持つのはどのmemberIdか」を引く
+    // (1人が複数メールをカンマ区切りで登録している場合にも対応)
+    var emailSheet = getMemberEmailsSheet()
+    var eHeaders = headerRow(emailSheet)
+    var eIdCol = eHeaders.indexOf('id')
+    var eEmailCol = eHeaders.indexOf('email')
+    var eLastRow = emailSheet.getLastRow()
+    if (eLastRow < 2) return result
+    var eValues = emailSheet.getRange(2, 1, eLastRow - 1, eHeaders.length).getValues()
+
+    var idToMatchedEmails = {}
+    eValues.forEach(function (r) {
+      var mid = String(r[eIdCol])
+      String(r[eEmailCol] || '').split(',').map(function (e) { return e.trim() }).filter(Boolean).forEach(function (e) {
         if (wanted[e.toLowerCase()]) {
-          result[e] = (localeCol !== -1 && r[localeCol] === 'en') ? 'en' : 'ja'
+          if (!idToMatchedEmails[mid]) idToMatchedEmails[mid] = []
+          idToMatchedEmails[mid].push(e)
         }
       })
+    })
+    if (Object.keys(idToMatchedEmails).length === 0) return result
+
+    // 次にMembers側でそのmemberIdのlocaleを引く
+    var sheet = getSheet(SHEET_MEMBERS)
+    var headers = headerRow(sheet)
+    var idCol = headers.indexOf('id')
+    var localeCol = headers.indexOf('locale')
+    if (idCol === -1) return result
+    var rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), headers.length).getValues()
+    rows.forEach(function (r) {
+      var mid = String(r[idCol])
+      var matched = idToMatchedEmails[mid]
+      if (!matched) return
+      var locale = (localeCol !== -1 && r[localeCol] === 'en') ? 'en' : 'ja'
+      matched.forEach(function (e) { result[e] = locale })
     })
   } catch (err) {
     console.error('localesByEmails failed: ' + err)
@@ -2303,20 +2369,8 @@ function syncCalendarForTask(taskId) {
       .filter(Boolean)
     if (assigneeIds.length === 0) return
 
-    var members = getSheet(SHEET_MEMBERS)
-    var mHeaders = headerRow(members)
-    var idCol = mHeaders.indexOf('id')
-    var emailCol = mHeaders.indexOf('email')
-    if (idCol === -1 || emailCol === -1) return
-    var mRows = members.getRange(2, 1, Math.max(members.getLastRow() - 1, 0), mHeaders.length).getValues()
-    var guests = mRows
-      .filter(function (r) {
-        return assigneeIds.indexOf(String(r[idCol])) !== -1
-      })
-      .map(function (r) {
-        return String(r[emailCol] || '').trim()
-      })
-      .filter(Boolean)
+    var emailMap = getAllMemberEmails()
+    var guests = assigneeIds.map(function (aid) { return emailMap[String(aid)] }).filter(Boolean)
     if (guests.length === 0) return
 
     var cal = CalendarApp.getDefaultCalendar()
@@ -2484,8 +2538,6 @@ function addMember(name, email, affiliation, role) {
         return id
       case 'name':
         return name
-      case 'email':
-        return email || ''
       case 'role':
         return role || '一般'
       case 'notify_new_task':
@@ -2498,7 +2550,160 @@ function addMember(name, email, affiliation, role) {
   // affiliation isn't its own column — it's derived from project_ids (or,
   // for admin roles with none, defaulted client-side), so nothing to store
   // for it here; kept as a param for parity with the client-side call.
+  if (email) setMemberEmail(id, email)
   return { id: id }
+}
+
+// ---- MemberEmails (非公開シート) ---------------------------------------------
+//
+// メールアドレスはMembersシート(公開CSV)には置かず、こちらの非公開シートに
+// id(=Members.idと同じ値)をキーとして1人1行で保持する。読み書きは必ず
+// このセクションの関数経由で行い、Membersシート側に書き戻さないこと。
+
+function getMemberEmailsSheet() {
+  return getOrCreateSheet(SHEET_MEMBER_EMAILS, MEMBER_EMAILS_HEADERS)
+}
+
+// メンバー1人分のメール(カンマ区切りで複数可、Members.email時代と同じ仕様)を読む。
+// 行が無ければ空文字を返す(例外を投げない — 未登録は「メールなし」として扱う)。
+function getMemberEmailValue(memberId) {
+  var sheet = getMemberEmailsSheet()
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var emailCol = headers.indexOf('email')
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return ''
+  var values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][idCol]) === String(memberId)) return String(values[i][emailCol] || '')
+  }
+  return ''
+}
+
+// メンバー1人分のメールを書く(行が無ければ追加、あれば上書き)。
+function setMemberEmail(memberId, email) {
+  var sheet = getMemberEmailsSheet()
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var emailCol = headers.indexOf('email')
+  var lastRow = sheet.getLastRow()
+  var values = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, headers.length).getValues() : []
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][idCol]) === String(memberId)) {
+      sheet.getRange(i + 2, emailCol + 1).setValue(email || '')
+      return
+    }
+  }
+  sheet.appendRow([memberId, email || ''])
+}
+
+// MemberEmailsシート全体を1回読み、{ memberId: email } のマップを返す。
+// メール解決が必要な箇所(通知・カレンダー招待・言語判定など)はここから
+// 引く — Membersシートはもうemail列を持たない。
+function getAllMemberEmails() {
+  var sheet = getMemberEmailsSheet()
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var emailCol = headers.indexOf('email')
+  var lastRow = sheet.getLastRow()
+  var map = {}
+  if (lastRow < 2) return map
+  var values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+  values.forEach(function (r) {
+    var email = String(r[emailCol] || '').trim()
+    if (email) map[String(r[idCol])] = email
+  })
+  return map
+}
+
+// ログイン用: Googleでログインした(トークン検証済みの)メールアドレスから
+// 該当メンバーのidを探す。カンマ区切りの複数メール登録に対応。
+// 見つからなければnull(未登録は例外ではなく通常の結果として扱う)。
+function findMemberIdByEmail(email) {
+  var normalized = String(email || '').trim().toLowerCase()
+  if (!normalized) return null
+  var sheet = getMemberEmailsSheet()
+  var headers = headerRow(sheet)
+  var idCol = headers.indexOf('id')
+  var emailCol = headers.indexOf('email')
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return null
+  var values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+  for (var i = 0; i < values.length; i++) {
+    var emails = String(values[i][emailCol] || '').split(',').map(function (e) {
+      return e.trim().toLowerCase()
+    })
+    if (emails.indexOf(normalized) !== -1) return String(values[i][idCol])
+  }
+  return null
+}
+
+// ---- 一括移行: Membersシートのemail列 → MemberEmails(非公開シート) -----------
+//
+// セキュリティ対応: Membersシートは「ウェブに公開」されたCSVとして配信されて
+// おり(gas/README.md参照)、メンバーのメールアドレスをそこに置いたままだと
+// 誰でも読めてしまう。この関数は既存のemail列の値をすべて非公開の
+// MemberEmailsシートへコピーし、コピーを確認できた行だけ元のemail列を空にする。
+//
+// 実行方法: GASエディタ上部の関数ドロップダウンで
+// "migrateMemberEmailsToPrivateSheet" を選び、▶ 実行する(1回でOK)。
+// 何度実行しても安全(既に移行済みの行はコピーをスキップし、空にする処理のみ行う)。
+function migrateMemberEmailsToPrivateSheet() {
+  var membersSheet = getSheet(SHEET_MEMBERS)
+  var headers = headerRow(membersSheet)
+  var idCol = headers.indexOf('id')
+  var emailCol = headers.indexOf('email')
+  if (idCol < 0) {
+    console.error('❌ Membersシートに id 列がありません')
+    return
+  }
+  if (emailCol < 0) {
+    console.log('✅ Membersシートに email 列はもうありません(移行済み)')
+    return
+  }
+
+  var lastRow = membersSheet.getLastRow()
+  if (lastRow < 2) {
+    console.log('対象行なし')
+    return
+  }
+  var values = membersSheet.getRange(2, 1, lastRow - 1, headers.length).getValues()
+
+  var emailSheet = getMemberEmailsSheet()
+  var emailHeaders = headerRow(emailSheet)
+  var eIdCol = emailHeaders.indexOf('id')
+  var existingIds = {}
+  var eLastRow = emailSheet.getLastRow()
+  if (eLastRow > 1) {
+    var eValues = emailSheet.getRange(2, 1, eLastRow - 1, emailHeaders.length).getValues()
+    eValues.forEach(function (r) {
+      existingIds[String(r[eIdCol])] = true
+    })
+  }
+
+  var migrated = 0
+  var alreadyMigrated = 0
+  var blanked = 0
+  for (var i = 0; i < values.length; i++) {
+    var memberId = String(values[i][idCol])
+    var email = String(values[i][emailCol] || '')
+    if (!email) continue
+    if (!existingIds[memberId]) {
+      emailSheet.appendRow([memberId, email])
+      existingIds[memberId] = true
+      migrated++
+    } else {
+      alreadyMigrated++
+    }
+    // この時点でMemberEmails側に値がある(今コピーしたか、既に移行済み)ため、
+    // Membersシート側は空にして公開CSVに載らないようにする。
+    membersSheet.getRange(i + 2, emailCol + 1).setValue('')
+    blanked++
+  }
+  console.log(
+    '✅ 移行完了: ' + migrated + '件コピー、' + alreadyMigrated + '件は既に移行済み、' +
+    blanked + '件のMembers.email列を空にしました',
+  )
 }
 
 // Saves a profile picture (sent as a data: URL, already resized client-side)
@@ -3166,6 +3371,54 @@ function sendSlackMessage(content) {
 function notifyChat(content) {
   sendDiscordMessage(content)
   sendSlackMessage(content)
+}
+
+// ---- Webhook接続テスト ------------------------------------------------------
+//
+// send*Message()はタスク通知に相乗りするbest-effort実装で、例外もHTTPの
+// 失敗レスポンスも握りつぶす(muteHttpExceptions:true + try/catchで無視)ため、
+// 「本当につながっているか」の確認には使えない。こちらは実際にテスト
+// メッセージを送信し、HTTPレスポンスコードを見て成否を判定・例外化する
+// (呼び出し元のAdmin → Tags画面で保存直後に呼ばれ、結果がそのままトースト
+// 表示される)。
+
+function testDiscordWebhook() {
+  var url = getDiscordWebhookUrl()
+  if (!url) throw new Error('Discord Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      content: '✅ Orbitとの連携テストです。このメッセージが届いていればDiscordへの通知設定は正常です。',
+      allowed_mentions: { parse: [] },
+    }),
+    muteHttpExceptions: true,
+  })
+  var code = resp.getResponseCode()
+  // Discordの正常応答は204 No Content
+  if (code < 200 || code >= 300) {
+    throw new Error('Discordへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+  }
+  return { tested: true }
+}
+
+function testSlackWebhook() {
+  var url = getSlackWebhookUrl()
+  if (!url) throw new Error('Slack Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      text: '✅ Orbitとの連携テストです。このメッセージが届いていればSlackへの通知設定は正常です。',
+    }),
+    muteHttpExceptions: true,
+  })
+  var code = resp.getResponseCode()
+  // Slack Incoming Webhookの正常応答は200(本文 "ok")
+  if (code < 200 || code >= 300) {
+    throw new Error('Slackへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+  }
+  return { tested: true }
 }
 
 // タスク名・説明など自由入力テキストの自動翻訳（多言語対応、item: i18n）。

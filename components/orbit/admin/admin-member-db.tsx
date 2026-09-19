@@ -73,7 +73,10 @@ function buildBaseCols(t: TranslationFn): ColDef[] {
     { key: 'careerAspiration', label: t('admin.memberDb.col.careerAspiration'), getValue: (m) => m.careerAspiration ?? '', editable: true, width: 180 },
     { key: 'desiredFutureRole', label: t('admin.memberDb.col.desiredFutureRole'), getValue: (m) => m.desiredFutureRole ?? '', editable: true, width: 120 },
     // admin-only: hidden from 一般 (see filterColsForViewer)
-    { key: 'email', label: t('admin.memberDb.col.email'), getValue: (m) => m.email ?? '', editable: false, width: 180 },
+    // email列はここには無い — セキュリティ対応でMembersの公開CSVから分離し、
+    // 認証済みのGASアクション経由でしか読めなくなったため、このグリッドにも
+    // 一覧表示しない(admin-projects.tsx/feedback-screen.tsx等、本人分は
+    // myEmail経由で別途扱う)
     { key: 'university', label: t('admin.memberDb.col.university'), getValue: (m) => m.university ?? '', editable: false, width: 140 },
     { key: 'faculty', label: t('admin.memberDb.col.faculty'), getValue: (m) => m.faculty ?? '', editable: false, width: 120 },
     { key: 'departmentName', label: t('admin.memberDb.col.departmentName'), getValue: (m) => m.departmentName ?? '', editable: false, width: 120 },
@@ -131,7 +134,6 @@ function requiredLevelGap(member: Member, skill: string, tasks: import('@/lib/or
 // Keys that must not be shown to non-admin (一般) viewers.
 // Keep this in sync with the server-side GAS restriction list.
 const ADMIN_ONLY_COL_KEYS = new Set([
-  'email',
   'university',
   'faculty',
   'departmentName',

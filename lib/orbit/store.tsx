@@ -133,6 +133,9 @@ function isArchived(t: Task): boolean {
 
 interface OrbitState {
   currentUserId: string | null
+  // 自分自身の登録メール(カンマ区切り、無ければ''）。他メンバーのメールは
+  // Membersの公開CSVから分離済みで、どこからも取得できない(意図的)
+  myEmail: string
   tasks: Task[]
   members: Member[]
   projects: Project[]
@@ -221,7 +224,9 @@ interface OrbitContextValue extends OrbitState {
   setOrgLogoUrl: (url: string) => void
   themeColor: string
   setThemeColor: (color: string) => void
-  setDiscordWebhookUrl: (url: string) => void
+  // 保存だけでなく実際にテストメッセージを送って接続確認する
+  // (「保存しました」表示だけでは本当に届くかは分からないため)
+  setDiscordWebhookUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
   addRecurringRule: (rule: Omit<RecurringTaskRule, 'id' | 'active' | 'lastGeneratedDate'>) => void
   removeRecurringRule: (ruleId: string) => void
   toggleRecurringRule: (ruleId: string) => void
@@ -236,7 +241,7 @@ interface OrbitContextValue extends OrbitState {
   clearSkillCertifiedEvent: () => void
   markMentionSeen: (commentId: string) => void
   dismissNotification: (notificationId: string) => void
-  setSlackWebhookUrl: (url: string) => void
+  setSlackWebhookUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
   toggleMemberInactive: (memberId: string) => void
   updateMemberDepartmentPath: (memberId: string, departmentPath: string) => void
   updateAbsentDates: (memberId: string, dates: string[]) => void
@@ -245,6 +250,11 @@ interface OrbitContextValue extends OrbitState {
   setOneOnOneQuestions: (questions: string[]) => void
   login: (userId: string) => void
   logout: () => void
+  // ログイン画面専用: Googleでログインしたメールアドレスから該当メンバーの
+  // idを解決する(見つからなければnull)。isRemoteConfiguredなら非公開の
+  // MemberEmailsシートをGAS経由で照合し、そうでなければローカルデモの
+  // members配列を直接見る
+  resolveLoginMember: (email: string) => Promise<string | null>
   setMode: (m: Mode) => void
   // Register approved parsed tasks as a single natural-language input.
   addTasksFromInput: (text: string, parsed: ParsedTask[]) => void
@@ -690,6 +700,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(isRemoteConfigured ? [] : SEED_TASKS)
   const [members, setMembers] = useState<Member[]>(isRemoteConfigured ? [] : MEMBERS)
   const [projects, setProjects] = useState<Project[]>(isRemoteConfigured ? [] : PROJECTS)
+  // 自分自身の登録メール(カンマ区切り)。セキュリティ対応でMembers(公開CSV)
+  // からemailを分離したため、members[].emailはもう誰にも入っていない —
+  // 自分の分だけこれで別管理する(下のuseEffectで認証済みGAS経由で取得)
+  const [myEmail, setMyEmail] = useState<string>('')
   const [inputs, setInputs] = useState<TaskInput[]>(SEED_INPUTS)
   const [mode, setModeState] = useState<Mode>('output')
   const [hydrated, setHydrated] = useState(false)
@@ -798,6 +812,34 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     },
     [reportRemoteError],
   )
+
+  // currentUserIdが変わるたび(ログイン・ログアウト・localStorageからの復元)、
+  // 自分自身の登録メールを取得し直す。members配列自体の更新(定期的な公開CSV
+  // 再取得)には反応させない — membersにはもうemailが載っていないので、
+  // 依存すると無関係な再取得ループになるだけ
+  useEffect(() => {
+    if (!currentUserId) {
+      setMyEmail('')
+      return
+    }
+    if (!isRemoteConfigured) {
+      setMyEmail(MEMBERS.find((m) => m.id === currentUserId)?.email ?? '')
+      return
+    }
+    let cancelled = false
+    remoteApi
+      .getMyEmails()
+      .then((res) => {
+        if (!cancelled) setMyEmail(res.email ?? '')
+      })
+      .catch(() => {
+        // サイレントに諦める — 未ログイン状態のGoogleセッション切れ等。
+        // person-detail.tsx側の「自分」セクションを開き直せば再試行される
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [currentUserId])
 
   // hydrate from localStorage once (only meaningful without a remote DB —
   // when the spreadsheet is configured it's fetched fresh below and wins)
@@ -1438,11 +1480,28 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // Webhook URLはApps ScriptのPropertiesService（非公開）に保存され、
   // Settingsシート（公開CSV）には一切乗らないので、クライアント側で読み
   // 返す手段は意図的に用意していない（gas/README.md §4.7）。
+  // 保存しただけでは本当にDiscordに届くか分からない(URLの入力ミス等が
+  // 「保存しました」表示のまま気づかれない)ため、保存直後に実際にテスト
+  // メッセージを送信し、成否をUI側に返す(org-settings-screen.tsxでトースト表示)
   const setDiscordWebhookUrl = useCallback(
-    (url: string) => {
-      if (isRemoteConfigured) runRemote(remoteApi.updateDiscordWebhookUrl(url))
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!isRemoteConfigured) return { ok: false, error: 'GASが未接続です' }
+      try {
+        await remoteApi.updateDiscordWebhookUrl(url)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        reportRemoteError(err)
+        return { ok: false, error: message }
+      }
+      if (!url) return { ok: true }
+      try {
+        await remoteApi.testDiscordWebhook()
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
     },
-    [runRemote],
+    [reportRemoteError],
   )
 
   // SKL-010: スキルレベルアップ閾値の設定（Admin > Tags）。awardSkillPoints・
@@ -2010,6 +2069,27 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setGasAuthToken(null)
     setCalendarToken(null)
   }, [])
+
+  // ログイン画面から呼ばれる。以前はここでクライアント側が保持する全メンバー分の
+  // emailと突き合わせていたが、セキュリティ対応でMembersの公開CSVからemailを
+  // 分離したため、isRemoteConfigured時は非公開のMemberEmailsシートをGAS経由で
+  // 照合する(resolveLogin — メール自体はサーバーに残したまま、一致した
+  // memberIdだけを受け取る)。ローカルデモ環境はGASが無いため従来通り
+  // membersを直接見る
+  const resolveLoginMember = useCallback(
+    async (email: string): Promise<string | null> => {
+      if (!isRemoteConfigured) {
+        const lc = email.trim().toLowerCase()
+        const found = members.find((m) =>
+          (m.email ?? '').split(',').map((e) => e.trim().toLowerCase()).includes(lc),
+        )
+        return found?.id ?? null
+      }
+      const res = await remoteApi.resolveLogin()
+      return res.memberId
+    },
+    [members],
+  )
 
   const setMode = useCallback((m: Mode) => setModeState(m), [])
 
@@ -3164,9 +3244,10 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       setMembers((prev) =>
         prev.map((m) => (m.id === memberId ? { ...m, email: trimmed || undefined } : m)),
       )
+      if (memberId === currentUserId) setMyEmail(trimmed)
       if (isRemoteConfigured) runRemote(remoteApi.updateEmail(memberId, trimmed))
     },
-    [runRemote],
+    [runRemote, currentUserId],
   )
 
   // which projects a project-scoped admin (see isFullAdmin) manages
@@ -4069,13 +4150,28 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [currentUserId],
   )
 
-  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存
+  // Slack Incoming Webhook（item 8）— Discordと同様GAS PropertiesServiceに保存。
+  // 保存直後に実際にテストメッセージを送信して接続確認する（setDiscordWebhookUrlと同じ理由）
   const setSlackWebhookUrl = useCallback(
-    (url: string) => {
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
       setSlackWebhookUrlState(url)
-      if (isRemoteConfigured) runRemote(remoteApi.updateSlackWebhookUrl(url))
+      if (!isRemoteConfigured) return { ok: false, error: 'GASが未接続です' }
+      try {
+        await remoteApi.updateSlackWebhookUrl(url)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        reportRemoteError(err)
+        return { ok: false, error: message }
+      }
+      if (!url) return { ok: true }
+      try {
+        await remoteApi.testSlackWebhook()
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
     },
-    [runRemote],
+    [reportRemoteError],
   )
 
   // item 20: 1on1質問項目を更新
@@ -4471,6 +4567,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const value: OrbitContextValue = {
     currentUserId,
+    myEmail,
     tasks,
     visibleTasks,
     pendingTasks,
@@ -4555,6 +4652,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     setOneOnOneQuestions,
     login,
     logout,
+    resolveLoginMember,
     setMode,
     addTasksFromInput,
     updateTaskStatus,

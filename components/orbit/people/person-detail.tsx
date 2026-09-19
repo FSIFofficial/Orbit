@@ -103,6 +103,7 @@ export function PersonDetail({ id }: { id: string }) {
     updateAvatar,
     uploadAvatarImage,
     driveEnabled,
+    myEmail,
     updateEmail,
     updateNotify,
     updateNotifySettings,
@@ -182,7 +183,11 @@ export function PersonDetail({ id }: { id: string }) {
     }
   }
 
-  const emails = (member.email ?? '')
+  // 自分自身のメールのみ扱える(セキュリティ対応でMembersの公開CSVから
+  // emailを分離したため、member.emailはもう存在しない — myEmailは常に
+  // 「今ログインしている本人」のメールで、この一覧は isSelf の時だけ
+  // 表示されるのでそれで正しい)
+  const emails = (myEmail ?? '')
     .split(',')
     .map((e) => e.trim())
     .filter(Boolean)
