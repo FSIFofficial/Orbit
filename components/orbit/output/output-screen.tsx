@@ -621,9 +621,9 @@ export function OutputScreen() {
 
 function Segment({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-secondary/60 p-0.5">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="orbit-scroll inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-secondary/60 p-0.5">
         {children}
       </div>
     </div>

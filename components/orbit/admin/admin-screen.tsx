@@ -126,7 +126,7 @@ export function AdminScreen({ section }: { section: Section }) {
       </aside>
 
       {/* Mobile tabs */}
-      <div className="w-full">
+      <div className="min-w-0 flex-1">
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden">
           {nav.map((n) => (
             <button
