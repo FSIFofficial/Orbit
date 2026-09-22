@@ -85,7 +85,7 @@ export function KanbanBoard({
                 {columnTasks.length}
               </span>
             </div>
-            <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2">
+            <div className="orbit-scroll flex min-h-[120px] max-h-[65vh] flex-col gap-2 overflow-y-auto px-2 pb-2">
               {columnTasks.map((task) => (
                 <KanbanCard
                   key={task.id}

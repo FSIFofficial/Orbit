@@ -5,6 +5,11 @@ import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { KanbanBoard } from '../output/kanban-board'
 import { CalendarView } from '../output/calendar-view'
+import { ListView } from '../output/list-view'
+import { DifficultyBoard } from '../output/difficulty-board'
+import { DependencyView } from '../output/dependency-view'
+import { GanttView } from '../output/gantt-view'
+import { OpenBidView } from '../output/open-bid-view'
 import { TaskDetailDrawer } from '../output/task-detail-drawer'
 import { Avatar } from '@/components/orbit/primitives'
 import { isOverdue } from '@/lib/orbit/utils'
@@ -13,13 +18,13 @@ import { cn } from '@/lib/utils'
 import { ArrowLeft, Target } from 'lucide-react'
 import { useI18n } from '@/lib/orbit/i18n'
 
-type Tab = 'overview' | 'workflow' | 'calendar'
+type Tab = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt' | 'openbid' | 'overview'
 
 export function ProjectDetail({ id }: { id: string }) {
   const { getProject, visibleTasks: tasks, members, getProjectMembers, currentUser } = useOrbit()
   const { go } = useNav()
   const { t } = useI18n()
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>('workflow')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   const project = getProject(id)
@@ -100,9 +105,14 @@ export function ProjectDetail({ id }: { id: string }) {
       <div className="mt-5 flex items-center gap-1 border-b border-border">
         {(
           [
-            ['overview', 'Overview'],
-            ['workflow', 'Workflow'],
-            ['calendar', 'Calendar'],
+            ['workflow', t('output.view.workflow')],
+            ['list', t('output.view.list')],
+            ['calendar', t('output.view.calendar')],
+            ['difficulty', t('output.view.difficulty')],
+            ['dependency', t('output.view.dependency')],
+            ['gantt', t('output.view.gantt')],
+            ['openbid', t('output.view.openbid')],
+            ['overview', t('project.detail.tab.overview')],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -157,7 +167,12 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
         )}
         {tab === 'workflow' && <KanbanBoard tasks={pt} onOpenTask={setOpenTaskId} />}
+        {tab === 'list' && <ListView tasks={pt} onOpenTask={setOpenTaskId} />}
         {tab === 'calendar' && <CalendarView tasks={pt} onOpenTask={setOpenTaskId} />}
+        {tab === 'difficulty' && <DifficultyBoard tasks={pt} onOpenTask={setOpenTaskId} />}
+        {tab === 'dependency' && <DependencyView tasks={pt} onOpenTask={setOpenTaskId} />}
+        {tab === 'gantt' && <GanttView tasks={pt} onOpenTask={setOpenTaskId} />}
+        {tab === 'openbid' && <OpenBidView tasks={pt} onOpenTask={setOpenTaskId} />}
       </div>
 
       <TaskDetailDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
