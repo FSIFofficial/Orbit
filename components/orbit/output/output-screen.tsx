@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Task } from '@/lib/orbit/types'
+import type { Task, Priority, Difficulty } from '@/lib/orbit/types'
 import { useOrbit } from '@/lib/orbit/store'
 import { useNav } from '@/lib/orbit/nav'
 import { KanbanBoard } from './kanban-board'
@@ -15,6 +15,7 @@ import { GanttView } from './gantt-view'
 import { OpenBidView } from './open-bid-view'
 import { TaskDetailDrawer } from './task-detail-drawer'
 import { KANBAN_CARD_FIELDS, KANBAN_CARD_FIELD_KEY, type KanbanCardField } from './kanban-card'
+import { PROJECT_CARD_FIELDS, PROJECT_CARD_FIELD_KEY, type ProjectCardField } from './project-view'
 import { cn } from '@/lib/utils'
 import {
   ArrowUpDown,
@@ -35,6 +36,7 @@ import {
   FileText,
   BarChart2,
   Megaphone,
+  ListOrdered,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
@@ -44,6 +46,64 @@ import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
 type View = 'workflow' | 'list' | 'calendar' | 'difficulty' | 'dependency' | 'gantt' | 'openbid'
+
+// item: タスクの表示順切替 — ワークフロー/難易度ボード内のカード順は元々
+// tasks配列の並び(=入力順)のままだったので、締切/優先度/難易度/作成日で
+// 切り替えられるようにした。deadline/createdAt無しのタスクは末尾に回す
+type TaskSort = 'deadline' | 'priority' | 'difficulty' | 'created'
+const TASK_SORT_ORDER: TaskSort[] = ['deadline', 'priority', 'difficulty', 'created']
+const TASK_SORT_KEY: Record<TaskSort, TranslationKey> = {
+  deadline: 'output.sort.deadline',
+  priority: 'output.sort.priority',
+  difficulty: 'output.sort.difficulty',
+  created: 'output.sort.created',
+}
+const PRIORITY_RANK: Record<Priority, number> = { '高': 0, '中': 1, '低': 2 }
+const DIFFICULTY_RANK: Record<Difficulty, number> = {
+  '誰でも可': 0,
+  '新人歓迎': 1,
+  '少し経験必要': 2,
+  '経験者向け': 3,
+  '上級者向け': 4,
+}
+
+function sortTasksBy(tasks: Task[], sort: TaskSort): Task[] {
+  const arr = [...tasks]
+  switch (sort) {
+    case 'deadline':
+      arr.sort((a, b) => {
+        if (!a.deadline && !b.deadline) return 0
+        if (!a.deadline) return 1
+        if (!b.deadline) return -1
+        return a.deadline.localeCompare(b.deadline)
+      })
+      break
+    case 'priority':
+      arr.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])
+      break
+    case 'difficulty':
+      arr.sort((a, b) => DIFFICULTY_RANK[a.difficulty] - DIFFICULTY_RANK[b.difficulty])
+      break
+    case 'created':
+      arr.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      break
+  }
+  return arr
+}
+
+// 並び順もブラウザごとの個人的な好みなのでlocalStorageに保存する
+function taskSortKeyFor(userId: string | null | undefined): string {
+  return `orbit-task-sort-${userId ?? 'anon'}`
+}
+function loadTaskSort(userId: string | null | undefined): TaskSort {
+  if (typeof window === 'undefined') return 'deadline'
+  try {
+    const raw = window.localStorage.getItem(taskSortKeyFor(userId))
+    return raw && TASK_SORT_ORDER.includes(raw as TaskSort) ? (raw as TaskSort) : 'deadline'
+  } catch {
+    return 'deadline'
+  }
+}
 
 const DEFAULT_TARGET_ORDER: Target[] = ['mine', 'all', 'people', 'projects', 'archive']
 const TARGET_KEY: Record<Target, TranslationKey> = {
@@ -92,6 +152,25 @@ function loadCardFields(userId: string | null | undefined): Set<KanbanCardField>
   }
 }
 
+// プロジェクト表示（対象=プロジェクト）のカードに出す項目も、同じ考え方で
+// ブラウザごとの個人設定として保存する
+function projectCardFieldsKey(userId: string | null | undefined): string {
+  return `orbit-project-card-fields-${userId ?? 'anon'}`
+}
+function loadProjectCardFields(userId: string | null | undefined): Set<ProjectCardField> {
+  if (typeof window === 'undefined') return new Set(PROJECT_CARD_FIELDS)
+  try {
+    const raw = window.localStorage.getItem(projectCardFieldsKey(userId))
+    if (!raw) return new Set(PROJECT_CARD_FIELDS)
+    const parsed = JSON.parse(raw) as string[]
+    return new Set(
+      parsed.filter((f): f is ProjectCardField => PROJECT_CARD_FIELDS.includes(f as ProjectCardField)),
+    )
+  } catch {
+    return new Set(PROJECT_CARD_FIELDS)
+  }
+}
+
 // 依存関係ツリーはプロジェクトが混在すると見づらくなるので、プロジェクト単位で
 // 表示/非表示を切り替えられるようにしている。これもブラウザごとの個人設定
 function hiddenProjectsKey(userId: string | null | undefined): string {
@@ -129,6 +208,14 @@ export function OutputScreen() {
   const fieldsRef = useRef<HTMLDivElement>(null)
   const [orderOpen, setOrderOpen] = useState(false)
   const orderRef = useRef<HTMLDivElement>(null)
+  const [taskSort, setTaskSort] = useState<TaskSort>(() => loadTaskSort(currentUser?.id))
+  const [sortOpen, setSortOpen] = useState(false)
+  const sortRef = useRef<HTMLDivElement>(null)
+  const [projectCardFields, setProjectCardFields] = useState<Set<ProjectCardField>>(() =>
+    loadProjectCardFields(currentUser?.id),
+  )
+  const [projectFieldsOpen, setProjectFieldsOpen] = useState(false)
+  const projectFieldsRef = useRef<HTMLDivElement>(null)
   const [draggingTarget, setDraggingTarget] = useState<Target | null>(null)
   const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(() =>
     loadHiddenProjects(currentUser?.id),
@@ -150,6 +237,12 @@ export function OutputScreen() {
       ) {
         setProjectVisibilityOpen(false)
       }
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false)
+      }
+      if (projectFieldsRef.current && !projectFieldsRef.current.contains(e.target as Node)) {
+        setProjectFieldsOpen(false)
+      }
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
@@ -167,6 +260,30 @@ export function OutputScreen() {
       }
       return next
     })
+  }
+
+  const toggleProjectCardField = (field: ProjectCardField) => {
+    setProjectCardFields((prev) => {
+      const next = new Set(prev)
+      if (next.has(field)) next.delete(field)
+      else next.add(field)
+      try {
+        window.localStorage.setItem(projectCardFieldsKey(currentUser?.id), JSON.stringify([...next]))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
+
+  const changeTaskSort = (sort: TaskSort) => {
+    setTaskSort(sort)
+    setSortOpen(false)
+    try {
+      window.localStorage.setItem(taskSortKeyFor(currentUser?.id), sort)
+    } catch {
+      /* ignore */
+    }
   }
 
   const toggleProjectVisibility = (projectId: string) => {
@@ -242,6 +359,10 @@ export function OutputScreen() {
       return true
     })
   }, [target, myTasks, visibleTasks, projectFilter, fromDate, toDate])
+
+  // ワークフロー/難易度ボードのカード順（並び替え非対応のガント/依存関係/
+  // 公募ビューはfilteredTasksをそのまま使う）
+  const sortedTasks = useMemo(() => sortTasksBy(filteredTasks, taskSort), [filteredTasks, taskSort])
 
   // 依存関係ツリー専用の追加絞り込み（プロジェクト単位の表示/非表示）
   const dependencyTasks = useMemo(
@@ -419,6 +540,50 @@ export function OutputScreen() {
             </Seg>
           </Segment>
 
+          {target === 'projects' && (
+            <div className="relative" ref={projectFieldsRef}>
+              <button
+                type="button"
+                onClick={() => setProjectFieldsOpen((o) => !o)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+                aria-expanded={projectFieldsOpen}
+              >
+                <SlidersHorizontal className="size-3.5" />
+                {tr('output.fields.button')}
+              </button>
+              {projectFieldsOpen && (
+                <div className="absolute left-0 top-full z-10 mt-1.5 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
+                  <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                    {tr('output.fields.hint')}
+                  </p>
+                  {PROJECT_CARD_FIELDS.map((f) => {
+                    const checked = projectCardFields.has(f)
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => toggleProjectCardField(f)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-4 shrink-0 items-center justify-center rounded border',
+                            checked
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border-strong text-transparent',
+                          )}
+                        >
+                          <Check className="size-3" strokeWidth={3} />
+                        </span>
+                        {tr(PROJECT_CARD_FIELD_KEY[f])}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {(target === 'all' || target === 'mine') &&
             (view === 'workflow' || view === 'difficulty' || view === 'dependency') && (
             <div className="relative" ref={fieldsRef}>
@@ -459,6 +624,44 @@ export function OutputScreen() {
                       </button>
                     )
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(target === 'all' || target === 'mine') && (view === 'workflow' || view === 'difficulty') && (
+            <div className="relative" ref={sortRef}>
+              <button
+                type="button"
+                onClick={() => setSortOpen((o) => !o)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+                aria-expanded={sortOpen}
+              >
+                <ListOrdered className="size-3.5" />
+                {tr('output.sort.button')}
+              </button>
+              {sortOpen && (
+                <div className="absolute left-0 top-full z-10 mt-1.5 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in slide-in-from-top-1">
+                  {TASK_SORT_ORDER.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => changeTaskSort(s)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-secondary"
+                    >
+                      <span
+                        className={cn(
+                          'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                          taskSort === s
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border-strong text-transparent',
+                        )}
+                      >
+                        <Check className="size-3" strokeWidth={3} />
+                      </span>
+                      {tr(TASK_SORT_KEY[s])}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -586,9 +789,9 @@ export function OutputScreen() {
       ) : (
         <>
           {target === 'people' && <PeopleView />}
-          {target === 'projects' && <ProjectView />}
+          {target === 'projects' && <ProjectView fields={projectCardFields} />}
           {(target === 'all' || target === 'mine') && view === 'workflow' && (
-            <KanbanBoard tasks={filteredTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
+            <KanbanBoard tasks={sortedTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
           )}
           {(target === 'all' || target === 'mine') && view === 'list' && (
             <ListView tasks={filteredTasks} onOpenTask={setOpenTaskId} />
@@ -597,7 +800,7 @@ export function OutputScreen() {
             <CalendarView tasks={filteredTasks} onOpenTask={setOpenTaskId} />
           )}
           {(target === 'all' || target === 'mine') && view === 'difficulty' && (
-            <DifficultyBoard tasks={filteredTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
+            <DifficultyBoard tasks={sortedTasks} onOpenTask={setOpenTaskId} fields={cardFields} />
           )}
           {(target === 'all' || target === 'mine') && view === 'dependency' && (
             <DependencyView tasks={dependencyTasks} onOpenTask={setOpenTaskId} fields={cardFields} />

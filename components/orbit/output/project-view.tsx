@@ -7,7 +7,18 @@ import { useNav } from '@/lib/orbit/nav'
 import { exportProjectTasksToExcel } from '@/lib/orbit/export-excel'
 import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react'
 import { Project } from '@/lib/orbit/types'
-import { useI18n } from '@/lib/orbit/i18n'
+import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
+
+// item: プロジェクト表示のカードに出す項目を選べるようにした（Kanbanカードの
+// 表示項目トグルと同じ考え方）。プロジェクト名と進捗率バーの下の統計行は
+// 常時表示、それ以外はここでON/OFFできる
+export type ProjectCardField = 'stats' | 'progress' | 'members'
+export const PROJECT_CARD_FIELDS: ProjectCardField[] = ['stats', 'progress', 'members']
+export const PROJECT_CARD_FIELD_KEY: Record<ProjectCardField, TranslationKey> = {
+  stats: 'project.card.field.stats',
+  progress: 'project.card.field.progress',
+  members: 'project.card.field.members',
+}
 
 function ProjectCard({
   p,
@@ -18,6 +29,7 @@ function ProjectCard({
   go,
   depth,
   hasChildren,
+  fields,
   children,
 }: {
   p: Project
@@ -28,6 +40,7 @@ function ProjectCard({
   go: ReturnType<typeof useNav>['go']
   depth: number
   hasChildren: boolean
+  fields: Set<ProjectCardField>
   children?: React.ReactNode
 }) {
   const { t } = useI18n()
@@ -37,6 +50,9 @@ function ProjectCard({
   const waiting = pt.filter((t) => t.status === 'review').length
   const completion = pt.length ? Math.round((done / pt.length) * 100) : 0
   const pm = getProjectMembers(p.id)
+  const showStats = fields.has('stats')
+  const showProgress = fields.has('progress')
+  const showMembers = fields.has('members')
 
   return (
     <div className={depth > 0 ? 'ml-4 border-l-2 border-border/50 pl-4' : ''}>
@@ -58,27 +74,33 @@ function ProjectCard({
             <span className={`size-2.5 rounded-full ${depth > 0 ? 'bg-muted-foreground/50' : 'bg-primary/60'}`} />
             <p className="text-sm font-semibold text-foreground">{p.name}</p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span>{t('project.card.membersCount', { count: pm.length })}</span>
-            <span>{t('project.card.tasksCount', { count: pt.length })}</span>
-            <span className={waiting > 0 ? 'text-warning' : ''}>{t('project.card.waitingCount', { count: waiting })}</span>
-          </div>
-          <div>
-            <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">{t('project.card.progress')}</span>
-              <span className="font-medium tabular-nums text-foreground">{completion}%</span>
+          {showStats && (
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span>{t('project.card.membersCount', { count: pm.length })}</span>
+              <span>{t('project.card.tasksCount', { count: pt.length })}</span>
+              <span className={waiting > 0 ? 'text-warning' : ''}>{t('project.card.waitingCount', { count: waiting })}</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
+          )}
+          {showProgress && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">{t('project.card.progress')}</span>
+                <span className="font-medium tabular-nums text-foreground">{completion}%</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
+              </div>
             </div>
-          </div>
-          <div className="flex -space-x-1.5">
-            {pm.slice(0, 5).map((m) => (
-              <span key={m.id} className="rounded-full ring-2 ring-card">
-                <Avatar member={m} size={24} />
-              </span>
-            ))}
-          </div>
+          )}
+          {showMembers && (
+            <div className="flex -space-x-1.5">
+              {pm.slice(0, 5).map((m) => (
+                <span key={m.id} className="rounded-full ring-2 ring-card">
+                  <Avatar member={m} size={24} />
+                </span>
+              ))}
+            </div>
+          )}
         </button>
         </div>
         <div className="flex justify-end border-t border-border/50 pt-2">
@@ -109,6 +131,7 @@ function ProjectTree({
   getProjectMembers,
   go,
   depth,
+  fields,
 }: {
   projects: Project[]
   allProjects: Project[]
@@ -118,6 +141,7 @@ function ProjectTree({
   getProjectMembers: ReturnType<typeof useOrbit>['getProjectMembers']
   go: ReturnType<typeof useNav>['go']
   depth: number
+  fields: Set<ProjectCardField>
 }) {
   return (
     <>
@@ -134,6 +158,7 @@ function ProjectTree({
             go={go}
             depth={depth}
             hasChildren={children.length > 0}
+            fields={fields}
           >
             {children.length > 0 && (
               <ProjectTree
@@ -145,6 +170,7 @@ function ProjectTree({
                 getProjectMembers={getProjectMembers}
                 go={go}
                 depth={depth + 1}
+                fields={fields}
               />
             )}
           </ProjectCard>
@@ -154,7 +180,11 @@ function ProjectTree({
   )
 }
 
-export function ProjectView() {
+export function ProjectView({
+  fields = new Set(PROJECT_CARD_FIELDS),
+}: {
+  fields?: Set<ProjectCardField>
+}) {
   const { activeProjects, visibleTasks: tasks, members, getProjectMembers } = useOrbit()
   const { go } = useNav()
 
@@ -171,6 +201,7 @@ export function ProjectView() {
         getProjectMembers={getProjectMembers}
         go={go}
         depth={0}
+        fields={fields}
       />
     </div>
   )

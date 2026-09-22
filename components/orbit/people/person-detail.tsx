@@ -52,7 +52,7 @@ import {
   type SyncRow,
 } from '@/lib/orbit/google-sheet-sync'
 
-type Tab = 'overview' | 'tasks' | 'growth' | 'career' | 'calendar'
+type Tab = 'overview' | 'tasks' | 'growth' | 'career' | 'calendar' | 'settings'
 type TaskView = 'list' | 'board' | 'calendar' | 'dependency'
 
 // Downscales/crops an uploaded image to a square JPEG data URL so avatar
@@ -526,172 +526,6 @@ export function PersonDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Account settings — self only, edits the person's own sheet row */}
-      {isSelf && (
-        <div className="mt-4 rounded-xl border border-border bg-card p-4">
-          <SectionLabel>{t('person.account.title')}</SectionLabel>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('person.account.emailDesc')}
-          </p>
-          {/* updateEmailはGAS側で本人による変更も含めて常にisDaihyo固定 */}
-          <AdminAccessNote level="daihyo" className="mb-1" />
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Mail className="size-4 shrink-0 text-muted-foreground" />
-            {emails.map((e) => (
-              <span
-                key={e}
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 text-xs font-medium"
-              >
-                {e}
-                <button
-                  onClick={() => removeEmail(e)}
-                  className="opacity-60 hover:opacity-100"
-                  aria-label={t('person.account.removeEmail', { email: e })}
-                >
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              value={newEmail}
-              onChange={(ev) => setNewEmail(ev.target.value)}
-              onKeyDown={(ev) => {
-                if (ev.nativeEvent.isComposing || ev.keyCode === 229) return
-                if (ev.key === 'Enter') {
-                  ev.preventDefault()
-                  addEmail()
-                }
-              }}
-              onBlur={() => {
-                if (newEmail.trim()) addEmail()
-              }}
-              placeholder={t('person.account.emailPlaceholder')}
-              type="email"
-              className="h-7 w-48 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
-            />
-          </div>
-          <NotifySettingsTable
-            member={member}
-            onUpdate={(settings) => updateNotifySettings(member.id, settings)}
-          />
-        </div>
-      )}
-
-      {/* 言語 / タイムゾーン — self only。全画面の表示に影響するため、
-          特定のタブの中ではなくプロフィール上部（タブの外）に置く */}
-      {isSelf && (
-        <div className="mt-4 rounded-xl border border-border bg-card p-4">
-          <SectionLabel>{t('settings.language')} / {t('settings.timezone')}</SectionLabel>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <select
-              value={locale}
-              onChange={(e) => {
-                const next = e.target.value as (typeof SUPPORTED_LOCALES)[number]['code']
-                setLocale(next)
-                setMemberLocale(member.id, next)
-              }}
-              className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-            >
-              {SUPPORTED_LOCALES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={member.timezone ?? DEFAULT_TIMEZONE}
-              onChange={(e) => setMemberTimezone(member.id, e.target.value)}
-              className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-            >
-              {TIMEZONE_OPTIONS.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Personal Google Sheets sync — self only */}
-      {isSelf && isGoogleOAuthConfigured() && (
-        <div className="mt-4 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2">
-            <Link2 className="size-4 text-muted-foreground" />
-            <SectionLabel>{t('person.sheet.title')}</SectionLabel>
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('person.sheet.description')}
-          </p>
-
-          {personalSheetId ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-xs font-medium text-accent-foreground">
-                <Check className="size-3.5 text-primary" strokeWidth={3} />
-                {sheetTitle ?? personalSheetId}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-xs"
-                disabled={sheetStatus !== 'idle'}
-                onClick={handleSheetSync}
-              >
-                {sheetStatus === 'syncing' ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
-                {sheetStatus === 'syncing' ? t('person.sheet.syncing') : t('person.sheet.syncNow')}
-              </Button>
-              <button
-                type="button"
-                onClick={handleSheetDisconnect}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
-              >
-                <X className="size-3.5" />
-                {t('person.sheet.disconnect')}
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                value={sheetInput}
-                onChange={(e) => setSheetInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                  if (e.key === 'Enter') { e.preventDefault(); handleSheetConnect() }
-                }}
-                placeholder={t('person.sheet.placeholder')}
-                className="h-8 min-w-0 flex-1 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
-              />
-              <Button
-                size="sm"
-                className="h-8 gap-1.5 text-xs"
-                disabled={sheetStatus !== 'idle' || !sheetInput.trim()}
-                onClick={handleSheetConnect}
-              >
-                {sheetStatus === 'verifying' ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Link2 className="size-3.5" />
-                )}
-                {sheetStatus === 'verifying' ? t('person.sheet.verifying') : t('person.sheet.connect')}
-              </Button>
-            </div>
-          )}
-
-          {sheetError && (
-            <p className="mt-2 text-xs text-destructive">{sheetError}</p>
-          )}
-          {sheetSyncedAt && !sheetError && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t('person.sheet.lastSynced', { time: sheetSyncedAt.toLocaleTimeString('ja-JP') })}
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Tabs */}
       <div className="mt-5 flex items-center gap-1 border-b border-border">
         {(
@@ -701,6 +535,7 @@ export function PersonDetail({ id }: { id: string }) {
             ...(isSelf || isAdmin ? [['growth', t('person.tab.growth')]] : []),
             ...(isSelf || isAdmin ? [['career', t('person.tab.career')]] : []),
             ['calendar', t('person.tab.calendar')],
+            ...(isSelf ? [['settings', t('person.tab.settings')]] : []),
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -1463,6 +1298,171 @@ export function PersonDetail({ id }: { id: string }) {
         </p>
       </div>
         </>
+      )}
+
+      {tab === 'settings' && isSelf && (
+        <div className="mt-5 flex flex-col gap-4">
+          {/* Account settings — edits the person's own sheet row */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <SectionLabel>{t('person.account.title')}</SectionLabel>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('person.account.emailDesc')}
+            </p>
+            {/* updateEmailはGAS側で本人による変更も含めて常にisDaihyo固定 */}
+            <AdminAccessNote level="daihyo" className="mb-1" />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Mail className="size-4 shrink-0 text-muted-foreground" />
+              {emails.map((e) => (
+                <span
+                  key={e}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 text-xs font-medium"
+                >
+                  {e}
+                  <button
+                    onClick={() => removeEmail(e)}
+                    className="opacity-60 hover:opacity-100"
+                    aria-label={t('person.account.removeEmail', { email: e })}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={newEmail}
+                onChange={(ev) => setNewEmail(ev.target.value)}
+                onKeyDown={(ev) => {
+                  if (ev.nativeEvent.isComposing || ev.keyCode === 229) return
+                  if (ev.key === 'Enter') {
+                    ev.preventDefault()
+                    addEmail()
+                  }
+                }}
+                onBlur={() => {
+                  if (newEmail.trim()) addEmail()
+                }}
+                placeholder={t('person.account.emailPlaceholder')}
+                type="email"
+                className="h-7 w-48 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
+              />
+            </div>
+            <NotifySettingsTable
+              member={member}
+              onUpdate={(settings) => updateNotifySettings(member.id, settings)}
+            />
+          </div>
+
+          {/* 言語 / タイムゾーン */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <SectionLabel>{t('settings.language')} / {t('settings.timezone')}</SectionLabel>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <select
+                value={locale}
+                onChange={(e) => {
+                  const next = e.target.value as (typeof SUPPORTED_LOCALES)[number]['code']
+                  setLocale(next)
+                  setMemberLocale(member.id, next)
+                }}
+                className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+              >
+                {SUPPORTED_LOCALES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={member.timezone ?? DEFAULT_TIMEZONE}
+                onChange={(e) => setMemberTimezone(member.id, e.target.value)}
+                className="h-9 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+              >
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Personal Google Sheets sync */}
+          {isGoogleOAuthConfigured() && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2">
+                <Link2 className="size-4 text-muted-foreground" />
+                <SectionLabel>{t('person.sheet.title')}</SectionLabel>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('person.sheet.description')}
+              </p>
+
+              {personalSheetId ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-xs font-medium text-accent-foreground">
+                    <Check className="size-3.5 text-primary" strokeWidth={3} />
+                    {sheetTitle ?? personalSheetId}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    disabled={sheetStatus !== 'idle'}
+                    onClick={handleSheetSync}
+                  >
+                    {sheetStatus === 'syncing' ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    {sheetStatus === 'syncing' ? t('person.sheet.syncing') : t('person.sheet.syncNow')}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={handleSheetDisconnect}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="size-3.5" />
+                    {t('person.sheet.disconnect')}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    value={sheetInput}
+                    onChange={(e) => setSheetInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                      if (e.key === 'Enter') { e.preventDefault(); handleSheetConnect() }
+                    }}
+                    placeholder={t('person.sheet.placeholder')}
+                    className="h-8 min-w-0 flex-1 rounded-md border border-dashed border-border-strong bg-background px-2 text-xs outline-none focus:border-primary"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    disabled={sheetStatus !== 'idle' || !sheetInput.trim()}
+                    onClick={handleSheetConnect}
+                  >
+                    {sheetStatus === 'verifying' ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Link2 className="size-3.5" />
+                    )}
+                    {sheetStatus === 'verifying' ? t('person.sheet.verifying') : t('person.sheet.connect')}
+                  </Button>
+                </div>
+              )}
+
+              {sheetError && (
+                <p className="mt-2 text-xs text-destructive">{sheetError}</p>
+              )}
+              {sheetSyncedAt && !sheetError && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('person.sheet.lastSynced', { time: sheetSyncedAt.toLocaleTimeString('ja-JP') })}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <TaskDetailDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
