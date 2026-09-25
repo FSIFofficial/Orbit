@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
+import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { useToast } from '@/components/orbit/toast'
 import { Avatar, DifficultyBadge, ProjectTag, Tag, SimilarTaskSummary } from '@/components/orbit/primitives'
 import { Modal } from '@/components/orbit/modal'
@@ -24,6 +25,7 @@ export function AdminApprovals() {
     isFullAdmin,
   } = useOrbit()
   const toast = useToast()
+  const { openTask } = useTaskDrawer()
   const { t: tr } = useI18n()
   const [rejecting, setRejecting] = useState<Task | null>(null)
   const [reason, setReason] = useState('')
@@ -56,48 +58,54 @@ export function AdminApprovals() {
               <div key={t.id} className="rounded-lg border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ProjectTag name={getProject(t.projectId)?.name ?? ''} />
-                      <span className="text-xs text-muted-foreground">
-                        {tr('admin.approvals.deadlineLabel', { date: formatDeadline(t.deadline) })}
-                      </span>
-                      <DifficultyBadge difficulty={t.difficulty} />
-                      {escalated && (
-                        <span className="rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
-                          {t.importance}
+                    <button
+                      type="button"
+                      onClick={() => openTask(t.id)}
+                      className="block w-full text-left transition-colors hover:text-primary"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ProjectTag name={getProject(t.projectId)?.name ?? ''} />
+                        <span className="text-xs text-muted-foreground">
+                          {tr('admin.approvals.deadlineLabel', { date: formatDeadline(t.deadline) })}
                         </span>
-                      )}
-                    </div>
-                    <h2 className="mt-1.5 text-sm font-semibold">{t.name}</h2>
-                    {t.description && (
-                      <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {t.skills.map((s) => (
-                        <Tag key={s}>{s}</Tag>
-                      ))}
-                    </div>
-                    {creator && (
-                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <Avatar member={creator} size={18} />
-                          {tr('admin.approvals.registeredBy', { name: creator.displayName || creator.name })}
-                        </span>
-                        {escalated ? (
-                          <span className="flex items-center gap-1 text-destructive">
-                            <ShieldCheck className="size-3.5" />
-                            {tr('admin.approvals.escalatedNote', { importance: t.importance ?? '' })}
+                        <DifficultyBadge difficulty={t.difficulty} />
+                        {escalated && (
+                          <span className="rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
+                            {t.importance}
                           </span>
-                        ) : (
-                          approver && (
-                            <span className="flex items-center gap-1 text-accent-foreground">
-                              <ShieldCheck className="size-3.5" />
-                              {tr('admin.approvals.approverLabel', { name: approver.displayName || approver.name })}
-                            </span>
-                          )
                         )}
                       </div>
-                    )}
+                      <h2 className="mt-1.5 text-sm font-semibold">{t.name}</h2>
+                      {t.description && (
+                        <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {t.skills.map((s) => (
+                          <Tag key={s}>{s}</Tag>
+                        ))}
+                      </div>
+                      {creator && (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Avatar member={creator} size={18} />
+                            {tr('admin.approvals.registeredBy', { name: creator.displayName || creator.name })}
+                          </span>
+                          {escalated ? (
+                            <span className="flex items-center gap-1 text-destructive">
+                              <ShieldCheck className="size-3.5" />
+                              {tr('admin.approvals.escalatedNote', { importance: t.importance ?? '' })}
+                            </span>
+                          ) : (
+                            approver && (
+                              <span className="flex items-center gap-1 text-accent-foreground">
+                                <ShieldCheck className="size-3.5" />
+                                {tr('admin.approvals.approverLabel', { name: approver.displayName || approver.name })}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </button>
                     {similar.length > 0 && (
                       <div className="mt-2.5 rounded-md border border-warning/30 bg-warning-muted px-2.5 py-2">
                         <div className="flex items-center gap-1.5 text-xs font-medium text-warning">

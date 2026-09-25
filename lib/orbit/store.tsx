@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useCallback,
 } from 'react'
@@ -698,6 +699,29 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   // below replaces it. Start empty instead and let the loading gates in
   // orbit-app.tsx / admin-screen.tsx cover the wait.
   const [tasks, setTasks] = useState<Task[]>(isRemoteConfigured ? [] : SEED_TASKS)
+  // GAS書き込み直後は公開CSV(fetchRemoteData)側の反映に数分ラグがあるため
+  // (下のavatarUrlフォールバックと同種の問題)、承認/却下した直後に情報更新
+  // すると古いCSVスナップショットでtasksが丸ごと上書きされ、「承認したのに
+  // 一覧に残り続ける／却下したのに復活する」ように見えてしまう。このセッ
+  // ション内で承認・却下したタスクIDを覚えておき、以後の再取得でも結果を
+  // 上書きされないようにする
+  const locallyApprovedTaskIdsRef = useRef<Set<string>>(new Set())
+  const locallyRejectedTaskIdsRef = useRef<Set<string>>(new Set())
+  const applyLocalApprovalOverrides = useCallback((remoteTasks: Task[]) => {
+    if (
+      locallyApprovedTaskIdsRef.current.size === 0 &&
+      locallyRejectedTaskIdsRef.current.size === 0
+    ) {
+      return remoteTasks
+    }
+    return remoteTasks
+      .filter((t) => !locallyRejectedTaskIdsRef.current.has(t.id))
+      .map((t) =>
+        t.pendingApproval && locallyApprovedTaskIdsRef.current.has(t.id)
+          ? { ...t, pendingApproval: false }
+          : t,
+      )
+  }, [])
   const [members, setMembers] = useState<Member[]>(isRemoteConfigured ? [] : MEMBERS)
   const [projects, setProjects] = useState<Project[]>(isRemoteConfigured ? [] : PROJECTS)
   // 自分自身の登録メール(カンマ区切り)。セキュリティ対応でMembers(公開CSV)
@@ -895,7 +919,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       .then(({ members: m, projects: p, tasks: t }) => {
         setMembers(m)
         setProjects(p)
-        setTasks(t)
+        setTasks(applyLocalApprovalOverrides(t))
         setRemoteStatus('ready')
         setRemoteError(null)
       })
@@ -903,7 +927,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         reportRemoteError(err)
         setRemoteStatus('error')
       })
-  }, [reportRemoteError])
+  }, [reportRemoteError, applyLocalApprovalOverrides])
 
   // fetch the optional Settings sheet once, when configured — this is the
   // source of truth for the skill/category/role-level pools and project
@@ -975,7 +999,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         if (remote) {
           setMembers(remote.members)
           setProjects(remote.projects)
-          setTasks(remote.tasks)
+          setTasks(applyLocalApprovalOverrides(remote.tasks))
         }
         if (settings) {
           setSkillOptions(settings.skillOptions.length ? uniq(settings.skillOptions) : DEFAULT_SKILL_OPTIONS)
@@ -1022,7 +1046,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(reportRemoteError)
       .finally(() => setRefreshing(false))
-  }, [reportRemoteError])
+  }, [reportRemoteError, applyLocalApprovalOverrides])
 
   // 定期タスク generation check (item 2/TSK-051の修正) — 生成の要否判定・
   // 実際の生成はGAS側のLockService付き関数(generateRecurringTasksLocked)
@@ -2944,6 +2968,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const approveTask = useCallback(
     (id: string) => {
+      locallyApprovedTaskIdsRef.current.add(id)
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, pendingApproval: false } : t)))
       if (isRemoteConfigured) runRemote(remoteApi.approveTask(id))
     },
@@ -2976,6 +3001,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const rejectTask = useCallback(
     (id: string, reason?: string) => {
       const task = tasks.find((t) => t.id === id)
+      locallyRejectedTaskIdsRef.current.add(id)
       setTasks((prev) =>
         prev
           .filter((t) => t.id !== id)
