@@ -944,6 +944,7 @@ export const ja = {
   'input.result.bulkCategoryPlaceholder': 'カテゴリ',
   'input.result.bulkDifficultyPlaceholder': '難易度',
   'input.result.bulkPriorityPlaceholder': '優先度',
+  'input.result.bulkAssigneePlaceholder': '担当者を追加',
   'input.result.priorityOption': '優先度{priority}',
   'input.result.emptyState': 'すべてのタスクを削除しました。',
   'input.result.ofTotalApproving': '/{total} 件を承認中',

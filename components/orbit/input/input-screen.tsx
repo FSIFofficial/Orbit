@@ -254,6 +254,17 @@ export function InputScreen() {
   const bulkApply = <K extends keyof ParsedTask>(key: K, value: ParsedTask[K]) => {
     setParsed((prev) => prev.map((p) => (selectedIds.has(p.id) ? { ...p, [key]: value } : p)))
   }
+  // 担当者は他の項目と違って上書きではなく追加(既存の担当者はそのまま残す)。
+  // 1人だけのタスクに全員同じ担当を追加したいケースが主目的のため
+  const bulkAddAssignee = (memberId: string) => {
+    setParsed((prev) =>
+      prev.map((p) =>
+        selectedIds.has(p.id) && !p.assigneeIds.includes(memberId)
+          ? { ...p, assigneeIds: [...p.assigneeIds, memberId] }
+          : p,
+      ),
+    )
+  }
 
   const handleRegister = () => {
     const approved = parsed.filter((p) => p.approved)
@@ -658,6 +669,21 @@ export function InputScreen() {
                     {PRIORITIES.map((p) => (
                       <option key={p} value={p}>
                         {t('input.result.priorityOption', { priority: t(PRIORITY_KEY[p]) })}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) bulkAddAssignee(e.target.value)
+                      e.target.value = ''
+                    }}
+                    className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
+                  >
+                    <option value="">{t('input.result.bulkAssigneePlaceholder')}</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName || m.name}
                       </option>
                     ))}
                   </select>
