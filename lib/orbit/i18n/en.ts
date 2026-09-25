@@ -944,6 +944,7 @@ export const en = {
   'input.result.bulkCategoryPlaceholder': 'Category',
   'input.result.bulkDifficultyPlaceholder': 'Difficulty',
   'input.result.bulkPriorityPlaceholder': 'Priority',
+  'input.result.bulkAssigneePlaceholder': 'Add assignee',
   'input.result.priorityOption': 'Priority {priority}',
   'input.result.emptyState': 'All tasks have been removed.',
   'input.result.ofTotalApproving': '/{total} approved',

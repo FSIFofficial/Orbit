@@ -171,21 +171,20 @@ export function ParsedTaskCard({
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3.5 sm:grid-cols-4">
         <Field label={t('taskDrawer.row.project')}>
-          <input
-            list="project-suggestions"
-            value={projects.find((p) => p.id === task.projectId)?.name ?? ''}
-            onChange={(e) => {
-              const matched = projects.find((p) => p.name === e.target.value)
-              if (matched) set('projectId', matched.id)
-            }}
-            placeholder={t('input.parsedTask.projectPlaceholder')}
-            className="w-full rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
-          />
-          <datalist id="project-suggestions">
+          <select
+            value={task.projectId}
+            onChange={(e) => set('projectId', e.target.value)}
+            className="w-full cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 text-sm outline-none hover:border-border focus:border-border-strong"
+          >
+            {!projects.some((p) => p.id === task.projectId) && (
+              <option value={task.projectId}>{t('input.parsedTask.projectPlaceholder')}</option>
+            )}
             {projects.map((p) => (
-              <option key={p.id} value={p.name} />
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
-          </datalist>
+          </select>
         </Field>
 
         <Field label={t('taskDrawer.row.startDate')}>
