@@ -195,7 +195,7 @@ export function CareerTab({
       )}
       <CompetenciesSection member={member} editable={editableAdminOnly} onSave={updateCompetencies} />
       <CareerHistorySection member={member} editable={editable} onSave={updateCareerHistory} rid={rid} />
-      <QualificationsSection member={member} editable={editable} onSave={updateQualifications} rid={rid} />
+      <QualificationsSection member={member} editable={editable} skillOptions={skillOptions} onSave={updateQualifications} rid={rid} />
       <PortableRecordSection member={member} editable={editable} onImport={importPortableRecord} />
       <TrainingHistorySection
         member={member}
@@ -794,11 +794,13 @@ function CareerHistorySection({
 function QualificationsSection({
   member,
   editable,
+  skillOptions,
   onSave,
   rid,
 }: {
   member: Member
   editable: boolean
+  skillOptions: string[]
   onSave: CareerTabProps['updateQualifications']
   rid: () => string
 }) {
@@ -806,22 +808,33 @@ function QualificationsSection({
   const [name, setName] = useState('')
   const [acquiredDate, setAcquiredDate] = useState('')
   const [issuer, setIssuer] = useState('')
+  const [relatedSkills, setRelatedSkills] = useState<string[]>([])
+  const [external, setExternal] = useState(false)
 
   const add = () => {
     const n = name.trim()
     if (!n) return
     onSave(member.id, [
       ...items,
-      { id: rid(), name: n, acquiredDate: acquiredDate || undefined, issuer: issuer.trim() || undefined },
+      {
+        id: rid(),
+        name: n,
+        acquiredDate: acquiredDate || undefined,
+        issuer: issuer.trim() || undefined,
+        relatedSkills: relatedSkills.length > 0 ? relatedSkills : undefined,
+        external: external || undefined,
+      },
     ])
     setName('')
     setAcquiredDate('')
     setIssuer('')
+    setRelatedSkills([])
+    setExternal(false)
   }
 
   const { t } = useI18n()
   return (
-    <Section title={t('career.qualifications.title')}>
+    <Section title={t('career.qualifications.title')} description={t('career.qualifications.desc')}>
       <EntryList emptyText={t('career.noRecords')}>
         {items.map((q) => (
           <EntryRow key={q.id} editable={editable} onRemove={() => onSave(member.id, items.filter((x) => x.id !== q.id))}>
@@ -831,22 +844,45 @@ function QualificationsSection({
                 {[q.acquiredDate, q.issuer].filter(Boolean).join(' / ')}
               </span>
             )}
+            {q.relatedSkills && q.relatedSkills.length > 0 && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                {q.relatedSkills.join('、')}
+                {q.external && <span className="ml-1 text-primary">{t('career.qualifications.externalTag')}</span>}
+              </span>
+            )}
           </EntryRow>
         ))}
       </EntryList>
       {editable && (
-        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('career.qualifications.namePlaceholder')} className={fieldClass} />
-          <input type="date" value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)} className={fieldClass} />
-          <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={t('career.qualifications.issuerPlaceholder')} className={fieldClass} />
-          <button
-            onClick={add}
-            disabled={!name.trim()}
-            className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
-          >
-            <Plus className="size-3.5" />
-            {t('common.add')}
-          </button>
+        <div className="mt-2 flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('career.qualifications.namePlaceholder')} className={fieldClass} />
+            <input type="date" value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)} className={fieldClass} />
+            <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={t('career.qualifications.issuerPlaceholder')} className={fieldClass} />
+            <button
+              onClick={add}
+              disabled={!name.trim()}
+              className="flex h-8 items-center justify-center gap-1 rounded-md border border-dashed border-border-strong text-xs text-muted-foreground hover:bg-secondary disabled:opacity-40"
+            >
+              <Plus className="size-3.5" />
+              {t('common.add')}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('career.qualifications.relatedSkillsLabel')}</span>
+            <EditableTags
+              tags={relatedSkills}
+              editable
+              options={skillOptions}
+              onChange={setRelatedSkills}
+              emptyText={t('common.notSet')}
+              placeholder={t('career.qualifications.relatedSkillsPlaceholder')}
+            />
+            <label className="ml-2 flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={external} onChange={(e) => setExternal(e.target.checked)} className="size-3.5 accent-primary" />
+              {t('career.qualifications.externalLabel')}
+            </label>
+          </div>
         </div>
       )}
     </Section>

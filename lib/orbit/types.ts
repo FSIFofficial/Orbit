@@ -296,6 +296,12 @@ export interface Qualification {
   name: string
   acquiredDate?: string // YYYY-MM-DD
   issuer?: string
+  // スキルポイント制度のレベル4/5判定に使う(utils.tsのcomputeSkillLevel)。
+  // レベル4「タスク以外で1つ以上認定される」はrelatedSkillsに紐づく件数、
+  // レベル5「外部での実績や外部検定で3つ以上評価される」はexternal=trueの
+  // 件数で判定する
+  relatedSkills?: string[]
+  external?: boolean
 }
 
 export interface EvaluationRecord {

@@ -84,7 +84,7 @@ import {
   remoteApi,
   toCreatePayload,
 } from './remote'
-import { computeProjectAutoHealth, daysSince, deadlineLevel, incompletePrerequisites, isLowWorkloadMember, parseMentions } from './utils'
+import { computeProjectAutoHealth, computeSkillLevel, daysSince, deadlineLevel, incompletePrerequisites, isLowWorkloadMember, parseMentions, SKILL_LEVEL_CUMULATIVE_THRESHOLDS } from './utils'
 import { useI18n } from './i18n'
 import { cacheTimezone, DEFAULT_TIMEZONE } from './timezone'
 import { setGasAuthToken, setCalendarToken } from './google-sheet-sync'
@@ -1554,7 +1554,8 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   )
 
   // スキルポイント付与 — タスク完了後に管理者が各スキルに対してポイントを付与。
-  // 累計ポイントが閾値を超えるとスキルレベルが自動で繰り上がる。
+  // 累計ポイントが閾値[50,150,350,550,750]を超え、かつレベル4/5は資格
+  // (認定)条件も満たすとスキルレベルが自動で繰り上がる(computeSkillLevel)。
   const awardSkillPoints = useCallback(
     (taskId: string, memberId: string, points: SkillPoints) => {
       setMembers((prev) =>
@@ -1564,11 +1565,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           Object.entries(points).forEach(([skill, pts]) => {
             current[skill] = (current[skill] ?? 0) + pts
           })
-          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+          const qualifications = m.qualifications ?? []
           const existingLevels = [...(m.skillLevels ?? [])]
           Object.entries(current).forEach(([skill, pts]) => {
-            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
-            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
+            const earnedLevel = computeSkillLevel(pts, skill, qualifications)
+            if (earnedLevel == null) return
             const idx = existingLevels.findIndex((sl) => sl.skill === skill)
             if (idx < 0) {
               existingLevels.push({ skill, level: earnedLevel })
@@ -1582,7 +1583,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       setTasks((prev) => prev.map((t) => (t.id !== taskId ? t : { ...t, awardedPoints: points })))
       if (isRemoteConfigured) runRemote(remoteApi.awardSkillPoints(taskId, memberId, points))
     },
-    [skillLevelThresholds, runRemote],
+    [runRemote],
   )
 
   // 他団体での実績の持ち込み — awardSkillPointsと同じ「累計加算→レベル
@@ -1602,18 +1603,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           Object.entries(filteredPoints).forEach(([skill, pts]) => {
             current[skill] = (current[skill] ?? 0) + pts
           })
-          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
-          const existingLevels = [...(m.skillLevels ?? [])]
-          Object.entries(current).forEach(([skill, pts]) => {
-            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
-            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
-            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
-            if (idx < 0) {
-              existingLevels.push({ skill, level: earnedLevel })
-            } else if (earnedLevel > existingLevels[idx].level) {
-              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
-            }
-          })
           const existingQualifications = m.qualifications ?? []
           const existingKeys = new Set(
             existingQualifications.map((q) => `${q.name}|${q.acquiredDate ?? ''}`),
@@ -1621,18 +1610,30 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           const newQualifications = qualifications.filter(
             (q) => !existingKeys.has(`${q.name}|${q.acquiredDate ?? ''}`),
           )
+          const mergedQualifications = [...existingQualifications, ...newQualifications]
+          const existingLevels = [...(m.skillLevels ?? [])]
+          Object.entries(current).forEach(([skill, pts]) => {
+            const earnedLevel = computeSkillLevel(pts, skill, mergedQualifications)
+            if (earnedLevel == null) return
+            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
+            if (idx < 0) {
+              existingLevels.push({ skill, level: earnedLevel })
+            } else if (earnedLevel > existingLevels[idx].level) {
+              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
+            }
+          })
           return {
             ...m,
             skillPoints: current,
             skillLevels: existingLevels,
-            qualifications: [...existingQualifications, ...newQualifications],
+            qualifications: mergedQualifications,
           }
         }),
       )
       if (isRemoteConfigured)
         runRemote(remoteApi.importPortableRecord(memberId, filteredPoints, qualifications))
     },
-    [skillLevelThresholds, runRemote],
+    [runRemote],
   )
 
   // 検定定義の更新（Admin）
@@ -1761,12 +1762,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
               } else {
                 existing[idx] = { ...existing[idx], level: quiz.targetLevel }
               }
-              // SKL-009: skill_points_jsonもレベルと整合させる。awardSkillPoints
-              // と同じ閾値計算(pts/threshold切り捨て+1=レベル)から逆算すると、
-              // レベルLに達する最低ポイントはthreshold*(L-1)
-              const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
-              const threshold = skillLevelThresholds[quiz.targetSkill] ?? defaultThreshold
-              const minPointsForLevel = threshold * (quiz.targetLevel - 1)
+              // SKL-009: skill_points_jsonもレベルと整合させる。検定合格を
+              // 「認定」の根拠として扱い、累積閾値[50,150,350,550,750]の
+              // targetLevel分まではポイントを底上げする(レベル4/5の資格
+              // 認定条件は検定合格自体で満たされるとみなしチェックしない)
+              const minPointsForLevel = SKILL_LEVEL_CUMULATIVE_THRESHOLDS[quiz.targetLevel]
               const currentPoints = { ...m.skillPoints }
               if ((currentPoints[quiz.targetSkill] ?? 0) < minPointsForLevel) {
                 currentPoints[quiz.targetSkill] = minPointsForLevel
@@ -1778,7 +1778,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         return { passed, score }
       }
     },
-    [quizDefinitions, reportRemoteError, skillLevelThresholds],
+    [quizDefinitions, reportRemoteError],
   )
 
   // ---- Phase 5: 経費申請・カスタムフォーム コールバック --------------------
