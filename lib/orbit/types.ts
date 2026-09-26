@@ -404,15 +404,18 @@ export type ProjectHealthLevel = 'good' | 'watch' | 'attention'
 
 // A template task an admin defines for a Project type (store.tsx's
 // projectTemplates), auto-created whenever a new project of that type
-// is added.
+// is added. Like TaskSetTemplateItem, an item can depend on other items
+// in the same template (dependsOn, by template-local id) so the tasks
+// generated at project creation come out pre-wired with dependsOnIds.
 export interface ProjectTemplateTask {
-  id: string
+  id: string // template-local id — referenced by dependsOn within this template
   name: string
   department: Department
   category: string
   skills: string[]
   difficulty: Difficulty
   priority: Priority
+  dependsOn?: string[] // template-local ids of prerequisite tasks in this template
 }
 
 // A reusable named task-set template (item 1: タスクのテンプレート化, e.g.

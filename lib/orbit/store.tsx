@@ -3090,8 +3090,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
       const templates = type ? projectTemplates[type] ?? [] : []
       const today = new Date().toISOString().slice(0, 10)
+      // 業務テンプレート(applyTaskSetTemplate)と同じく、テンプレート内の
+      // dependsOnはテンプレートローカルidで書かれているので、生成した
+      // 一時idへのマップを介して実際のdependsOnIdsに変換する
+      const tempIdByItemId = new Map(
+        templates.map((t) => [t.id, `t-${Math.random().toString(36).slice(2, 9)}`]),
+      )
       const templateTasks: Task[] = templates.map((t) => ({
-        id: `t-${Math.random().toString(36).slice(2, 9)}`,
+        id: tempIdByItemId.get(t.id)!,
         name: t.name,
         description: '',
         projectId: tempProjectId,
@@ -3108,6 +3114,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
         progressHistory: [],
         pendingApproval: false, // admin-initiated project setup — no approval needed
+        dependsOnIds: (t.dependsOn ?? [])
+          .map((localId) => tempIdByItemId.get(localId))
+          .filter((id): id is string => !!id),
       }))
       if (templateTasks.length > 0) setTasks((prev) => [...templateTasks, ...prev])
 
@@ -3138,8 +3147,23 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
                 .then((mapping) => {
                   const realId = new Map(mapping.map((m) => [m.tempId, m.id]))
                   setTasks((prev) =>
-                    prev.map((t) => (realId.has(t.id) ? { ...t, id: realId.get(t.id)! } : t)),
+                    prev.map((t) =>
+                      realId.has(t.id)
+                        ? {
+                            ...t,
+                            id: realId.get(t.id)!,
+                            dependsOnIds: (t.dependsOnIds ?? []).map((depId) => realId.get(depId) ?? depId),
+                          }
+                        : t,
+                    ),
                   )
+                  templateTasks.forEach((t) => {
+                    if (!t.dependsOnIds || t.dependsOnIds.length === 0) return
+                    const resolvedId = realId.get(t.id)
+                    if (!resolvedId) return
+                    const resolvedDeps = t.dependsOnIds.map((depId) => realId.get(depId) ?? depId)
+                    runRemote(remoteApi.updateDependsOn(resolvedId, resolvedDeps))
+                  })
                 })
                 .catch(reportRemoteError)
             }
@@ -3148,7 +3172,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           .catch(reportRemoteError)
       }
     },
-    [projectTemplates, currentUserId, reportRemoteError],
+    [projectTemplates, currentUserId, reportRemoteError, runRemote],
   )
 
   // a task can't exist without a project (Task.projectId is required), so
