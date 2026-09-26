@@ -138,9 +138,12 @@ export function PersonDetail({ id }: { id: string }) {
   const { go } = useNav()
   const toast = useToast()
   const { t, locale, setLocale } = useI18n()
-  // 自分のページを開いたときは、プロフィール詳細(Overview)ではなく
-  // タスクに関する内容を最初に見せる。詳細はsettingsタブ側に統合する
-  const [tab, setTab] = useState<Tab>(id === currentUser?.id ? 'tasks' : 'overview')
+  // 個人ページを開いたときは、自分・他人問わずプロフィール詳細(Overview)
+  // ではなくタスクに関する内容を最初に見せる(item: 「対象:個人」で個人名を
+  // クリックしたときもタスクの内容だけ表示してほしい)。自分の場合の
+  // Overview相当の内容はsettingsタブ側に統合済み。他人の場合はOverview
+  // タブがそのまま残っているので、そこから詳細プロフィールを見られる
+  const [tab, setTab] = useState<Tab>('tasks')
   const [taskView, setTaskView] = useState<TaskView>('list')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
