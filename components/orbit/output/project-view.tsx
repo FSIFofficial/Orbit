@@ -57,37 +57,38 @@ function ProjectCard({
 
   return (
     <div className={depth > 0 ? 'ml-4 border-l-2 border-border/50 pl-4' : ''}>
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:border-border-strong hover:shadow-[0_2px_8px_rgba(16,24,40,0.06)]">
-        <button onClick={() => go({ name: 'project', id: p.id })} className="flex flex-1 flex-col gap-4 text-left">
-          <div className="flex items-center gap-2.5">
-            <span className={`size-2.5 rounded-full ${depth > 0 ? 'bg-muted-foreground/50' : 'bg-primary/60'}`} />
-            <p className="text-sm font-semibold text-foreground">{p.name}</p>
+      {/* item: カード1枚の高さを従来の6〜7割程度に圧縮(縦gap・パディングを
+          詰め、統計行と進捗バーを1行にまとめた) */}
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:border-border-strong hover:shadow-[0_2px_8px_rgba(16,24,40,0.06)]">
+        <button onClick={() => go({ name: 'project', id: p.id })} className="flex flex-1 flex-col gap-2 text-left">
+          <div className="flex items-center justify-between gap-2.5">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className={`size-2 shrink-0 rounded-full ${depth > 0 ? 'bg-muted-foreground/50' : 'bg-primary/60'}`} />
+              <span className="truncate text-sm font-semibold text-foreground">{p.name}</span>
+            </span>
+            {showMembers && (
+              <span className="flex shrink-0 -space-x-1.5">
+                {pm.slice(0, 4).map((m) => (
+                  <span key={m.id} className="rounded-full ring-2 ring-card">
+                    <Avatar member={m} size={18} />
+                  </span>
+                ))}
+              </span>
+            )}
           </div>
           {showStats && (
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span>{t('project.card.membersCount', { count: pm.length })}</span>
               <span>{t('project.card.tasksCount', { count: pt.length })}</span>
               <span className={waiting > 0 ? 'text-warning' : ''}>{t('project.card.waitingCount', { count: waiting })}</span>
             </div>
           )}
           {showProgress && (
-            <div>
-              <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">{t('project.card.progress')}</span>
-                <span className="font-medium tabular-nums text-foreground">{completion}%</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
                 <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
               </div>
-            </div>
-          )}
-          {showMembers && (
-            <div className="flex -space-x-1.5">
-              {pm.slice(0, 5).map((m) => (
-                <span key={m.id} className="rounded-full ring-2 ring-card">
-                  <Avatar member={m} size={24} />
-                </span>
-              ))}
+              <span className="shrink-0 text-[11px] font-medium tabular-nums text-foreground">{completion}%</span>
             </div>
           )}
         </button>
@@ -105,7 +106,7 @@ function ProjectCard({
             ))}
           </div>
         )}
-        <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2">
+        <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-1.5">
           {hasChildren ? (
             <button
               type="button"
@@ -206,19 +207,24 @@ export function ProjectView({
 
   const topLevel = activeProjects.filter((p) => !p.parentId)
 
+  // item: プロジェクト一覧が長くなっても、この領域だけが独立してスクロール
+  // するようにする(プロジェクト追加ボタンなどページ上部の操作は常に見える
+  // 位置に残る)
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <ProjectTree
-        projects={topLevel}
-        allProjects={activeProjects}
-        tasks={tasks}
-        activeProjects={activeProjects}
-        members={members}
-        getProjectMembers={getProjectMembers}
-        go={go}
-        depth={0}
-        fields={fields}
-      />
+    <div className="max-h-[70vh] overflow-y-auto orbit-scroll pr-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ProjectTree
+          projects={topLevel}
+          allProjects={activeProjects}
+          tasks={tasks}
+          activeProjects={activeProjects}
+          members={members}
+          getProjectMembers={getProjectMembers}
+          go={go}
+          depth={0}
+          fields={fields}
+        />
+      </div>
     </div>
   )
 }

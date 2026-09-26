@@ -329,6 +329,7 @@ export const ja = {
   'output.view.openbid': '公募',
   'output.fields.button': '表示項目',
   'output.fields.hint': 'カードに表示する項目（タスク名は常に表示）',
+  'output.projects.addModalTitle': '新しいプロジェクトを追加',
   'output.sort.button': '表示順',
   'output.sort.deadline': '締切が近い順',
   'output.sort.priority': '優先度が高い順',

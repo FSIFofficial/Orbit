@@ -329,6 +329,7 @@ export const en = {
   'output.view.openbid': 'Open bid',
   'output.fields.button': 'Fields',
   'output.fields.hint': 'Fields shown on cards (task name is always shown)',
+  'output.projects.addModalTitle': 'Add new project',
   'output.sort.button': 'Sort',
   'output.sort.deadline': 'Deadline (soonest first)',
   'output.sort.priority': 'Priority (highest first)',
