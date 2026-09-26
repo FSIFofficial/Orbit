@@ -102,6 +102,9 @@ export function InputScreen() {
   const [registered, setRegistered] = useState(false)
   const [historyInput, setHistoryInput] = useState<TaskInput | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // 休止中メンバーは一括変更の担当者追加にも出さない(ParsedTaskCard側の
+  // 個別担当者選択と揃える)
+  const activeMembers = members.filter((m) => !m.inactive)
   const [importError, setImportError] = useState<string | null>(null)
   const [importSource, setImportSource] = useState<string | null>(null)
   const [sheetData, setSheetData] = useState<SheetData | null>(null)
@@ -681,7 +684,7 @@ export function InputScreen() {
                     className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-xs outline-none"
                   >
                     <option value="">{t('input.result.bulkAssigneePlaceholder')}</option>
-                    {members.map((m) => (
+                    {activeMembers.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.displayName || m.name}
                       </option>
