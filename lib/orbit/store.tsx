@@ -393,6 +393,7 @@ interface OrbitContextValue extends OrbitState {
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
   setBlocker: (id: string, note: string | null) => void
+  setHoldReason: (id: string, note: string | null) => void
   updateEstimatedHours: (id: string, hours: number | null) => void
   updateActualHours: (id: string, hours: number | null) => void
   updateRetrospective: (id: string, retrospective: TaskRetrospective | null) => void
@@ -3766,6 +3767,22 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
+  // ステータスを「保留」にする際の理由。blockerと同じ形(note+since)で
+  // 独立管理し、保留を解除しても理由自体は履歴として残す
+  const setHoldReason = useCallback(
+    (id: string, note: string | null) => {
+      const trimmed = note?.trim() || null
+      const since = trimmed ? new Date().toISOString().slice(0, 10) : null
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, holdReason: trimmed ? { note: trimmed, since: since! } : undefined } : t,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.setHoldReason(id, trimmed, since))
+    },
+    [runRemote],
+  )
+
   // 想定/実績の所要時間（item 5） — powers the Assignments page's
   // per-member 今週の工数 indicator and the INPUT screen's estimate suggestion
   const updateEstimatedHours = useCallback(
@@ -4828,6 +4845,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateReviewers,
     approveTaskReview,
     setBlocker,
+    setHoldReason,
     updateEstimatedHours,
     updateActualHours,
     updateRetrospective,

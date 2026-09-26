@@ -125,6 +125,7 @@ export const en = {
 
   // ---- task status (internal enum → display label) -----------------------
   'status.todo': 'To do',
+  'status.hold': 'On hold',
   'status.progress': 'In progress',
   'status.support': 'Needs support',
   'status.review': 'In review',
@@ -593,6 +594,16 @@ export const en = {
   'taskDrawer.historyChangeLine': '{who} changed {field} from "{from}" to "{to}"',
   'taskDrawer.takeButton': 'Take this task',
   'taskDrawer.assigneeFooterNote': 'You are assigned to this task. Use the button above to update its status.',
+  'taskDrawer.infoCard.title': 'Task info',
+  'taskDrawer.effortCard.title': 'Effort',
+  'taskDrawer.effortCard.estimated': 'Estimated',
+  'taskDrawer.effortCard.actual': 'Actual',
+  'taskDrawer.blocker.empty': 'No blockers right now',
+  'taskDrawer.deliverables.addButton': 'Add deliverable',
+  'taskDrawer.holdReason.label': 'Hold reason',
+  'taskDrawer.holdReason.placeholder': 'Enter the reason for the hold',
+  'taskDrawer.relatedFeaturesHeader': 'Related features',
+  'taskDrawer.detailsHeader': 'Details',
 
   // ---- task-detail-drawer: source input modal ---------------------------
   'taskDrawer.sourceInput.title': 'Original input',
@@ -699,8 +710,8 @@ export const en = {
   // ---- task-detail-drawer: timer widget ------------------------------------
   'taskDrawer.timer.pause': 'Pause',
   'taskDrawer.timer.start': 'Start',
-  'taskDrawer.timer.addToActual': 'Add to actual',
-  'taskDrawer.timer.reset': 'Reset',
+  'taskDrawer.timer.resume': 'Resume',
+  'taskDrawer.timer.finish': 'Finish',
 
   // ---- task-detail-drawer: Google Calendar button --------------------------
   'taskDrawer.gcal.added': 'Added to Google Calendar',

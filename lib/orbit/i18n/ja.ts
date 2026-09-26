@@ -125,6 +125,7 @@ export const ja = {
 
   // ---- task status (内部enum → 表示ラベル) --------------------------------
   'status.todo': '未着手',
+  'status.hold': '保留',
   'status.progress': '進行中',
   'status.support': 'サポート必要',
   'status.review': '確認待ち',
@@ -593,6 +594,16 @@ export const ja = {
   'taskDrawer.historyChangeLine': '{who}が{field}を「{from}」→「{to}」に変更',
   'taskDrawer.takeButton': 'このタスクを担当する',
   'taskDrawer.assigneeFooterNote': 'あなたが担当しています。上のボタンでステータスを更新できます。',
+  'taskDrawer.infoCard.title': 'タスク情報',
+  'taskDrawer.effortCard.title': '工数',
+  'taskDrawer.effortCard.estimated': '想定',
+  'taskDrawer.effortCard.actual': '実績',
+  'taskDrawer.blocker.empty': '現在ブロッカーはありません',
+  'taskDrawer.deliverables.addButton': '成果物を追加',
+  'taskDrawer.holdReason.label': '保留理由',
+  'taskDrawer.holdReason.placeholder': '保留理由を入力',
+  'taskDrawer.relatedFeaturesHeader': '関連機能',
+  'taskDrawer.detailsHeader': '詳細情報',
 
   // ---- task-detail-drawer: source input modal ---------------------------
   'taskDrawer.sourceInput.title': '元の入力内容',
@@ -698,9 +709,9 @@ export const ja = {
 
   // ---- task-detail-drawer: timer widget ------------------------------------
   'taskDrawer.timer.pause': '一時停止',
-  'taskDrawer.timer.start': '開始',
-  'taskDrawer.timer.addToActual': '実績に加算',
-  'taskDrawer.timer.reset': 'リセット',
+  'taskDrawer.timer.start': '計測開始',
+  'taskDrawer.timer.resume': '再開',
+  'taskDrawer.timer.finish': '終了',
 
   // ---- task-detail-drawer: Google Calendar button --------------------------
   'taskDrawer.gcal.added': 'Googleカレンダーに追加しました',

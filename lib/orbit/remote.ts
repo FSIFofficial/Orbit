@@ -322,6 +322,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     reviewerId: r.reviewer_id || undefined,
     reviewerIds: r.reviewer_ids ? splitTags(r.reviewer_ids) : (r.reviewer_id ? [r.reviewer_id] : undefined),
     blocker: r.blocker_note ? { note: r.blocker_note, since: r.blocker_since || '' } : undefined,
+    holdReason: r.hold_reason_note ? { note: r.hold_reason_note, since: r.hold_reason_since || '' } : undefined,
     deliverables: parseJsonArray<TaskDeliverable>(r.deliverables_json),
     history: parseJsonArray<TaskHistoryEntry>(r.history_json),
     comments: parseJsonArray<TaskComment>(r.comments_json),
@@ -831,6 +832,8 @@ export const remoteApi = {
   approveTaskReview: (taskId: string, comment?: string) => postToGas('approveTaskReview', { taskId, comment }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
+  setHoldReason: (taskId: string, note: string | null, since: string | null) =>
+    postToGas('setHoldReason', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>
     postToGas('updateDeliverables', { taskId, deliverables }),
   updateHistory: (taskId: string, history: TaskHistoryEntry[]) =>

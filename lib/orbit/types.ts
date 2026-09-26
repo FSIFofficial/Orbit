@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'progress' | 'support' | 'review' | 'fix' | 'done'
+export type TaskStatus = 'todo' | 'hold' | 'progress' | 'support' | 'review' | 'fix' | 'done'
 
 export type Difficulty = '誰でも可' | '新人歓迎' | '少し経験必要' | '経験者向け' | '上級者向け'
 
@@ -647,6 +647,12 @@ export interface Task {
     note: string
     since: string // YYYY-MM-DD
   }
+  // ステータスが「保留」のときの理由。他の項目と同じくstatusとは独立して
+  // 保持する(保留を解除して別ステータスに移っても直近の理由は残しておく)
+  holdReason?: {
+    note: string
+    since: string // YYYY-MM-DD
+  }
   // links to where the finished work lives (Drive/Canva/GitHub/Figma/…) —
   // also reused on the assignee's achievements page
   deliverables?: TaskDeliverable[]
@@ -795,6 +801,7 @@ export interface ParsedTask {
 
 export const STATUS_ORDER: TaskStatus[] = [
   'todo',
+  'hold',
   'progress',
   'support',
   'review',
@@ -804,6 +811,7 @@ export const STATUS_ORDER: TaskStatus[] = [
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: '未着手',
+  hold: '保留',
   progress: '進行中',
   support: 'サポート必要',
   review: '確認待ち',
@@ -813,6 +821,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 
 export const STATUS_COLOR: Record<TaskStatus, string> = {
   todo: 'var(--status-todo)',
+  hold: 'var(--status-hold)',
   progress: 'var(--status-progress)',
   support: 'var(--status-support)',
   review: 'var(--status-review)',

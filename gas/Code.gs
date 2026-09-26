@@ -897,6 +897,7 @@ function authorizeAction(acting, action, body) {
     'notifyFormResult',
     'updateHistory',
     'updateDeliverables',
+    'setHoldReason',           // 保留理由の設定は担当者(または管理者)が本人操作
     'submitQuizResult',        // 検定の受験はログイン済み誰でも
     'submitExpenseApplication',// 経費申請はログイン済み誰でも
     'withdrawExpense',         // 取り下げは本人（下層でチェック）
@@ -1181,6 +1182,12 @@ function doPost(e) {
         result = updateTaskFields(body.taskId, {
           blocker_note: body.note || '',
           blocker_since: body.note ? body.since || todayStr() : '',
+        })
+        break
+      case 'setHoldReason':
+        result = updateTaskFields(body.taskId, {
+          hold_reason_note: body.note || '',
+          hold_reason_since: body.note ? body.since || todayStr() : '',
         })
         break
       case 'updateDeliverables':
