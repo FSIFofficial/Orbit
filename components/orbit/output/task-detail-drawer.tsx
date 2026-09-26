@@ -39,7 +39,7 @@ import {
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, computeAvgSkillPoints, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, computeAvgSkillPoints, computeBaseSkillPoints, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
@@ -837,8 +837,12 @@ function SkillAwardModal({
 }) {
   const { t } = useI18n()
   const [memberId, setMemberId] = useState(assignees[0]?.id ?? '')
+  // 初期値は難易度・想定時間からの自動算出(1〜3pt)。もっと難しいと
+  // 管理者が判断する場合は下のinputで4・5ptに手動で引き上げる
   const [pointsMap, setPointsMap] = useState<Record<string, number>>(() =>
-    Object.fromEntries(task.skills.map((s) => [s, 10])),
+    Object.fromEntries(
+      task.skills.map((s) => [s, computeBaseSkillPoints(task.difficulty, task.estimatedHours)]),
+    ),
   )
   // SKL-013: 初期値(固定10)のまま未確認か、参考値採用/手動入力で管理者が
   // 確認済みかを色分けするための状態

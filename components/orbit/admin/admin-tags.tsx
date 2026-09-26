@@ -6,7 +6,8 @@ import { useToast } from '@/components/orbit/toast'
 import { Tag, SectionLabel, Avatar, AdminAccessNote } from '@/components/orbit/primitives'
 import { Button } from '@/components/ui/button'
 import { ADMIN_SECTIONS, DEFAULT_NON_TOP_SECTIONS, BASE_ROLE } from '@/lib/orbit/types'
-import type { AdminSection, CustomMemberColumn, SurveyQuestion } from '@/lib/orbit/types'
+import type { AdminSection, CustomMemberColumn, SkillLevelValue, SurveyQuestion } from '@/lib/orbit/types'
+import { SKILL_LEVEL_CUMULATIVE_THRESHOLDS } from '@/lib/orbit/utils'
 import { Plus, Check, ChevronUp, ChevronDown, X, Trash2, ImageUp, Loader2 } from 'lucide-react'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
@@ -876,67 +877,36 @@ function CustomMemberColumnsEditor() {
   )
 }
 
-// SKL-010: スキルレベルアップ閾値 — awardSkillPoints/submitQuizResultの
-// レベル計算(累計ポイント÷閾値の切り捨て+1)で使われるskillLevelThresholds
-// を管理者が編集できるようにする。スキルごとに未設定の行は「デフォルト」の
-// 値をplaceholderとして薄く表示する（保存時点ではデフォルト値そのものは
-// 個別スキルのキーとしては書き込まない）。
+// SKL-010: スキルレベルの累積ポイント閾値。以前はスキルごとに管理者が
+// 自由な値を設定できる仕組みだった(1閾値×倍数でレベルを算出)が、
+// 「レベルが上がるほど必要ポイントが増える」設計に統一したため、
+// 全スキル共通の固定値[50,150,350,550,750](utils.tsのcomputeSkillLevel)
+// になった。レベル4/5はポイントに加えて資格(認定)の条件も必要なので、
+// ここは編集フォームではなく説明表示のみにしている
 function SkillLevelThresholdsEditor() {
-  const { skillOptions, skillLevelThresholds, updateSkillLevelThresholds } = useOrbit()
   const { t } = useI18n()
-  const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
-
-  const commit = (key: string, raw: string) => {
-    const trimmed = raw.trim()
-    if (trimmed === '') {
-      if (key === 'デフォルト') return // デフォルトは空にできない（無視）
-      if (!(key in skillLevelThresholds)) return
-      const next = { ...skillLevelThresholds }
-      delete next[key]
-      updateSkillLevelThresholds(next)
-      return
-    }
-    const n = Number(trimmed)
-    if (!Number.isFinite(n) || n <= 0) return
-    updateSkillLevelThresholds({ ...skillLevelThresholds, [key]: n })
-  }
+  const rows: { level: SkillLevelValue; points: number; extra?: string }[] = [
+    { level: 1, points: SKILL_LEVEL_CUMULATIVE_THRESHOLDS[1] },
+    { level: 2, points: SKILL_LEVEL_CUMULATIVE_THRESHOLDS[2] },
+    { level: 3, points: SKILL_LEVEL_CUMULATIVE_THRESHOLDS[3] },
+    { level: 4, points: SKILL_LEVEL_CUMULATIVE_THRESHOLDS[4], extra: t('admin.tags.skillLevelThresholds.level4Extra') },
+    { level: 5, points: SKILL_LEVEL_CUMULATIVE_THRESHOLDS[5], extra: t('admin.tags.skillLevelThresholds.level5Extra') },
+  ]
 
   return (
     <div className="mt-6 rounded-lg border border-border bg-card p-4">
       <SectionLabel>{t('admin.tags.skillLevelThresholds.title')}</SectionLabel>
       <p className="mt-1 text-xs text-muted-foreground">{t('admin.tags.skillLevelThresholds.desc')}</p>
       <div className="mt-3 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <span className="w-40 shrink-0 text-sm font-medium">
-            {t('admin.tags.skillLevelThresholds.defaultLabel')}
-          </span>
-          <input
-            type="number"
-            min={1}
-            defaultValue={defaultThreshold}
-            onBlur={(e) => commit('デフォルト', e.target.value)}
-            className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
-          />
-        </div>
-        {skillOptions.length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">{t('admin.tags.addSkillsFirst')}</p>
-        ) : (
-          skillOptions.map((skill) => (
-            <div key={skill} className="flex items-center gap-2">
-              <span className="w-40 shrink-0 truncate text-sm" title={skill}>
-                {skill}
-              </span>
-              <input
-                type="number"
-                min={1}
-                defaultValue={skillLevelThresholds[skill] ?? ''}
-                placeholder={String(defaultThreshold)}
-                onBlur={(e) => commit(skill, e.target.value)}
-                className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm outline-none placeholder:text-muted-foreground/50 focus:border-primary"
-              />
-            </div>
-          ))
-        )}
+        {rows.map((r) => (
+          <div key={r.level} className="flex items-center gap-2 text-sm">
+            <span className="w-16 shrink-0 font-medium">{t('admin.tags.skillLevelThresholds.levelLabel', { level: r.level })}</span>
+            <span className="w-28 shrink-0 tabular-nums text-muted-foreground">
+              {t('admin.tags.skillLevelThresholds.pointsValue', { points: r.points })}
+            </span>
+            {r.extra && <span className="text-xs text-muted-foreground">{r.extra}</span>}
+          </div>
+        ))}
       </div>
     </div>
   )

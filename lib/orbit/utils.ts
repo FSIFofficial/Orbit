@@ -1,4 +1,4 @@
-import type { Member, Project, ProjectHealthLevel, RadarAxis, Task } from './types'
+import type { Difficulty, Member, Project, ProjectHealthLevel, Qualification, RadarAxis, SkillLevelValue, Task } from './types'
 import { DIFFICULTY_LABEL, STATUS_LABEL } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
@@ -274,8 +274,9 @@ export function findSimilarTasks(
 }
 
 // SKL-014: カテゴリが同じ完了タスクにおける、このタスクの要求スキル
-// (task.skills)ごとの平均付与ポイント(参考値)。task-detail-drawer.tsxの
-// SkillAwardModalの初期計算式と同じもので、参考値が無いスキルはnull
+// (task.skills)ごとの平均付与ポイント(参考値)。「推定値で承認」ボタン
+// (admin-dashboard.tsx)向けで、参考値が無いスキルはnull。タスク単体からの
+// 自動算出はcomputeBaseSkillPointsを使う
 export function computeAvgSkillPoints(task: Task, allTasks: Task[]): Record<string, number | null> {
   return Object.fromEntries(
     task.skills.map((skill) => {
@@ -287,6 +288,55 @@ export function computeAvgSkillPoints(task: Task, allTasks: Task[]): Record<stri
       return [skill, Math.round(avg)]
     }),
   )
+}
+
+// ---- スキルポイント経済圏 ------------------------------------------------
+//
+// 基礎ポイントは難易度・想定時間から自動算出するが、1〜3ptの範囲に留める
+// (基準は3。簡単なタスクほど1・2に下がる)。4・5ptへの引き上げは「基礎点
+// 3ptより明らかに難しい」という人間の判断でのみ行う(SkillAwardModalで
+// 手動入力する。この関数自体は4・5を返さない)。
+export function computeBaseSkillPoints(difficulty: Difficulty, estimatedHours?: number | null): 1 | 2 | 3 {
+  const difficultyIndex = DIFFICULTY_LABEL.indexOf(difficulty) // 0(誰でも可)〜4(上級者向け)
+  let base: 1 | 2 | 3 = difficultyIndex <= 1 ? 1 : difficultyIndex === 2 ? 2 : 3
+  // 想定時間が長いタスクは、同じ難易度でも負荷が大きいとみなして1段引き上げる
+  if (estimatedHours != null && estimatedHours >= 8 && base < 3) {
+    base = (base + 1) as 1 | 2 | 3
+  }
+  return base
+}
+
+// レベルごとの累積ポイント閾値。レベル4/5は累積ポイントに加えて資格
+// (Qualification)による認定条件も満たす必要がある(computeSkillLevel参照)
+export const SKILL_LEVEL_CUMULATIVE_THRESHOLDS: Record<SkillLevelValue, number> = {
+  1: 50,
+  2: 150,
+  3: 350,
+  4: 550,
+  5: 750,
+}
+
+// 累積ポイント+資格(認定)からスキルレベルを判定する。
+// レベル4「そのスキルにおいてタスク以外で1つ以上認定される」→
+//   relatedSkillsにそのスキルを含む資格が1件以上
+// レベル5「外部での実績や外部検定で3つ以上評価される」→
+//   上記のうちexternal=trueの資格が3件以上
+// 閾値未満(レベル1未満)の場合はundefined(まだこのスキルのレベルを
+// 記録しない — 既存のSkillLevelValue型が1〜5のみで0を表現できないため)
+export function computeSkillLevel(
+  cumulativePoints: number,
+  skill: string,
+  qualifications: Qualification[],
+): SkillLevelValue | undefined {
+  const related = qualifications.filter((q) => q.relatedSkills?.includes(skill))
+  const externalCount = related.filter((q) => q.external).length
+
+  if (cumulativePoints >= SKILL_LEVEL_CUMULATIVE_THRESHOLDS[5] && externalCount >= 3) return 5
+  if (cumulativePoints >= SKILL_LEVEL_CUMULATIVE_THRESHOLDS[4] && related.length >= 1) return 4
+  if (cumulativePoints >= SKILL_LEVEL_CUMULATIVE_THRESHOLDS[3]) return 3
+  if (cumulativePoints >= SKILL_LEVEL_CUMULATIVE_THRESHOLDS[2]) return 2
+  if (cumulativePoints >= SKILL_LEVEL_CUMULATIVE_THRESHOLDS[1]) return 1
+  return undefined
 }
 
 export interface TaskPerformanceScore {
