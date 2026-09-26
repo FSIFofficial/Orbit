@@ -125,6 +125,7 @@ export const en = {
 
   // ---- task status (internal enum → display label) -----------------------
   'status.todo': 'To do',
+  'status.hold': 'On hold',
   'status.progress': 'In progress',
   'status.support': 'Needs support',
   'status.review': 'In review',
@@ -328,6 +329,7 @@ export const en = {
   'output.view.openbid': 'Open bid',
   'output.fields.button': 'Fields',
   'output.fields.hint': 'Fields shown on cards (task name is always shown)',
+  'output.projects.addModalTitle': 'Add new project',
   'output.sort.button': 'Sort',
   'output.sort.deadline': 'Deadline (soonest first)',
   'output.sort.priority': 'Priority (highest first)',
@@ -509,8 +511,8 @@ export const en = {
   'onboarding.addPlaceholder': 'e.g. I want to try design',
   'onboarding.skip': 'Set up later',
   'onboarding.start': 'Get started',
-  'project.card.expand': 'Expand',
-  'project.card.collapse': 'Collapse',
+  'project.card.showChildren': 'Show sub-projects ({count})',
+  'project.card.hideChildren': 'Hide sub-projects ({count})',
   'project.card.membersCount': '{count} members',
   'project.card.tasksCount': '{count} tasks',
   'project.card.waitingCount': '{count} awaiting review',
@@ -593,6 +595,16 @@ export const en = {
   'taskDrawer.historyChangeLine': '{who} changed {field} from "{from}" to "{to}"',
   'taskDrawer.takeButton': 'Take this task',
   'taskDrawer.assigneeFooterNote': 'You are assigned to this task. Use the button above to update its status.',
+  'taskDrawer.infoCard.title': 'Task info',
+  'taskDrawer.effortCard.title': 'Effort',
+  'taskDrawer.effortCard.estimated': 'Estimated',
+  'taskDrawer.effortCard.actual': 'Actual',
+  'taskDrawer.blocker.empty': 'No blockers right now',
+  'taskDrawer.deliverables.addButton': 'Add deliverable',
+  'taskDrawer.holdReason.label': 'Hold reason',
+  'taskDrawer.holdReason.placeholder': 'Enter the reason for the hold',
+  'taskDrawer.relatedFeaturesHeader': 'Related features',
+  'taskDrawer.detailsHeader': 'Details',
 
   // ---- task-detail-drawer: source input modal ---------------------------
   'taskDrawer.sourceInput.title': 'Original input',
@@ -699,8 +711,8 @@ export const en = {
   // ---- task-detail-drawer: timer widget ------------------------------------
   'taskDrawer.timer.pause': 'Pause',
   'taskDrawer.timer.start': 'Start',
-  'taskDrawer.timer.addToActual': 'Add to actual',
-  'taskDrawer.timer.reset': 'Reset',
+  'taskDrawer.timer.resume': 'Resume',
+  'taskDrawer.timer.finish': 'Finish',
 
   // ---- task-detail-drawer: Google Calendar button --------------------------
   'taskDrawer.gcal.added': 'Added to Google Calendar',
@@ -1048,7 +1060,7 @@ export const en = {
 
   // ---- career-tab (section headings/descriptions only) ------------------------------
   'career.searchProfile.title': 'Talent search profile',
-  'career.searchProfile.desc': 'Used by the talent search filter under Admin → Members.',
+  'career.searchProfile.desc': 'Used by the talent search filter under Admin → Members. Years of experience is calculated automatically from the join date (change it in the "Tenure" field below).',
   'career.skillLevels.title': 'Skill levels',
   'career.skillLevels.desc': 'Proficiency (1-5) for each skill. Lv.1 means "just getting started," not "can\'t do it at all." Completing a task auto-registers a skill at Lv.1, and experience from outside the organization can be added manually too. Field certification is judged by the proportion of skills registered here.',
   'career.radarChart.title': 'Skill radar chart',
@@ -1105,6 +1117,12 @@ export const en = {
   'career.history.rolePlaceholder': 'Role',
   'career.qualifications.namePlaceholder': 'Qualification name',
   'career.qualifications.issuerPlaceholder': 'Issuer (optional)',
+  'career.portableRecord.title': 'Portable record',
+  'career.portableRecord.desc': 'Export your common-skill (FSIF base skills) points, levels, and qualifications to a file, then import it when you join a different organization. Skills a specific organization added are not included.',
+  'career.portableRecord.exportButton': 'Export record',
+  'career.portableRecord.importButton': 'Import record from file',
+  'career.portableRecord.importedToast': 'Merged {skillCount} skill point entries and added {qualCount} qualification(s)',
+  'career.portableRecord.importErrorToast': "Couldn't read that file. Please select a file exported from Orbit",
   'career.training.namePlaceholder': 'Training name',
   'career.training.providerPlaceholder': 'Provider (optional)',
   'career.training.apply': 'Apply',

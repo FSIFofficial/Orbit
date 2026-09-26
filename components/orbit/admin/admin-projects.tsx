@@ -943,7 +943,10 @@ function TemplateTypeCard({
     skills: '',
     difficulty: DIFFICULTY_LABEL[0] as Difficulty,
     priority: '中' as Priority,
+    dependsOn: [] as string[],
   })
+
+  const itemName = (id: string) => tasks.find((t) => t.id === id)?.name ?? '?'
 
   const addTask = () => {
     if (!draft.name.trim()) return
@@ -958,9 +961,18 @@ function TemplateTypeCard({
         .filter(Boolean),
       difficulty: draft.difficulty,
       priority: draft.priority,
+      dependsOn: draft.dependsOn.length > 0 ? draft.dependsOn : undefined,
     }
     onChange([...tasks, newTask])
-    setDraft({ ...draft, name: '', category: '', skills: '' })
+    setDraft({ ...draft, name: '', category: '', skills: '', dependsOn: [] })
+  }
+
+  const removeTask = (id: string) => {
+    onChange(
+      tasks
+        .filter((t) => t.id !== id)
+        .map((t) => ({ ...t, dependsOn: t.dependsOn?.filter((d) => d !== id) })),
+    )
   }
 
   return (
@@ -987,9 +999,14 @@ function TemplateTypeCard({
               <span className="ml-2 text-xs text-muted-foreground">
                 {tr(DEPARTMENT_KEY[t.department])} ・ {t.category} ・ {tr(DIFFICULTY_KEY[t.difficulty])} ・ {tr('priority.prefix')}{tr(PRIORITY_KEY[t.priority])}
               </span>
+              {t.dependsOn && t.dependsOn.length > 0 && (
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {tr('admin.projects.taskSets.dependsOnPrefix', { list: t.dependsOn.map(itemName).join('、') })}
+                </div>
+              )}
             </div>
             <button
-              onClick={() => onChange(tasks.filter((x) => x.id !== t.id))}
+              onClick={() => removeTask(t.id)}
               className="shrink-0 text-muted-foreground hover:text-destructive"
               aria-label={tr('common.delete')}
             >
@@ -1054,16 +1071,52 @@ function TemplateTypeCard({
           placeholder={tr('admin.projects.skillsPlaceholder')}
           className="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary sm:col-span-3"
         />
-        <Button
-          variant="outline"
-          className="col-span-2 h-8 text-xs sm:col-span-3"
-          disabled={!draft.name.trim()}
-          onClick={addTask}
-        >
-          <Plus className="size-3.5" />
-          {tr('admin.projects.types.addTaskButton')}
-        </Button>
       </div>
+
+      {/* item: プロジェクトテンプレート内でも前提タスク(dependsOn)を組み込め
+          るように — 業務テンプレート(TaskSetTemplateCard)と同じUIパターン */}
+      {tasks.length > 0 && (
+        <div className="mt-2">
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">{tr('admin.projects.taskSets.dependsOnLabel')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {tasks.map((t) => {
+              const checked = draft.dependsOn.includes(t.id)
+              return (
+                <button
+                  key={t.id}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      dependsOn: checked
+                        ? draft.dependsOn.filter((id) => id !== t.id)
+                        : [...draft.dependsOn, t.id],
+                    })
+                  }
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                    checked
+                      ? 'border-primary/30 bg-primary-muted text-accent-foreground'
+                      : 'border-border text-muted-foreground hover:bg-secondary',
+                  )}
+                >
+                  {checked && <Check className="size-3" strokeWidth={3} />}
+                  {t.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <Button
+        variant="outline"
+        className="mt-2 h-8 w-full text-xs"
+        disabled={!draft.name.trim()}
+        onClick={addTask}
+      >
+        <Plus className="size-3.5" />
+        {tr('admin.projects.types.addTaskButton')}
+      </Button>
     </div>
   )
 }

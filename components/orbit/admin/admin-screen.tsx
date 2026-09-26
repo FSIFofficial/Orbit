@@ -96,7 +96,7 @@ export function AdminScreen({ section }: { section: Section }) {
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]">
       {/* Sidebar */}
-      <aside className="hidden w-56 shrink-0 border-r border-border bg-card md:block">
+      <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 self-start overflow-y-auto border-r border-border bg-card md:block">
         <div className="px-4 py-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('admin.nav.section')}

@@ -116,6 +116,7 @@ export function PersonDetail({ id }: { id: string }) {
     updateSearchProfile,
     updateCareerHistory,
     updateQualifications,
+    importPortableRecord,
     updateEvaluationHistory,
     updateTransferHistory,
     updateSkillLevels,
@@ -137,7 +138,9 @@ export function PersonDetail({ id }: { id: string }) {
   const { go } = useNav()
   const toast = useToast()
   const { t, locale, setLocale } = useI18n()
-  const [tab, setTab] = useState<Tab>('overview')
+  // 自分のページを開いたときは、プロフィール詳細(Overview)ではなく
+  // タスクに関する内容を最初に見せる。詳細はsettingsタブ側に統合する
+  const [tab, setTab] = useState<Tab>(id === currentUser?.id ? 'tasks' : 'overview')
   const [taskView, setTaskView] = useState<TaskView>('list')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
@@ -530,7 +533,9 @@ export function PersonDetail({ id }: { id: string }) {
       <div className="mt-5 flex items-center gap-1 border-b border-border">
         {(
           [
-            ['overview', t('person.tab.overview')],
+            // 自分のページでは自分のプロフィール詳細(Overview)を主要タブから
+            // 外し、settingsタブに統合する(他のメンバーを見る場合は従来通り)
+            ...(isSelf ? [] : [['overview', t('person.tab.overview')]]),
             ['tasks', t('person.tab.tasks')],
             ...(isSelf || isAdmin ? [['growth', t('person.tab.growth')]] : []),
             ...(isSelf || isAdmin ? [['career', t('person.tab.career')]] : []),
@@ -996,6 +1001,7 @@ export function PersonDetail({ id }: { id: string }) {
           updateSearchProfile={updateSearchProfile}
           updateCareerHistory={updateCareerHistory}
           updateQualifications={updateQualifications}
+          importPortableRecord={importPortableRecord}
           updateEvaluationHistory={updateEvaluationHistory}
           updateTransferHistory={updateTransferHistory}
           updateSkillLevels={updateSkillLevels}
@@ -1106,7 +1112,8 @@ export function PersonDetail({ id }: { id: string }) {
         </div>
       )}
 
-      {tab === 'overview' && (
+      {/* 自分のページではOverviewは独立タブではなくsettingsタブの先頭に統合する */}
+      {((tab === 'overview' && !isSelf) || (tab === 'settings' && isSelf)) && (
         <>
       {/* ダッシュボードサマリー */}
       {isSelf && (() => {

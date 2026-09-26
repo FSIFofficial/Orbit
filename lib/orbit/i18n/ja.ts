@@ -125,6 +125,7 @@ export const ja = {
 
   // ---- task status (内部enum → 表示ラベル) --------------------------------
   'status.todo': '未着手',
+  'status.hold': '保留',
   'status.progress': '進行中',
   'status.support': 'サポート必要',
   'status.review': '確認待ち',
@@ -328,6 +329,7 @@ export const ja = {
   'output.view.openbid': '公募',
   'output.fields.button': '表示項目',
   'output.fields.hint': 'カードに表示する項目（タスク名は常に表示）',
+  'output.projects.addModalTitle': '新しいプロジェクトを追加',
   'output.sort.button': '表示順',
   'output.sort.deadline': '締切が近い順',
   'output.sort.priority': '優先度が高い順',
@@ -509,8 +511,8 @@ export const ja = {
   'onboarding.addPlaceholder': '例：デザインをやってみたい',
   'onboarding.skip': 'あとで設定する',
   'onboarding.start': 'はじめる',
-  'project.card.expand': '展開',
-  'project.card.collapse': '折りたたむ',
+  'project.card.showChildren': '子プロジェクトを表示（{count}件）',
+  'project.card.hideChildren': '子プロジェクトを隠す（{count}件）',
   'project.card.membersCount': 'メンバー {count}',
   'project.card.tasksCount': 'タスク {count}',
   'project.card.waitingCount': '確認待ち {count}',
@@ -593,6 +595,16 @@ export const ja = {
   'taskDrawer.historyChangeLine': '{who}が{field}を「{from}」→「{to}」に変更',
   'taskDrawer.takeButton': 'このタスクを担当する',
   'taskDrawer.assigneeFooterNote': 'あなたが担当しています。上のボタンでステータスを更新できます。',
+  'taskDrawer.infoCard.title': 'タスク情報',
+  'taskDrawer.effortCard.title': '工数',
+  'taskDrawer.effortCard.estimated': '想定',
+  'taskDrawer.effortCard.actual': '実績',
+  'taskDrawer.blocker.empty': '現在ブロッカーはありません',
+  'taskDrawer.deliverables.addButton': '成果物を追加',
+  'taskDrawer.holdReason.label': '保留理由',
+  'taskDrawer.holdReason.placeholder': '保留理由を入力',
+  'taskDrawer.relatedFeaturesHeader': '関連機能',
+  'taskDrawer.detailsHeader': '詳細情報',
 
   // ---- task-detail-drawer: source input modal ---------------------------
   'taskDrawer.sourceInput.title': '元の入力内容',
@@ -698,9 +710,9 @@ export const ja = {
 
   // ---- task-detail-drawer: timer widget ------------------------------------
   'taskDrawer.timer.pause': '一時停止',
-  'taskDrawer.timer.start': '開始',
-  'taskDrawer.timer.addToActual': '実績に加算',
-  'taskDrawer.timer.reset': 'リセット',
+  'taskDrawer.timer.start': '計測開始',
+  'taskDrawer.timer.resume': '再開',
+  'taskDrawer.timer.finish': '終了',
 
   // ---- task-detail-drawer: Google Calendar button --------------------------
   'taskDrawer.gcal.added': 'Googleカレンダーに追加しました',
@@ -1048,7 +1060,7 @@ export const ja = {
 
   // ---- career-tab（各セクションの見出し・説明のみ）--------------------------
   'career.searchProfile.title': '人材検索プロフィール',
-  'career.searchProfile.desc': 'Admin → Membersの人材検索フィルタで使われます。',
+  'career.searchProfile.desc': 'Admin → Membersの人材検索フィルタで使われます。経験年数は所属日から自動計算されます（所属日は下の「所属歴」欄で変更できます）。',
   'career.skillLevels.title': 'スキルレベル',
   'career.skillLevels.desc': '各スキルの習熟度（1〜5）です。Lv.1は「何もできない」ではなく「やり始めたばかり」の意味です。タスクを完了するとLv.1で自動登録され、団体外の経験なども自分で追加できます。要求分野の認定は、ここに登録されたスキルの保有率で判定されます。',
   'career.radarChart.title': 'スキルレーダーチャート',
@@ -1105,6 +1117,12 @@ export const ja = {
   'career.history.rolePlaceholder': '役割',
   'career.qualifications.namePlaceholder': '資格名',
   'career.qualifications.issuerPlaceholder': '発行元（任意）',
+  'career.portableRecord.title': '実績の持ち出し・持ち込み',
+  'career.portableRecord.desc': '共通スキル（FSIF配布の基本スキル）のポイント・レベルと資格をファイルに書き出し、他の団体に移った際に持ち込めます。団体独自に追加したスキルは対象外です。',
+  'career.portableRecord.exportButton': '実績をエクスポート',
+  'career.portableRecord.importButton': 'ファイルから実績をインポート',
+  'career.portableRecord.importedToast': '{skillCount}件のスキルポイントを合算し、資格を{qualCount}件反映しました',
+  'career.portableRecord.importErrorToast': 'ファイルを読み込めませんでした。エクスポートしたファイルを選択してください',
   'career.training.namePlaceholder': '研修名',
   'career.training.providerPlaceholder': '実施元（任意）',
   'career.training.apply': '申請',

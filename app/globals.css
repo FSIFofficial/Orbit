@@ -81,6 +81,7 @@
 
   /* status */
   --status-todo: #64748b;
+  --status-hold: #78716c;
   --status-progress: #6366f1;
   --status-support: #0891b2;
   --status-review: #d97706;
@@ -139,6 +140,7 @@
 
   /* status (slightly brighter for dark bg) */
   --status-todo: #94a3b8;
+  --status-hold: #a8a29e;
   --status-progress: #818cf8;
   --status-support: #22d3ee;
   --status-review: #fbbf24;

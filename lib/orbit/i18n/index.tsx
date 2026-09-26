@@ -35,6 +35,7 @@ const LOCALE_STORAGE_KEY = 'orbit-locale'
 // UI表示は段階的にこちら（t(STATUS_KEY[s])）へ移行する。
 export const STATUS_KEY: Record<TaskStatus, TranslationKey> = {
   todo: 'status.todo',
+  hold: 'status.hold',
   progress: 'status.progress',
   support: 'status.support',
   review: 'status.review',

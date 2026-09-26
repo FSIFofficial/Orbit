@@ -37,11 +37,14 @@ import {
   BarChart2,
   Megaphone,
   ListOrdered,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ExpenseApplicationModal } from '@/components/orbit/expense-application-modal'
 import { ExpenseHistoryModal } from '@/components/orbit/expense-history-modal'
 import { CustomFormModal } from '@/components/orbit/custom-form-modal'
+import { Modal } from '@/components/orbit/modal'
+import { useToast } from '@/components/orbit/toast'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type Target = 'mine' | 'all' | 'people' | 'projects' | 'archive'
@@ -188,7 +191,19 @@ function loadHiddenProjects(userId: string | null | undefined): Set<string> {
 }
 
 export function OutputScreen() {
-  const { visibleTasks, archivedTasks, projects, currentUser, pendingTasks, expenseCategories, customFormDefs } = useOrbit()
+  const {
+    visibleTasks,
+    archivedTasks,
+    projects,
+    currentUser,
+    pendingTasks,
+    expenseCategories,
+    customFormDefs,
+    isFullAdmin,
+    addProject,
+    projectTypes,
+  } = useOrbit()
+  const toast = useToast()
   const { go } = useNav()
   const { t: tr } = useI18n()
   const [targetOrder, setTargetOrder] = useState<Target[]>(() => loadTargetOrder(currentUser?.id))
@@ -199,6 +214,12 @@ export function OutputScreen() {
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
   const [formModalOpen, setFormModalOpen] = useState(false)
+  // プロジェクト表示ページ側でもプロジェクトを追加できるように(item: プロジェクト
+  // カード一覧を独立スクロールにした際、下までスクロールしても追加操作に
+  // 迷わないよう、スクロール領域の外にこのボタンを置く)
+  const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectType, setNewProjectType] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [cardFields, setCardFields] = useState<Set<KanbanCardField>>(() =>
@@ -540,6 +561,13 @@ export function OutputScreen() {
             </Seg>
           </Segment>
 
+          {target === 'projects' && isFullAdmin && (
+            <Button className="h-8" onClick={() => setAddProjectOpen(true)}>
+              <Plus className="size-3.5" />
+              {tr('admin.projects.form.submit')}
+            </Button>
+          )}
+
           {target === 'projects' && (
             <div className="relative" ref={projectFieldsRef}>
               <button
@@ -818,6 +846,63 @@ export function OutputScreen() {
       {expenseModalOpen && <ExpenseApplicationModal onClose={() => setExpenseModalOpen(false)} />}
       {expenseHistoryOpen && <ExpenseHistoryModal onClose={() => setExpenseHistoryOpen(false)} />}
       {formModalOpen && <CustomFormModal onClose={() => setFormModalOpen(false)} />}
+
+      <Modal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} labelledBy="add-project-title">
+        <h2 id="add-project-title" className="text-base font-semibold">
+          {tr('output.projects.addModalTitle')}
+        </h2>
+        <div className="mt-3 flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              {tr('admin.projects.form.nameLabel')}
+            </label>
+            <input
+              autoFocus
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              placeholder={tr('admin.projects.form.namePlaceholder')}
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              {tr('admin.projects.form.typeLabel')}
+            </label>
+            <select
+              value={newProjectType}
+              onChange={(e) => setNewProjectType(e.target.value)}
+              className="h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+            >
+              <option value="">{tr('common.notSet')}</option>
+              {projectTypes.map((pt) => (
+                <option key={pt} value={pt}>
+                  {pt}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" className="h-9" onClick={() => setAddProjectOpen(false)}>
+            {tr('common.cancel')}
+          </Button>
+          <Button
+            className="h-9"
+            disabled={!newProjectName.trim()}
+            onClick={() => {
+              const trimmed = newProjectName.trim()
+              if (!trimmed) return
+              addProject(trimmed, '', newProjectType || undefined)
+              toast(tr('admin.projects.createToast', { name: trimmed }))
+              setNewProjectName('')
+              setNewProjectType('')
+              setAddProjectOpen(false)
+            }}
+          >
+            {tr('admin.projects.form.submit')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -139,13 +139,19 @@ export function formatTenure(joinedAt: string): string {
   return years > 0 ? `${years}年${months}ヶ月` : `${months}ヶ月`
 }
 
-// 所属歴を年数（小数）で返す — 人材検索フィルタ（Admin > Members）で
-// 「経験年数」（自己申告の概数）の代わりに所属日ベースで絞り込むために使う
+// 所属歴を年数（小数）で返す — 人材検索フィルタ（Admin > Members）などで使う
 export function tenureYears(joinedAt: string): number {
   const start = parseJoinedAt(joinedAt).getTime()
   const now = Date.now()
   if (Number.isNaN(start)) return 0
   return Math.max(0, (now - start) / (365.25 * 24 * 60 * 60 * 1000))
+}
+
+// 経験年数 — 従来は自己申告の数値だったが、所属日(joinedAt)からの自動計算に
+// 統一した。joinedAt未設定のメンバーはundefined（「未設定」表示）になる
+export function computeYearsOfExperience(joinedAt?: string): number | undefined {
+  if (!joinedAt) return undefined
+  return Math.floor(tenureYears(joinedAt))
 }
 
 export function formatDateTime(iso?: string): string {

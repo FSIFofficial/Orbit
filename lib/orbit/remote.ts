@@ -224,7 +224,8 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     mentorId: r.mentor_id || undefined,
     joinedAt: r.joined_at || undefined,
     // ---- タレントマネジメント (人材DB／スキル管理／人材検索／育成・キャリア) ----
-    yearsOfExperience: r.years_of_experience ? Number(r.years_of_experience) : undefined,
+    // 経験年数はjoinedAtからの自動計算に統一したためここでは読み込まない
+    // (utils.tsのcomputeYearsOfExperienceを参照)
     hasManagementExperience: /^(true|1|yes)$/i.test((r.has_management_experience || '').trim()),
     desiredAreas: splitTags(r.desired_areas),
     desiredSkills: splitTags(r.desired_skills), // DEV-002
@@ -322,6 +323,7 @@ function mapTaskRow(r: Record<string, string>): Task {
     reviewerId: r.reviewer_id || undefined,
     reviewerIds: r.reviewer_ids ? splitTags(r.reviewer_ids) : (r.reviewer_id ? [r.reviewer_id] : undefined),
     blocker: r.blocker_note ? { note: r.blocker_note, since: r.blocker_since || '' } : undefined,
+    holdReason: r.hold_reason_note ? { note: r.hold_reason_note, since: r.hold_reason_since || '' } : undefined,
     deliverables: parseJsonArray<TaskDeliverable>(r.deliverables_json),
     history: parseJsonArray<TaskHistoryEntry>(r.history_json),
     comments: parseJsonArray<TaskComment>(r.comments_json),
@@ -831,6 +833,8 @@ export const remoteApi = {
   approveTaskReview: (taskId: string, comment?: string) => postToGas('approveTaskReview', { taskId, comment }),
   setBlocker: (taskId: string, note: string | null, since: string | null) =>
     postToGas('setBlocker', { taskId, note, since }),
+  setHoldReason: (taskId: string, note: string | null, since: string | null) =>
+    postToGas('setHoldReason', { taskId, note, since }),
   updateDeliverables: (taskId: string, deliverables: TaskDeliverable[]) =>
     postToGas('updateDeliverables', { taskId, deliverables }),
   updateHistory: (taskId: string, history: TaskHistoryEntry[]) =>
@@ -876,7 +880,6 @@ export const remoteApi = {
   updateSearchProfile: (
     memberId: string,
     profile: {
-      yearsOfExperience: number | null
       hasManagementExperience: boolean
       desiredAreas: string[]
       desiredSkills: string[]
@@ -913,6 +916,12 @@ export const remoteApi = {
   // ---- スキルポイント付与 ----
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) =>
     postToGas<{ newLevels: SkillLevel[]; newPoints: SkillPoints }>('awardSkillPoints', { taskId, memberId, points }),
+  // ---- 他団体からの実績持ち込み (lib/orbit/portable-record.ts) ----
+  importPortableRecord: (memberId: string, skillPoints: SkillPoints, qualifications: Qualification[]) =>
+    postToGas<{ newLevels: SkillLevel[]; newPoints: SkillPoints; qualifications: Qualification[] }>(
+      'importPortableRecord',
+      { memberId, skillPoints, qualifications },
+    ),
   // ---- 検定 ----
   updateQuizDefinitions: (quizzes: QuizDefinition[]) =>
     postToGas('updateSetting', { key: 'quiz_definitions', value: JSON.stringify(quizzes) }),

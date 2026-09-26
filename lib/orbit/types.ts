@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'progress' | 'support' | 'review' | 'fix' | 'done'
+export type TaskStatus = 'todo' | 'hold' | 'progress' | 'support' | 'review' | 'fix' | 'done'
 
 export type Difficulty = '誰でも可' | '新人歓迎' | '少し経験必要' | '経験者向け' | '上級者向け'
 
@@ -195,7 +195,9 @@ export interface Member {
   // config, used by 人材育成タブ.
 
   // 人材検索: filterable attributes
-  yearsOfExperience?: number
+  // 経験年数は従来ここに自己申告の数値として持っていたが、所属日
+  // (joinedAt)からの自動計算に統一したため削除した。表示・検索が
+  // 必要な箇所は utils.ts の computeYearsOfExperience(joinedAt) を使う
   hasManagementExperience?: boolean
   // desired growth areas/skills ("成長したい領域やスキル"), distinct from
   // Will (what they want to do) and skills (what they already have)
@@ -404,15 +406,18 @@ export type ProjectHealthLevel = 'good' | 'watch' | 'attention'
 
 // A template task an admin defines for a Project type (store.tsx's
 // projectTemplates), auto-created whenever a new project of that type
-// is added.
+// is added. Like TaskSetTemplateItem, an item can depend on other items
+// in the same template (dependsOn, by template-local id) so the tasks
+// generated at project creation come out pre-wired with dependsOnIds.
 export interface ProjectTemplateTask {
-  id: string
+  id: string // template-local id — referenced by dependsOn within this template
   name: string
   department: Department
   category: string
   skills: string[]
   difficulty: Difficulty
   priority: Priority
+  dependsOn?: string[] // template-local ids of prerequisite tasks in this template
 }
 
 // A reusable named task-set template (item 1: タスクのテンプレート化, e.g.
@@ -647,6 +652,12 @@ export interface Task {
     note: string
     since: string // YYYY-MM-DD
   }
+  // ステータスが「保留」のときの理由。他の項目と同じくstatusとは独立して
+  // 保持する(保留を解除して別ステータスに移っても直近の理由は残しておく)
+  holdReason?: {
+    note: string
+    since: string // YYYY-MM-DD
+  }
   // links to where the finished work lives (Drive/Canva/GitHub/Figma/…) —
   // also reused on the assignee's achievements page
   deliverables?: TaskDeliverable[]
@@ -795,6 +806,7 @@ export interface ParsedTask {
 
 export const STATUS_ORDER: TaskStatus[] = [
   'todo',
+  'hold',
   'progress',
   'support',
   'review',
@@ -804,6 +816,7 @@ export const STATUS_ORDER: TaskStatus[] = [
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: '未着手',
+  hold: '保留',
   progress: '進行中',
   support: 'サポート必要',
   review: '確認待ち',
@@ -813,6 +826,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 
 export const STATUS_COLOR: Record<TaskStatus, string> = {
   todo: 'var(--status-todo)',
+  hold: 'var(--status-hold)',
   progress: 'var(--status-progress)',
   support: 'var(--status-support)',
   review: 'var(--status-review)',

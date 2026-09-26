@@ -100,7 +100,12 @@ const SKILL_CERT_THRESHOLD = 3
 // hidden from the normal workspace, visible only under the Archive tab.
 const ARCHIVE_AFTER_DAYS = 14
 
-const DEFAULT_SKILL_OPTIONS = [
+// FSIF側で配布する「共通スキル」の固定リスト。団体は自由に追加(addSkillOption)
+// できるが、この基本リストは団体側で削除・改名できない前提とする。
+// lib/orbit/portable-record.ts の実績エクスポート/インポートで、他団体でも
+// 通用するスキルかどうかの判定にそのまま使う(このリストに載っているスキル
+// のポイントだけを持ち出し・持ち込みの対象にする)
+export const DEFAULT_SKILL_OPTIONS = [
   'デザイン', 'Canva', 'PowerPoint', 'ライティング', 'リサーチ', 'SNS', '広報', 'コミュニケーション',
   'イベント運営', 'メール', 'UI/UX', '実装', '企画', '要件定義', 'プロダクト設計', '校閲', 'Claude', 'V0',
 ]
@@ -324,6 +329,14 @@ interface OrbitContextValue extends OrbitState {
   quizDefinitions: QuizDefinition[]
   radarAxes: RadarAxis[]
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
+  // 他団体での実績(共通スキルのポイント・資格)の持ち込み。本人が自分の
+  // ページから実行する想定(lib/orbit/portable-record.tsのエクスポート/
+  // インポートとセットで使う) — awardSkillPointsと違いタスクには紐付かない
+  importPortableRecord: (
+    memberId: string,
+    skillPoints: SkillPoints,
+    qualifications: Qualification[],
+  ) => void
   updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
   updateRadarAxes: (axes: RadarAxis[]) => void
   // LRN-001: 学習コンテンツ
@@ -348,7 +361,6 @@ interface OrbitContextValue extends OrbitState {
   updateSearchProfile: (
     memberId: string,
     profile: {
-      yearsOfExperience: number | null
       hasManagementExperience: boolean
       desiredAreas: string[]
       desiredSkills: string[]
@@ -380,6 +392,7 @@ interface OrbitContextValue extends OrbitState {
   updateDependsOn: (id: string, dependsOnIds: string[]) => void
   updateReviewer: (id: string, reviewerId: string | null) => void
   setBlocker: (id: string, note: string | null) => void
+  setHoldReason: (id: string, note: string | null) => void
   updateEstimatedHours: (id: string, hours: number | null) => void
   updateActualHours: (id: string, hours: number | null) => void
   updateRetrospective: (id: string, retrospective: TaskRetrospective | null) => void
@@ -825,7 +838,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
-    console.error('[orbit] remote sync failed', err)
+    console.error('[orbit] リモートとの同期に失敗しました', err)
     setRemoteError(err instanceof Error ? err.message : String(err))
   }, [])
 
@@ -1568,6 +1581,56 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       )
       setTasks((prev) => prev.map((t) => (t.id !== taskId ? t : { ...t, awardedPoints: points })))
       if (isRemoteConfigured) runRemote(remoteApi.awardSkillPoints(taskId, memberId, points))
+    },
+    [skillLevelThresholds, runRemote],
+  )
+
+  // 他団体での実績の持ち込み — awardSkillPointsと同じ「累計加算→レベル
+  // 再計算」ロジックだが、タスクには紐付けない。加えて資格も重複を避けて
+  // 追記する。共通スキル(DEFAULT_SKILL_OPTIONS)以外のキーは念のため無視する
+  // (エクスポート側で既に絞り込み済みだが、手編集されたファイル対策)
+  const importPortableRecord = useCallback(
+    (memberId: string, skillPoints: SkillPoints, qualifications: Qualification[]) => {
+      const commonSkills = new Set(DEFAULT_SKILL_OPTIONS)
+      const filteredPoints = Object.fromEntries(
+        Object.entries(skillPoints).filter(([skill]) => commonSkills.has(skill)),
+      )
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const current = { ...m.skillPoints }
+          Object.entries(filteredPoints).forEach(([skill, pts]) => {
+            current[skill] = (current[skill] ?? 0) + pts
+          })
+          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+          const existingLevels = [...(m.skillLevels ?? [])]
+          Object.entries(current).forEach(([skill, pts]) => {
+            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
+            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
+            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
+            if (idx < 0) {
+              existingLevels.push({ skill, level: earnedLevel })
+            } else if (earnedLevel > existingLevels[idx].level) {
+              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
+            }
+          })
+          const existingQualifications = m.qualifications ?? []
+          const existingKeys = new Set(
+            existingQualifications.map((q) => `${q.name}|${q.acquiredDate ?? ''}`),
+          )
+          const newQualifications = qualifications.filter(
+            (q) => !existingKeys.has(`${q.name}|${q.acquiredDate ?? ''}`),
+          )
+          return {
+            ...m,
+            skillPoints: current,
+            skillLevels: existingLevels,
+            qualifications: [...existingQualifications, ...newQualifications],
+          }
+        }),
+      )
+      if (isRemoteConfigured)
+        runRemote(remoteApi.importPortableRecord(memberId, filteredPoints, qualifications))
     },
     [skillLevelThresholds, runRemote],
   )
@@ -3026,8 +3089,14 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
       const templates = type ? projectTemplates[type] ?? [] : []
       const today = new Date().toISOString().slice(0, 10)
+      // 業務テンプレート(applyTaskSetTemplate)と同じく、テンプレート内の
+      // dependsOnはテンプレートローカルidで書かれているので、生成した
+      // 一時idへのマップを介して実際のdependsOnIdsに変換する
+      const tempIdByItemId = new Map(
+        templates.map((t) => [t.id, `t-${Math.random().toString(36).slice(2, 9)}`]),
+      )
       const templateTasks: Task[] = templates.map((t) => ({
-        id: `t-${Math.random().toString(36).slice(2, 9)}`,
+        id: tempIdByItemId.get(t.id)!,
         name: t.name,
         description: '',
         projectId: tempProjectId,
@@ -3044,6 +3113,9 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
         progressHistory: [],
         pendingApproval: false, // admin-initiated project setup — no approval needed
+        dependsOnIds: (t.dependsOn ?? [])
+          .map((localId) => tempIdByItemId.get(localId))
+          .filter((id): id is string => !!id),
       }))
       if (templateTasks.length > 0) setTasks((prev) => [...templateTasks, ...prev])
 
@@ -3074,8 +3146,23 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
                 .then((mapping) => {
                   const realId = new Map(mapping.map((m) => [m.tempId, m.id]))
                   setTasks((prev) =>
-                    prev.map((t) => (realId.has(t.id) ? { ...t, id: realId.get(t.id)! } : t)),
+                    prev.map((t) =>
+                      realId.has(t.id)
+                        ? {
+                            ...t,
+                            id: realId.get(t.id)!,
+                            dependsOnIds: (t.dependsOnIds ?? []).map((depId) => realId.get(depId) ?? depId),
+                          }
+                        : t,
+                    ),
                   )
+                  templateTasks.forEach((t) => {
+                    if (!t.dependsOnIds || t.dependsOnIds.length === 0) return
+                    const resolvedId = realId.get(t.id)
+                    if (!resolvedId) return
+                    const resolvedDeps = t.dependsOnIds.map((depId) => realId.get(depId) ?? depId)
+                    runRemote(remoteApi.updateDependsOn(resolvedId, resolvedDeps))
+                  })
                 })
                 .catch(reportRemoteError)
             }
@@ -3084,7 +3171,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           .catch(reportRemoteError)
       }
     },
-    [projectTemplates, currentUserId, reportRemoteError],
+    [projectTemplates, currentUserId, reportRemoteError, runRemote],
   )
 
   // a task can't exist without a project (Task.projectId is required), so
@@ -3331,7 +3418,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (
       memberId: string,
       profile: {
-        yearsOfExperience: number | null
         hasManagementExperience: boolean
         desiredAreas: string[]
         desiredSkills: string[]
@@ -3342,7 +3428,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           m.id === memberId
             ? {
                 ...m,
-                yearsOfExperience: profile.yearsOfExperience ?? undefined,
                 hasManagementExperience: profile.hasManagementExperience,
                 desiredAreas: profile.desiredAreas,
                 desiredSkills: profile.desiredSkills,
@@ -3699,6 +3784,22 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
         prev.map((t) => (t.id === id ? { ...t, blocker: trimmed ? { note: trimmed, since: since! } : undefined } : t)),
       )
       if (isRemoteConfigured) runRemote(remoteApi.setBlocker(id, trimmed, since))
+    },
+    [runRemote],
+  )
+
+  // ステータスを「保留」にする際の理由。blockerと同じ形(note+since)で
+  // 独立管理し、保留を解除しても理由自体は履歴として残す
+  const setHoldReason = useCallback(
+    (id: string, note: string | null) => {
+      const trimmed = note?.trim() || null
+      const since = trimmed ? new Date().toISOString().slice(0, 10) : null
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, holdReason: trimmed ? { note: trimmed, since: since! } : undefined } : t,
+        ),
+      )
+      if (isRemoteConfigured) runRemote(remoteApi.setHoldReason(id, trimmed, since))
     },
     [runRemote],
   )
@@ -4723,6 +4824,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     quizDefinitions,
     radarAxes,
     awardSkillPoints,
+    importPortableRecord,
     updateQuizDefinitions,
     updateRadarAxes,
     submitQuizResult,
@@ -4764,6 +4866,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     updateReviewers,
     approveTaskReview,
     setBlocker,
+    setHoldReason,
     updateEstimatedHours,
     updateActualHours,
     updateRetrospective,

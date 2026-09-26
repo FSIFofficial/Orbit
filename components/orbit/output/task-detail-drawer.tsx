@@ -58,8 +58,8 @@ import {
   Pencil,
   Play,
   Plus,
-  RotateCcw,
   Search,
+  Square,
   Timer,
   Trash2,
   TriangleAlert,
@@ -155,6 +155,7 @@ export function TaskDetailDrawer({
     approveTaskReview,
     updateTaskDetails,
     setBlocker,
+    setHoldReason,
     addDeliverable,
     removeDeliverable,
     addComment,
@@ -237,6 +238,7 @@ export function TaskDetailDrawer({
               setBlocker(task.id, null)
               toast(tr('taskDrawer.blocker.cleared'))
             }}
+            onSetHoldReason={(note) => setHoldReason(task.id, note)}
             onOpenHandoff={() => setHandoffOpen(true)}
             onOpenAward={() => setAwardOpen(true)}
             onAddDeliverable={(label, url) => addDeliverable(task.id, label, url)}
@@ -1484,6 +1486,7 @@ function DrawerBody({
   onApproveReview,
   onOpenBlocker,
   onClearBlocker,
+  onSetHoldReason,
   onOpenHandoff,
   onOpenEdit,
   onOpenDelete,
@@ -1526,6 +1529,7 @@ function DrawerBody({
   onApproveReview: (comment?: string) => void
   onOpenBlocker: () => void
   onClearBlocker: () => void
+  onSetHoldReason: (note: string | null) => void
   onOpenHandoff: () => void
   onOpenEdit: () => void
   onOpenDelete: () => void
@@ -1561,13 +1565,20 @@ function DrawerBody({
   const canManageBlocker = isAdmin || isAssignee
   const canManageDeliverables = isAdmin || isAssignee
   const [progressDraft, setProgressDraft] = useState('')
+  const [addingDeliverable, setAddingDeliverable] = useState(false)
   const [deliverableLabel, setDeliverableLabel] = useState('')
   const [deliverableUrl, setDeliverableUrl] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   // TSK-062+TSK-067統合: 確認者が承認時に残すコメント(任意)。レビュー
   // フィードバック兼次回への申し送りメモとして機能する
   const [reviewComment, setReviewComment] = useState('')
+  // ScheduleSection/FormSectionと同じ「設定可能か」判定(点8: 関連機能の
+  // 見出しを一つにまとめて出すかどうかの判定に使う。両セクションとも
+  // 内部で同じ条件により自己判定して非表示になるため、ここで重複して
+  // 判定しておかないと「関連機能」の見出しだけが中身なく残ってしまう)
+  const canConfigureRelatedFeatures = isAdmin || task.createdById === currentUserId
 
   // 確認者が設定されている場合、「完了」への変更は確認者本人のみ可（item 17）。
   // 確認者なし or 自分が確認者の場合は従来通りadminが変更可。
@@ -1646,42 +1657,106 @@ function DrawerBody({
           </p>
         )}
 
-        {task.blocker && (
-          <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5">
-            <div className="flex items-start gap-2">
-              <Ban className="mt-0.5 size-4 shrink-0 text-destructive" />
-              <div>
-                <p className="text-sm font-medium text-destructive">{t('taskDrawer.blocked')}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{task.blocker.note}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">{task.blocker.since}〜</p>
-              </div>
+        {/* 点1: 画面上部はタスク名/ステータス/進捗率/期限/担当者/プロジェクト
+            のみを大きく表示。ステータスはこの場でプルダウン変更でき、
+            「ステータスを変更」という独立した項目は無くした */}
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.row.status')}
+            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <StatusDot status={task.status} />
+              {canChangeStatus ? (
+                <select
+                  value={task.status}
+                  onChange={(e) => {
+                    const s = e.target.value as TaskStatus
+                    if (s === 'done' && incompleteDeps.length > 0) return
+                    onStatus(s)
+                  }}
+                  className="cursor-pointer rounded-md border border-transparent bg-transparent text-base font-semibold outline-none hover:border-border focus:border-primary"
+                >
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>{t(STATUS_KEY[s])}</option>
+                  ))}
+                  {!statusOptions.includes(task.status) && (
+                    <option value={task.status}>{t(STATUS_KEY[task.status])}</option>
+                  )}
+                </select>
+              ) : (
+                <span className="text-base font-semibold">{t(STATUS_KEY[task.status])}</span>
+              )}
             </div>
-            {canManageBlocker && (
-              <button
-                onClick={onClearBlocker}
-                className="shrink-0 whitespace-nowrap text-xs font-medium text-primary hover:underline"
-              >
-                {t('taskDrawer.blockedRelease')}
-              </button>
+            {incompleteDeps.length > 0 && (
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-warning">
+                <TriangleAlert className="size-3" />
+                {t('taskDrawer.dependsIncompleteWarning', { names: incompleteDeps.map((d) => d.name).join('、') })}
+              </p>
+            )}
+            {reviewerIds.length > 0 && !isReviewer && isAdmin && (
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <UserCheck className="size-3" />
+                {t('taskDrawer.reviewerOnlyDoneNotice')}
+              </p>
+            )}
+            {canChangeStatus && !isAdmin && (
+              <p className="mt-1 text-[11px] text-muted-foreground">{t('taskDrawer.pendingReviewNotice')}</p>
             )}
           </div>
-        )}
 
-        <dl className="mt-5 space-y-0.5">
-          <Row label={t('taskDrawer.row.project')}>
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              <span className="size-1.5 rounded-full bg-primary/60" />
-              {projectName}
-            </span>
-          </Row>
-          <Row label={t('taskDrawer.row.department')}>
-            <span className="text-sm"><DepartmentTag name={task.department} /></span>
-          </Row>
-          <Row label={t('taskDrawer.row.assignee')}>
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.progressHeader')}
+            </p>
+            <p className="mt-1 text-base font-semibold tabular-nums">{task.progressPercent ?? 0}%</p>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.row.deadline')}
+            </p>
+            <div className={cn('mt-1 flex items-center gap-1.5 text-base font-semibold', overdue && 'text-destructive')}>
+              {overdue && <TriangleAlert className="size-4" />}
+              {task.deadline ? (
+                <>
+                  {formatDeadlineFull(task.deadline)}
+                  {task.dueTime && <span className="tabular-nums">　{task.dueTime}</span>}
+                </>
+              ) : (
+                <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={onOpenSchedule}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label={t('taskDrawer.scheduleEdit')}
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              )}
+            </div>
+            {calendarUrl && (
+              <a
+                href={calendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <CalendarPlus className="size-3.5" />
+                {t('taskDrawer.addToMyGCal')}
+              </a>
+            )}
+          </div>
+
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.row.assignee')}
+            </p>
             {assignees.length > 0 ? (
-              <div className="flex flex-col items-end gap-1">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {assignees.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-2 text-sm">
+                  <span key={a.id} className="inline-flex items-center gap-1.5 text-base font-semibold">
                     <Avatar member={a} size={22} />
                     {a.displayName || a.name}
                   </span>
@@ -1696,232 +1771,238 @@ function DrawerBody({
                 )}
               </div>
             ) : (
-              <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
-                {t('output.list.unassigned')}
-              </span>
+              <div className="mt-1">
+                <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                  {t('output.list.unassigned')}
+                </span>
+              </div>
             )}
-          </Row>
-          <Row label={t('taskDrawer.row.reviewer')}>
-            <span className="inline-flex flex-wrap items-center gap-1.5 text-sm">
-              {reviewers.length > 0 ? (
-                reviewers.map((m) => m && (
-                  <span key={m.id} className="inline-flex items-center gap-1.5">
-                    <Avatar member={m} size={22} />
-                    {m.displayName || m.name}
-                  </span>
-                ))
-              ) : (
-                <span className="text-muted-foreground">{t('common.notSet')}</span>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={onOpenReviewer}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={t('taskDrawer.reviewerEdit')}
-                >
-                  <Pencil className="size-3.5" />
-                </button>
-              )}
-            </span>
-          </Row>
-          <Row label={t('taskDrawer.row.startDate')}>
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              {formatDeadlineFull(task.startDate ?? null)}
-              {isAdmin && (
-                <button
-                  onClick={onOpenSchedule}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={t('taskDrawer.scheduleEdit')}
-                >
-                  <Pencil className="size-3.5" />
-                </button>
-              )}
-            </span>
-          </Row>
-          <Row label={t('taskDrawer.row.deadline')}>
-            <span className={cn('inline-flex items-center gap-1.5 text-sm', overdue && 'text-destructive')}>
-              {overdue && <TriangleAlert className="size-3.5" />}
-              {formatDeadlineFull(task.deadline)}
-              {task.dueTime && <span className="tabular-nums">　{task.dueTime}</span>}
-              {isAdmin && (
-                <button
-                  onClick={onOpenSchedule}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={t('taskDrawer.scheduleEdit')}
-                >
-                  <Pencil className="size-3.5" />
-                </button>
-              )}
-            </span>
-          </Row>
-          <Row label={t('taskDrawer.row.dependsOn')}>
-            <div className="flex flex-col items-end gap-1">
-              {dependsOnTasks.length > 0 ? (
-                dependsOnTasks.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => openTask(d.id)}
-                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                  >
-                    <GitBranch className="size-3.5 text-muted-foreground" />
-                    {d.name}
-                  </button>
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">{t('common.none')}</span>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={onOpenDepends}
-                  className="text-xs text-primary hover:underline"
-                >
-                  {t('common.edit')}
-                </button>
-              )}
-            </div>
-          </Row>
-          <Row label={t('taskDrawer.row.status')}>
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              <StatusDot status={task.status} />
-              {t(STATUS_KEY[task.status])}
-            </span>
-          </Row>
-          <Row label={t('taskDrawer.row.category')}>
-            <span className="text-sm"><TranslatedText text={task.category} /></span>
-          </Row>
-          <Row label={t('taskDrawer.row.difficulty')}>
-            <DifficultyBadge difficulty={task.difficulty} />
-          </Row>
-          <Row label={t('taskDrawer.row.skills')}>
-            <div className="flex flex-wrap gap-1.5">
-              {task.skills.map((s) => (
-                <Tag key={s}>{s}</Tag>
-              ))}
-            </div>
-          </Row>
-          <Row label={t('taskDrawer.row.estimatedHours')}>
-            <HoursField
-              value={task.estimatedHours}
-              editable={isAdmin}
-              onSave={onUpdateEstimatedHours}
-              placeholder={t('common.notSet')}
-            />
-          </Row>
-          <Row label={t('taskDrawer.row.actualHours')}>
-            <HoursField
-              value={task.actualHours}
-              editable={isAdmin || isAssignee}
-              onSave={onUpdateActualHours}
-              placeholder={t('common.notSet')}
-            />
-          </Row>
-          {(isAdmin || isAssignee) && currentUserId && (
-            <Row label={t('taskDrawer.row.timer')}>
-              <TimerWidget
-                taskId={task.id}
-                userId={currentUserId}
-                actualHours={task.actualHours}
-                onAddHours={(hours) => onUpdateActualHours((task.actualHours ?? 0) + hours)}
-              />
-            </Row>
-          )}
-          <Row label={t('taskDrawer.row.creator')}>
-            {creator ? (
-              <span className="inline-flex items-center gap-2 text-sm">
-                <Avatar member={creator} size={22} />
-                {creator.displayName || creator.name}
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">{t('taskDrawer.unknown')}</span>
-            )}
-          </Row>
-        </dl>
+          </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          {hasSourceInput && (
-            <button
-              onClick={onOpenInput}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              <FileText className="size-3.5" />
-              {t('taskDrawer.viewSourceInput')}
-            </button>
-          )}
-          {calendarUrl && (
-            <a
-              href={calendarUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              <CalendarPlus className="size-3.5" />
-              {t('taskDrawer.addToMyGCal')}
-            </a>
-          )}
-          {canManageBlocker && !task.blocker && (
-            <button
-              onClick={onOpenBlocker}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
-            >
-              <Ban className="size-3.5" />
-              {t('taskDrawer.blocker.title')}
-            </button>
-          )}
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.row.project')}
+            </p>
+            <p className="mt-1 inline-flex items-center gap-1.5 text-base font-semibold">
+              <span className="size-1.5 rounded-full bg-primary/60" />
+              {projectName}
+            </p>
+          </div>
         </div>
 
-        {/* Status changer */}
-        {canChangeStatus && (
-          <div className="mt-6">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('taskDrawer.changeStatusHeader')}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {statusOptions.map((s) => {
-                const blocked = s === 'done' && incompleteDeps.length > 0
-                return (
-                  <button
-                    key={s}
-                    onClick={() => !blocked && onStatus(s)}
-                    disabled={blocked}
-                    title={
-                      blocked
-                        ? t('taskDrawer.dependsIncompleteTitle', { names: incompleteDeps.map((d) => d.name).join('、') })
-                        : undefined
-                    }
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
-                      blocked && 'cursor-not-allowed opacity-40',
-                      task.status === s
-                        ? 'border-primary bg-primary-muted text-accent-foreground'
-                        : 'border-border bg-card text-foreground hover:bg-secondary',
-                    )}
-                  >
-                    <StatusDot status={s} />
-                    {t(STATUS_KEY[s])}
-                  </button>
-                )
-              })}
-            </div>
-            {incompleteDeps.length > 0 && (
-              <p className="mt-1.5 flex items-center gap-1 text-[11px] text-warning">
-                <TriangleAlert className="size-3" />
-                {t('taskDrawer.dependsIncompleteWarning', { names: incompleteDeps.map((d) => d.name).join('、') })}
-              </p>
-            )}
-            {reviewerIds.length > 0 && !isReviewer && isAdmin && (
-              <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                <UserCheck className="size-3" />
-                {t('taskDrawer.reviewerOnlyDoneNotice')}
-              </p>
-            )}
-            {!isAdmin && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {t('taskDrawer.pendingReviewNotice')}
+        {hasSourceInput && (
+          <button
+            onClick={onOpenInput}
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            <FileText className="size-3.5" />
+            {t('taskDrawer.viewSourceInput')}
+          </button>
+        )}
+
+        {/* 点10: ステータスが保留のときの理由。ブロッカーと同じく本人/管理者が
+            その場で編集できる */}
+        {task.status === 'hold' && (
+          <div className="mt-4 rounded-xl border border-border bg-secondary/40 p-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.holdReason.label')}
+            </p>
+            {canChangeStatus ? (
+              <textarea
+                key={task.holdReason?.note ?? ''}
+                defaultValue={task.holdReason?.note ?? ''}
+                onBlur={(e) => {
+                  const v = e.target.value.trim()
+                  if (v !== (task.holdReason?.note ?? '')) onSetHoldReason(v || null)
+                }}
+                placeholder={t('taskDrawer.holdReason.placeholder')}
+                rows={2}
+                className="mt-1 w-full resize-none rounded-md border border-transparent bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 hover:border-border focus:border-primary"
+              />
+            ) : (
+              <p className="mt-1 text-sm">
+                {task.holdReason?.note || (
+                  <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+                )}
               </p>
             )}
           </div>
         )}
+
+        {/* 点7: ブロッカーをカード化(未登録時も空状態+登録ボタンを常時表示) */}
+        {(task.blocker || canManageBlocker) && (
+          <div className="mt-4 rounded-xl border border-border bg-card p-3.5">
+            {task.blocker ? (
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <Ban className="mt-0.5 size-4 shrink-0 text-destructive" />
+                  <div>
+                    <p className="text-sm font-medium text-destructive">{t('taskDrawer.blocked')}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{task.blocker.note}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{task.blocker.since}〜</p>
+                  </div>
+                </div>
+                {canManageBlocker && (
+                  <button
+                    onClick={onClearBlocker}
+                    className="shrink-0 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                  >
+                    {t('taskDrawer.blockedRelease')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">{t('taskDrawer.blocker.empty')}</p>
+                <button
+                  onClick={onOpenBlocker}
+                  className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
+                >
+                  <Ban className="size-3.5" />
+                  {t('taskDrawer.blocker.title')}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 点3: 部門/カテゴリ/難易度/要求スキル/開始日/前提タスク/確認者を
+            「タスク情報」として1つのカードに統合(2列コンパクト表示)。
+            想定時間は工数カード(点5)側にまとめたのでここには含めない */}
+        <div className="mt-4 rounded-xl border border-border bg-card p-3.5">
+          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('taskDrawer.infoCard.title')}
+          </p>
+          <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
+            <InfoField label={t('taskDrawer.row.department')}>
+              <DepartmentTag name={task.department} />
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.category')}>
+              <TranslatedText text={task.category} />
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.difficulty')}>
+              <DifficultyBadge difficulty={task.difficulty} />
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.skills')}>
+              {task.skills.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {task.skills.map((s) => (
+                    <Tag key={s}>{s}</Tag>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+              )}
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.startDate')}>
+              <span className="inline-flex items-center gap-1.5">
+                {task.startDate ? (
+                  formatDeadlineFull(task.startDate)
+                ) : (
+                  <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={onOpenSchedule}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={t('taskDrawer.scheduleEdit')}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+              </span>
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.dependsOn')}>
+              <div className="flex flex-col items-start gap-1">
+                {dependsOnTasks.length > 0 ? (
+                  dependsOnTasks.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => openTask(d.id)}
+                      className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                    >
+                      <GitBranch className="size-3.5 text-muted-foreground" />
+                      {d.name}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground/50">{t('common.none')}</span>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={onOpenDepends}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {t('common.edit')}
+                  </button>
+                )}
+              </div>
+            </InfoField>
+            <InfoField label={t('taskDrawer.row.reviewer')}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {reviewers.length > 0 ? (
+                  reviewers.map((m) => m && (
+                    <span key={m.id} className="inline-flex items-center gap-1.5">
+                      <Avatar member={m} size={20} />
+                      {m.displayName || m.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={onOpenReviewer}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={t('taskDrawer.reviewerEdit')}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            </InfoField>
+          </div>
+        </div>
+
+        {/* 点5: 想定/実績/計測を「工数」として1行に統合 */}
+        <div className="mt-4 rounded-xl border border-border bg-card p-3.5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('taskDrawer.effortCard.title')}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 text-sm">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-muted-foreground">{t('taskDrawer.effortCard.estimated')}</span>
+              <HoursField
+                value={task.estimatedHours}
+                editable={isAdmin}
+                onSave={onUpdateEstimatedHours}
+                placeholder={t('common.notSet')}
+              />
+            </span>
+            <span className="text-border">｜</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-muted-foreground">{t('taskDrawer.effortCard.actual')}</span>
+              <HoursField
+                value={task.actualHours}
+                editable={isAdmin || isAssignee}
+                onSave={onUpdateActualHours}
+                placeholder={t('common.notSet')}
+              />
+            </span>
+            {(isAdmin || isAssignee) && currentUserId && (
+              <>
+                <span className="text-border">｜</span>
+                <TimerWidget
+                  taskId={task.id}
+                  userId={currentUserId}
+                  actualHours={task.actualHours}
+                  onAddHours={(hours) => onUpdateActualHours((task.actualHours ?? 0) + hours)}
+                />
+              </>
+            )}
+          </div>
+        </div>
 
         {/* 複数確認者の承認進捗（item: 確認フロー）— 確認者が設定されている
             タスクは、上のステータス変更ボタンからは「完了」を選べない
@@ -2047,13 +2128,25 @@ function DrawerBody({
           )}
         </div>
 
-        {/* Deliverables */}
-        <div className="mt-6">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('taskDrawer.deliverablesHeader')}
+        {/* 点7: 成果物をカード化(未登録時は空状態+追加ボタンのみ表示し、
+            ボタンを押した時だけ入力フォームを開く) */}
+        <div className="mt-4 rounded-xl border border-border bg-card p-3.5">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.deliverablesHeader')}
+            </p>
+            {canManageDeliverables && !addingDeliverable && (
+              <button
+                onClick={() => setAddingDeliverable(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Plus className="size-3.5" />
+                {t('taskDrawer.deliverables.addButton')}
+              </button>
+            )}
           </div>
           {(task.deliverables?.length ?? 0) > 0 ? (
-            <ul className="mb-3 flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-1.5">
               {task.deliverables!.map((d) => (
                 <li
                   key={d.id}
@@ -2081,11 +2174,14 @@ function DrawerBody({
               ))}
             </ul>
           ) : (
-            <p className="mb-3 text-sm text-muted-foreground">{t('taskDrawer.deliverablesEmpty')}</p>
+            !addingDeliverable && (
+              <p className="text-xs text-muted-foreground">{t('taskDrawer.deliverablesEmpty')}</p>
+            )
           )}
-          {canManageDeliverables && (
-            <div className="flex flex-col gap-1.5 sm:flex-row">
+          {canManageDeliverables && addingDeliverable && (
+            <div className="mt-2 flex flex-col gap-1.5 sm:flex-row">
               <input
+                autoFocus
                 value={deliverableLabel}
                 onChange={(e) => setDeliverableLabel(e.target.value)}
                 placeholder={t('taskDrawer.deliverableNamePlaceholder')}
@@ -2105,6 +2201,7 @@ function DrawerBody({
                   onAddDeliverable(deliverableLabel, deliverableUrl)
                   setDeliverableLabel('')
                   setDeliverableUrl('')
+                  setAddingDeliverable(false)
                 }}
               >
                 <Plus className="size-4" />
@@ -2114,23 +2211,32 @@ function DrawerBody({
           )}
         </div>
 
-        <ScheduleSection
-          task={task}
-          currentUserId={currentUserId}
-          isAdmin={isAdmin}
-          members={members}
-          onSetSchedule={onSetSchedule}
-          onRespondSchedule={onRespondSchedule}
-        />
+        {/* 点8: 日程調整・フォームを「関連機能」としてまとめる。設定済み
+            (または設定可能)な場合のみ見出しごと表示する */}
+        {(canConfigureRelatedFeatures || task.schedule || task.form) && (
+          <div className="mt-4 rounded-xl border border-border bg-card p-3.5">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('taskDrawer.relatedFeaturesHeader')}
+            </p>
+            <ScheduleSection
+              task={task}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              members={members}
+              onSetSchedule={onSetSchedule}
+              onRespondSchedule={onRespondSchedule}
+            />
 
-        <FormSection
-          task={task}
-          currentUserId={currentUserId}
-          isAdmin={isAdmin}
-          members={members}
-          onSetForm={onSetForm}
-          onRespondForm={onRespondForm}
-        />
+            <FormSection
+              task={task}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              members={members}
+              onSetForm={onSetForm}
+              onRespondForm={onRespondForm}
+            />
+          </div>
+        )}
 
         {/* Comments */}
         <div className="mt-6">
@@ -2254,6 +2360,29 @@ function DrawerBody({
           </div>
         )}
 
+        {/* 点4: 登録者は重要度が低いため「詳細情報」を開いた場合のみ表示 */}
+        {creator && (
+          <div className="mt-6">
+            <button
+              onClick={() => setDetailsOpen((o) => !o)}
+              className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <FileText className="size-3.5" />
+                {t('taskDrawer.detailsHeader')}
+              </span>
+              <ChevronDown className={cn('size-3.5 transition-transform', detailsOpen && 'rotate-180')} />
+            </button>
+            {detailsOpen && (
+              <div className="mt-2 flex items-center gap-1.5 text-sm">
+                <span className="text-xs text-muted-foreground">{t('taskDrawer.row.creator')}</span>
+                <Avatar member={creator} size={18} />
+                {creator.displayName || creator.name}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Change history */}
         {isAdmin && (task.history?.length ?? 0) > 0 && (
           <div className="mt-6">
@@ -2313,11 +2442,13 @@ function DrawerBody({
   )
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+// 点3: 「タスク情報」カード内の2列コンパクト表示用(旧Rowの左右分割レイアウトと
+// 異なり、ラベルを上・値を下に積む縦積み表示にしてグリッドに収める)
+function InfoField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border/60 py-2.5 last:border-0">
-      <dt className="shrink-0 pt-0.5 text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-right">{children}</dd>
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[11px] font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm">{children}</dd>
     </div>
   )
 }
@@ -2398,10 +2529,14 @@ function TimerWidget({
 
   const reset = () => update({ runningSince: null, accumulatedMs: 0 })
 
-  const addToActual = () => {
-    if (elapsedMs <= 0) return
-    const hours = Math.round((elapsedMs / 3600000) * 100) / 100
-    onAddHours(hours)
+  // 「終了」— 計測を止めて経過時間を実績時間に加算し、次の計測に備えて
+  // リセットする(点5: 計測ボタンは開始/一時停止/終了の3state)
+  const finish = () => {
+    if (state.runningSince) update({ runningSince: null, accumulatedMs: elapsedMs })
+    if (elapsedMs > 0) {
+      const hours = Math.round((elapsedMs / 3600000) * 100) / 100
+      onAddHours(hours)
+    }
     reset()
   }
 
@@ -2411,31 +2546,21 @@ function TimerWidget({
         <Timer className="size-3.5 text-muted-foreground" />
         {formatElapsed(elapsedMs)}
       </span>
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-        aria-label={state.runningSince ? t('taskDrawer.timer.pause') : t('taskDrawer.timer.start')}
-      >
-        {state.runningSince ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-      </button>
-      {elapsedMs > 0 && (
+      {!state.runningSince && elapsedMs === 0 ? (
+        <Button size="sm" onClick={toggle}>
+          <Play className="size-3.5" />
+          {t('taskDrawer.timer.start')}
+        </Button>
+      ) : (
         <>
-          <button
-            type="button"
-            onClick={addToActual}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            {t('taskDrawer.timer.addToActual')}
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-            aria-label={t('taskDrawer.timer.reset')}
-          >
-            <RotateCcw className="size-3.5" />
-          </button>
+          <Button size="sm" variant="outline" onClick={toggle}>
+            {state.runningSince ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+            {state.runningSince ? t('taskDrawer.timer.pause') : t('taskDrawer.timer.resume')}
+          </Button>
+          <Button size="sm" variant="outline" onClick={finish}>
+            <Square className="size-3.5" />
+            {t('taskDrawer.timer.finish')}
+          </Button>
         </>
       )}
     </div>

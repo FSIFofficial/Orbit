@@ -410,6 +410,60 @@ function computeAutoLevels(currentLevels, cumulativePoints, thresholds) {
 }
 
 /**
+ * 他団体で積んだ実績(共通スキルのポイント・資格)の持ち込み。本人が自分の
+ * ページからエクスポートしたファイルを、新しい団体で自分のページから
+ * インポートする想定(lib/orbit/portable-record.ts)。awardSkillPointsと同じ
+ * 「累計加算→レベル自動繰り上げ」ロジックだが、タスクには紐付けない。
+ * 資格は名前+取得日が一致するものは重複とみなしスキップして追記する。
+ */
+function importPortableRecord(memberId, skillPoints, qualifications) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+
+  var currentPoints = {}
+  try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
+  var currentLevels = []
+  try { currentLevels = JSON.parse(memberRow.skill_levels_json || '[]') } catch (_) {}
+  var currentQualifications = []
+  try { currentQualifications = JSON.parse(memberRow.qualifications_json || '[]') } catch (_) {}
+
+  var skillKeys = Object.keys(skillPoints || {})
+  for (var i = 0; i < skillKeys.length; i++) {
+    var s = skillKeys[i]
+    currentPoints[s] = (currentPoints[s] || 0) + (Number(skillPoints[s]) || 0)
+  }
+
+  var thresholds = getSkillLevelThresholds()
+  var newLevels = computeAutoLevels(currentLevels, currentPoints, thresholds)
+
+  var existingKeys = {}
+  for (var j = 0; j < currentQualifications.length; j++) {
+    var eq = currentQualifications[j]
+    existingKeys[(eq.name || '') + '|' + (eq.acquiredDate || '')] = true
+  }
+  var incoming = qualifications || []
+  for (var k = 0; k < incoming.length; k++) {
+    var q = incoming[k]
+    var key = (q.name || '') + '|' + (q.acquiredDate || '')
+    if (existingKeys[key]) continue
+    existingKeys[key] = true
+    currentQualifications.push({
+      id: 'q-' + Utilities.getUuid().slice(0, 8),
+      name: q.name || '',
+      acquiredDate: q.acquiredDate || undefined,
+      issuer: q.issuer || undefined,
+    })
+  }
+
+  updateMemberFields(memberId, {
+    skill_points_json: JSON.stringify(currentPoints),
+    skill_levels_json: JSON.stringify(newLevels),
+    qualifications_json: JSON.stringify(currentQualifications),
+  })
+  return { ok: true, newPoints: currentPoints, newLevels: newLevels, qualifications: currentQualifications }
+}
+
+/**
  * Awards skill points to a member on task completion.
  * Updates skill_points_json and auto-levels skill_levels_json.
  * Also saves awarded_points_json on the task for future avg calculations.
@@ -791,6 +845,7 @@ function authorizeAction(acting, action, body) {
     'updateDevelopmentPlan',// 本人・管理者双方が編集可
     'updateCareerHistory',  // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
     'updateQualifications', // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
+    'importPortableRecord', // 他団体からの実績持ち込みは本人が主体（管理者も代理可）
     'updateTrainingHistory',// 本人が申請、管理者が更新（ステータス変更）
     'notifyTrainingRequest',// 本人が申請するが念のため本人or管理者に制限
     'updateEducationInfo',  // 大学名・学部・学科・学年は本人・管理者双方が編集可
@@ -842,6 +897,7 @@ function authorizeAction(acting, action, body) {
     'notifyFormResult',
     'updateHistory',
     'updateDeliverables',
+    'setHoldReason',           // 保留理由の設定は担当者(または管理者)が本人操作
     'submitQuizResult',        // 検定の受験はログイン済み誰でも
     'submitExpenseApplication',// 経費申請はログイン済み誰でも
     'withdrawExpense',         // 取り下げは本人（下層でチェック）
@@ -1018,7 +1074,7 @@ function doPost(e) {
           notifyAdmins(willSubject, willBody)
           notifyChat('💡 ' + willName + 'さんのWillタグが更新されました：' + willTags)
         } catch (err) {
-          console.error('updateWill notification failed: ' + err)
+          console.error('updateWillの通知送信に失敗しました: ' + err)
         }
         break
       case 'updateTimezone':
@@ -1126,6 +1182,12 @@ function doPost(e) {
         result = updateTaskFields(body.taskId, {
           blocker_note: body.note || '',
           blocker_since: body.note ? body.since || todayStr() : '',
+        })
+        break
+      case 'setHoldReason':
+        result = updateTaskFields(body.taskId, {
+          hold_reason_note: body.note || '',
+          hold_reason_since: body.note ? body.since || todayStr() : '',
         })
         break
       case 'updateDeliverables':
@@ -1298,11 +1360,9 @@ function doPost(e) {
         break
       // ---- タレントマネジメント ----
       case 'updateSearchProfile':
+        // 経験年数はjoinedAtからの自動計算に統一したため、years_of_experience
+        // 列への書き込みは廃止(列自体は既存データ保持のためシートに残す)
         result = updateMemberFields(body.memberId, {
-          years_of_experience:
-            body.yearsOfExperience === null || body.yearsOfExperience === undefined
-              ? ''
-              : body.yearsOfExperience,
           has_management_experience: body.hasManagementExperience ? 'TRUE' : 'FALSE',
           desired_areas: (body.desiredAreas || []).join(','),
           desired_skills: (body.desiredSkills || []).join(','), // DEV-002
@@ -1370,6 +1430,9 @@ function doPost(e) {
         break
       case 'awardSkillPoints':
         result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
+        break
+      case 'importPortableRecord':
+        result = importPortableRecord(body.memberId, body.skillPoints || {}, body.qualifications || [])
         break
       case 'submitQuizResult':
         result = submitQuizResult(body.quizId, body.memberId, body.answers || [], actingMember)
@@ -1643,7 +1706,7 @@ function notifyProjectHealthChanged(projectId, health, note) {
     )
     notifyChat('❤️‍🩹 「' + project.name + '」の健康状態: ' + healthLabelJa)
   } catch (err) {
-    console.error('notifyProjectHealthChanged failed: ' + err)
+    console.error('notifyProjectHealthChangedの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -1710,7 +1773,7 @@ function notifyReview(taskId) {
     )
     notifyChat('🔔 「' + task.title + '」が確認待ちになりました。')
   } catch (err) {
-    console.error('notifyReview failed: ' + err)
+    console.error('notifyReviewの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -1725,12 +1788,12 @@ function notifyReview(taskId) {
 // Membersシートの列名/メールアドレス設定・MailAppの残り送信数を確認した上で、
 // notifyAdmins() を実際に一度呼び出してテストメールを送る。
 function debugNotifyTest() {
-  console.log('MailApp remaining daily quota: ' + MailApp.getRemainingDailyQuota())
+  console.log('MailAppの残り送信可能数: ' + MailApp.getRemainingDailyQuota())
   console.log('org_notification_emails: ' + JSON.stringify(orgNotificationEmails()))
 
   var sheet = getSheet(SHEET_MEMBERS)
   var headers = headerRow(sheet)
-  console.log('Members sheet headers: ' + headers.join(', '))
+  console.log('Membersシートのヘッダー: ' + headers.join(', '))
 
   var idCol = headers.indexOf('id')
   var notifyCol = headers.indexOf('notify_new_task')
@@ -1738,7 +1801,7 @@ function debugNotifyTest() {
   var emailMap = getAllMemberEmails()
   console.log(
     'MemberEmails件数=' + Object.keys(emailMap).length +
-    ', notify_new_task col idx=' + notifyCol + ', role col idx=' + roleCol,
+    ', notify_new_task列index=' + notifyCol + ', role列index=' + roleCol,
   )
 
   if (Object.keys(emailMap).length === 0) {
@@ -1748,8 +1811,7 @@ function debugNotifyTest() {
     rows.forEach(function (r, i) {
       var mid = String(r[idCol])
       console.log(
-        'row ' +
-          (i + 2) +
+        (i + 2) + '行目' +
           ': id=' + mid +
           ', email=' +
           JSON.stringify(emailMap[mid] || '') +
@@ -1759,9 +1821,9 @@ function debugNotifyTest() {
     })
   }
 
-  console.log('--- calling notifyAdmins() now (this will actually try to send a real email) ---')
+  console.log('--- ここから notifyAdmins() を実行します（実際にメールが送信されます）---')
   notifyAdmins('[Orbit] テスト通知', 'これは debugNotifyTest() からのテストメールです。届いていれば設定は正常です。')
-  console.log('debugNotifyTest: done — check the inbox (and spam folder) of the resolved recipient(s) above')
+  console.log('debugNotifyTest: 完了 — 上記の宛先の受信トレイ（迷惑メールフォルダも）を確認してください')
 }
 
 // 団体メール（Admin > Tagsで幹部/事業責任者が登録） — 個々のメンバーの
@@ -1902,7 +1964,7 @@ function notifyAdmins(subject, body, preferredEmails) {
     if (preferredEmails && preferredEmails.length > 0) {
       var to = uniqueEmails(preferredEmails.concat(orgEmails))
       sendLocalizedEmail(to, templates)
-      console.log('notifyAdmins: sent to preferredEmails+org ' + to.join(','))
+      console.log('notifyAdmins: preferredEmails+orgに送信しました ' + to.join(','))
       return
     }
     var sheet = getSheet(SHEET_MEMBERS)
@@ -1913,7 +1975,7 @@ function notifyAdmins(subject, body, preferredEmails) {
     var roleCol = headers.indexOf('role')
     var emailMap = getAllMemberEmails()
     if (Object.keys(emailMap).length === 0 && orgEmails.length === 0) {
-      console.warn('notifyAdmins: no member emails on file (MemberEmails) and no org emails configured — nothing sent')
+      console.warn('notifyAdmins: MemberEmailsにメール登録がなく、団体メールも未設定のため送信しませんでした')
       return
     }
 
@@ -1934,17 +1996,17 @@ function notifyAdmins(subject, body, preferredEmails) {
     var recipients = uniqueEmails((opted.length > 0 ? opted : reps).concat(orgEmails))
     if (recipients.length === 0) {
       console.warn(
-        'notifyAdmins: no recipients resolved (no member has notify_new_task=TRUE, no non-一般 role member has an email, and no org email configured) — nothing sent',
+        'notifyAdmins: 宛先を解決できませんでした（notify_new_task=TRUEのメンバーがおらず、「一般」以外のroleを持つメンバーにメール登録もなく、団体メールも未設定）— 送信しませんでした',
       )
       return
     }
 
     sendLocalizedEmail(recipients, templates)
-    console.log('notifyAdmins: sent to ' + recipients.join(','))
+    console.log('notifyAdmins: 送信先 ' + recipients.join(','))
   } catch (err) {
     // a mail error shouldn't roll back the caller's action, but log it so
     // it's visible in Executions instead of failing completely silently
-    console.error('notifyAdmins failed: ' + err + (err && err.stack ? '\n' + err.stack : ''))
+    console.error('notifyAdminsの送信に失敗しました: ' + err + (err && err.stack ? '\n' + err.stack : ''))
   }
 }
 
@@ -1978,7 +2040,7 @@ function reportsToEmails(assigneeIds) {
     })
     return emails
   } catch (err) {
-    console.error('reportsToEmails failed: ' + err)
+    console.error('reportsToEmailsの処理に失敗しました: ' + err)
     return []
   }
 }
@@ -1995,7 +2057,7 @@ function memberEmailsByIds(memberIds) {
     })
     return emails
   } catch (err) {
-    console.error('memberEmailsByIds failed: ' + err)
+    console.error('memberEmailsByIdsの処理に失敗しました: ' + err)
     return []
   }
 }
@@ -2047,7 +2109,7 @@ function localesByEmails(emails) {
       matched.forEach(function (e) { result[e] = locale })
     })
   } catch (err) {
-    console.error('localesByEmails failed: ' + err)
+    console.error('localesByEmailsの処理に失敗しました: ' + err)
   }
   return result
 }
@@ -2098,9 +2160,9 @@ function notifyMention(taskId, commentText, memberIds) {
     memberIds.forEach(function(mid) {
       queueNotification(mid, 'mention', templates)
     })
-    console.log('notifyMention: queued for memberIds ' + memberIds.join(','))
+    console.log('notifyMention: 通知キューに登録したmemberIds ' + memberIds.join(','))
   } catch (err) {
-    console.error('notifyMention failed: ' + err)
+    console.error('notifyMentionの処理に失敗しました: ' + err)
   }
 }
 
@@ -2127,7 +2189,7 @@ function notifyTrainingRequest(memberId, trainingName) {
     )
     notifyChat('📚 ' + name + 'さんから研修「' + (trainingName || '') + '」の申請がありました。')
   } catch (err) {
-    console.error('notifyTrainingRequest failed: ' + err)
+    console.error('notifyTrainingRequestの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2139,7 +2201,7 @@ function notifyTaskRejected(creatorId, taskName, reason) {
     if (!creatorId) return
     var emails = memberEmailsByIds([creatorId])
     if (emails.length === 0) {
-      console.warn('notifyTaskRejected: no email on file for creatorId ' + creatorId + ' — nothing sent')
+      console.warn('notifyTaskRejected: creatorId ' + creatorId + ' のメール登録がないため送信しませんでした')
       return
     }
     sendLocalizedEmail(emails, {
@@ -2158,9 +2220,9 @@ function notifyTaskRejected(creatorId, taskName, reason) {
           'Please check Orbit for details.',
       },
     })
-    console.log('notifyTaskRejected: sent to ' + emails.join(','))
+    console.log('notifyTaskRejected: 送信先 ' + emails.join(','))
   } catch (err) {
-    console.error('notifyTaskRejected failed: ' + err)
+    console.error('notifyTaskRejectedの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2169,7 +2231,7 @@ function notifyTrainingDecision(memberId, trainingName, approved) {
   try {
     var emails = memberEmailsByIds([memberId])
     if (emails.length === 0) {
-      console.warn('notifyTrainingDecision: no email on file for memberId ' + memberId + ' — nothing sent')
+      console.warn('notifyTrainingDecision: memberId ' + memberId + ' のメール登録がないため送信しませんでした')
       return
     }
     sendLocalizedEmail(emails, {
@@ -2184,9 +2246,9 @@ function notifyTrainingDecision(memberId, trainingName, approved) {
           'Your request for training "' + (trainingName || '') + '" was ' + (approved ? 'approved' : 'rejected') + '.\n\nPlease check Orbit for details.',
       },
     })
-    console.log('notifyTrainingDecision: sent to ' + emails.join(','))
+    console.log('notifyTrainingDecision: 送信先 ' + emails.join(','))
   } catch (err) {
-    console.error('notifyTrainingDecision failed: ' + err)
+    console.error('notifyTrainingDecisionの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2198,7 +2260,7 @@ function notifyScheduleResult(taskId) {
     if (!task || !task.creator_id) return
     var emails = memberEmailsByIds([task.creator_id])
     if (emails.length === 0) {
-      console.warn('notifyScheduleResult: no email on file for creator_id ' + task.creator_id + ' — nothing sent')
+      console.warn('notifyScheduleResult: creator_id ' + task.creator_id + ' のメール登録がないため送信しませんでした')
       return
     }
 
@@ -2240,10 +2302,10 @@ function notifyScheduleResult(taskId) {
       ja: { subject: '[Orbit] 日程調整の回答が揃いました', body: bodyJa },
       en: { subject: '[Orbit] Schedule coordination responses are complete', body: bodyEn },
     })
-    console.log('notifyScheduleResult: sent to ' + emails.join(','))
+    console.log('notifyScheduleResult: 送信先 ' + emails.join(','))
     notifyChat('🗓️ 「' + task.title + '」の日程調整で全員の回答が揃いました。')
   } catch (err) {
-    console.error('notifyScheduleResult failed: ' + err)
+    console.error('notifyScheduleResultの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2255,7 +2317,7 @@ function notifyFormResult(taskId) {
     if (!task || !task.creator_id) return
     var emails = memberEmailsByIds([task.creator_id])
     if (emails.length === 0) {
-      console.warn('notifyFormResult: no email on file for creator_id ' + task.creator_id + ' — nothing sent')
+      console.warn('notifyFormResult: creator_id ' + task.creator_id + ' のメール登録がないため送信しませんでした')
       return
     }
 
@@ -2302,10 +2364,10 @@ function notifyFormResult(taskId) {
       ja: { subject: '[Orbit] フォームの回答が揃いました', body: bodyJa },
       en: { subject: '[Orbit] Form responses are complete', body: bodyEn },
     })
-    console.log('notifyFormResult: sent to ' + emails.join(','))
+    console.log('notifyFormResult: 送信先 ' + emails.join(','))
     notifyChat('📝 「' + task.title + '」のフォームで全員の回答が揃いました。')
   } catch (err) {
-    console.error('notifyFormResult failed: ' + err)
+    console.error('notifyFormResultの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2344,7 +2406,7 @@ function notifyScheduleChange(taskId) {
       reportsToEmails(assigneeIds),
     )
   } catch (err) {
-    console.error('notifyScheduleChange failed: ' + err)
+    console.error('notifyScheduleChangeの通知送信に失敗しました: ' + err)
   }
 }
 
@@ -2666,7 +2728,7 @@ function uploadAvatar(memberId, dataUrl, filename, folderId) {
   var url = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w256-h256-c'
   console.log('uploadAvatar: memberId=' + memberId + ' url=' + url)
   var writeResult = updateMemberFields(memberId, { avatar_url: url })
-  console.log('uploadAvatar: updateMemberFields result=' + JSON.stringify(writeResult))
+  console.log('uploadAvatar: updateMemberFieldsの結果=' + JSON.stringify(writeResult))
   return { url: url }
 }
 
@@ -3205,11 +3267,11 @@ function notifyOverdueTasksToAssignees() {
         })
       } catch (err) {
         // メンバー1人の通知失敗は他のメンバーの処理に影響させない
-        console.error('notifyOverdueTasksToAssignees: failed for memberId=' + aid + ': ' + err)
+        console.error('notifyOverdueTasksToAssignees: memberId=' + aid + ' の通知に失敗しました: ' + err)
       }
     })
   } catch (err) {
-    console.error('notifyOverdueTasksToAssignees failed: ' + err)
+    console.error('notifyOverdueTasksToAssigneesの処理に失敗しました: ' + err)
   }
 }
 
@@ -3365,7 +3427,7 @@ function translateTexts(texts, targetLang) {
     try {
       return LanguageApp.translate(s, '', lang)
     } catch (err) {
-      console.error('translateTexts: failed for "' + s + '": ' + err)
+      console.error('translateTexts: "' + s + '" の翻訳に失敗しました: ' + err)
       return s
     }
   })
