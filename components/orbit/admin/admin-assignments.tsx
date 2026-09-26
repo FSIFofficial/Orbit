@@ -89,7 +89,11 @@ function MatchPanel({
 }) {
   const toast = useToast()
   const { t } = useI18n()
-  const ranked = rankCandidates(task, members, allTasks)
+  // 休止中メンバーはおすすめ候補から除外する(INPUT画面の担当者選択と同じ扱い)。
+  // 手動選択用の「その他」一覧は引き続き全メンバーを対象にする(意図的に
+  // 休止中メンバーへ手動アサインし直したいケースもあるため)
+  const activeMembers = members.filter((m) => !m.inactive)
+  const ranked = rankCandidates(task, activeMembers, allTasks)
   const rankedIds = new Set(ranked.map((r) => r.member.id))
   const others = members.filter((m) => !rankedIds.has(m.id))
   const [showOthers, setShowOthers] = useState(false)
