@@ -6,7 +6,7 @@ import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { DIFFICULTY_LABEL, type Member } from '@/lib/orbit/types'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
-import { memberWorkloadCapacity, matchSkills, tenureYears, computeTaskPerformanceScore, computeReviewTurnaroundDays, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { memberWorkloadCapacity, matchSkills, tenureYears, computeTaskPerformanceScore, computeReviewTurnaroundDays, computeYearsOfExperience, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { buildDefaultQuestions } from '@/components/orbit/survey-screen'
 
 function BarRow({
@@ -382,15 +382,15 @@ export function AdminAnalytics() {
     [scatterPoints],
   )
 
-  // item 36 マップ1: スキル×経験数 — yearsOfExperience(自己申告)未設定の
-  // メンバーはこのマップから除外する
+  // item 36 マップ1: スキル×経験数 — 経験年数はjoinedAt(所属日)からの
+  // 自動計算に統一したため、joinedAt未設定のメンバーはこのマップから除外する
   const skillExperiencePoints = useMemo(() =>
     members
-      .filter((m) => !m.inactive && m.yearsOfExperience != null)
+      .filter((m) => !m.inactive && m.joinedAt)
       .map((m) => ({
         member: m,
         x: m.skills.length + (m.skillLevels ?? []).length,
-        y: m.yearsOfExperience!,
+        y: computeYearsOfExperience(m.joinedAt)!,
       })),
     [members],
   )

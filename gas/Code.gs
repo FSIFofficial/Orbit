@@ -1360,11 +1360,9 @@ function doPost(e) {
         break
       // ---- タレントマネジメント ----
       case 'updateSearchProfile':
+        // 経験年数はjoinedAtからの自動計算に統一したため、years_of_experience
+        // 列への書き込みは廃止(列自体は既存データ保持のためシートに残す)
         result = updateMemberFields(body.memberId, {
-          years_of_experience:
-            body.yearsOfExperience === null || body.yearsOfExperience === undefined
-              ? ''
-              : body.yearsOfExperience,
           has_management_experience: body.hasManagementExperience ? 'TRUE' : 'FALSE',
           desired_areas: (body.desiredAreas || []).join(','),
           desired_skills: (body.desiredSkills || []).join(','), // DEV-002

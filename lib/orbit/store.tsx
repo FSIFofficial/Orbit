@@ -361,7 +361,6 @@ interface OrbitContextValue extends OrbitState {
   updateSearchProfile: (
     memberId: string,
     profile: {
-      yearsOfExperience: number | null
       hasManagementExperience: boolean
       desiredAreas: string[]
       desiredSkills: string[]
@@ -3419,7 +3418,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     (
       memberId: string,
       profile: {
-        yearsOfExperience: number | null
         hasManagementExperience: boolean
         desiredAreas: string[]
         desiredSkills: string[]
@@ -3430,7 +3428,6 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
           m.id === memberId
             ? {
                 ...m,
-                yearsOfExperience: profile.yearsOfExperience ?? undefined,
                 hasManagementExperience: profile.hasManagementExperience,
                 desiredAreas: profile.desiredAreas,
                 desiredSkills: profile.desiredSkills,

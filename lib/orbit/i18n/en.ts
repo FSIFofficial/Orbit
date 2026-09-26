@@ -1060,7 +1060,7 @@ export const en = {
 
   // ---- career-tab (section headings/descriptions only) ------------------------------
   'career.searchProfile.title': 'Talent search profile',
-  'career.searchProfile.desc': 'Used by the talent search filter under Admin → Members.',
+  'career.searchProfile.desc': 'Used by the talent search filter under Admin → Members. Years of experience is calculated automatically from the join date (change it in the "Tenure" field below).',
   'career.skillLevels.title': 'Skill levels',
   'career.skillLevels.desc': 'Proficiency (1-5) for each skill. Lv.1 means "just getting started," not "can\'t do it at all." Completing a task auto-registers a skill at Lv.1, and experience from outside the organization can be added manually too. Field certification is judged by the proportion of skills registered here.',
   'career.radarChart.title': 'Skill radar chart',

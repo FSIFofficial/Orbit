@@ -195,7 +195,9 @@ export interface Member {
   // config, used by 人材育成タブ.
 
   // 人材検索: filterable attributes
-  yearsOfExperience?: number
+  // 経験年数は従来ここに自己申告の数値として持っていたが、所属日
+  // (joinedAt)からの自動計算に統一したため削除した。表示・検索が
+  // 必要な箇所は utils.ts の computeYearsOfExperience(joinedAt) を使う
   hasManagementExperience?: boolean
   // desired growth areas/skills ("成長したい領域やスキル"), distinct from
   // Will (what they want to do) and skills (what they already have)

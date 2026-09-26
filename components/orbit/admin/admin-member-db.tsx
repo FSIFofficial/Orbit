@@ -9,6 +9,7 @@ import { Download, Upload, Eye, Search } from 'lucide-react'
 import type { CustomMemberColumn, Member } from '@/lib/orbit/types'
 import { BASE_ROLE } from '@/lib/orbit/types'
 import { exportSkillExcel } from '@/lib/orbit/export-excel'
+import { computeYearsOfExperience } from '@/lib/orbit/utils'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 
 type TranslationFn = (key: TranslationKey, vars?: Record<string, string | number>) => string
@@ -67,7 +68,9 @@ function buildBaseCols(t: TranslationFn): ColDef[] {
     { key: 'affiliation', label: t('admin.memberDb.col.affiliation'), getValue: (m) => m.affiliation, editable: false, width: 140, tooltip: t('admin.memberDb.col.affiliationTooltip') },
     { key: 'role', label: t('admin.memberDb.col.role'), getValue: (m) => m.role, editable: false, width: 100 },
     { key: 'skills', label: t('admin.memberDb.col.skills'), getValue: (m) => (m.skills ?? []).join(', '), editable: false, width: 180 },
-    { key: 'yearsOfExperience', label: t('admin.memberDb.col.yearsOfExperience'), getValue: (m) => m.yearsOfExperience != null ? String(m.yearsOfExperience) : '', editable: true, width: 90 },
+    // 経験年数はjoinedAt(所属日)からの自動計算に統一したため編集不可。
+    // 所属日はjoinedAt列から変更する
+    { key: 'yearsOfExperience', label: t('admin.memberDb.col.yearsOfExperience'), getValue: (m) => { const y = computeYearsOfExperience(m.joinedAt); return y != null ? String(y) : '' }, editable: false, width: 90 },
     { key: 'hasManagementExperience', label: t('admin.memberDb.col.hasManagementExperience'), getValue: (m) => m.hasManagementExperience ? t('admin.memberDb.yes') : t('admin.memberDb.no'), editable: false, width: 90 },
     { key: 'joinedAt', label: t('admin.memberDb.col.joinedAt'), getValue: (m) => m.joinedAt ?? '', editable: true, width: 110 },
     { key: 'careerAspiration', label: t('admin.memberDb.col.careerAspiration'), getValue: (m) => m.careerAspiration ?? '', editable: true, width: 180 },
@@ -173,7 +176,6 @@ export function AdminMemberDb() {
     members,
     skillOptions,
     visibleTasks,
-    updateSearchProfile,
     updateCareerGoals,
     updateJoinedAt,
     bulkUpdateSkills,
@@ -275,13 +277,6 @@ export function AdminMemberDb() {
     if (!member) return
     if (colKey.startsWith(CUSTOM_COL_PREFIX)) {
       updateCustomField(memberId, colKey.slice(CUSTOM_COL_PREFIX.length), val)
-    } else if (colKey === 'yearsOfExperience') {
-      updateSearchProfile(memberId, {
-        yearsOfExperience: val === '' ? null : Number(val),
-        hasManagementExperience: member.hasManagementExperience ?? false,
-        desiredAreas: member.desiredAreas ?? [],
-        desiredSkills: member.desiredSkills ?? [],
-      })
     } else if (colKey === 'joinedAt') {
       updateJoinedAt(memberId, val || null)
     } else if (colKey === 'careerAspiration' || colKey === 'desiredFutureRole') {
@@ -304,7 +299,7 @@ export function AdminMemberDb() {
       }
     }
     setEditCell(null)
-  }, [members, updateSearchProfile, updateCareerGoals, updateJoinedAt, updateCustomField, updateSkillLevels, bulkUpdateSkills])
+  }, [members, updateCareerGoals, updateJoinedAt, updateCustomField, updateSkillLevels, bulkUpdateSkills])
 
   // ---- member CSV export (uses viewer-scoped cols and members) ----
   const exportMemberCsv = () => {

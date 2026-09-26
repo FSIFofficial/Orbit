@@ -224,7 +224,8 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     mentorId: r.mentor_id || undefined,
     joinedAt: r.joined_at || undefined,
     // ---- タレントマネジメント (人材DB／スキル管理／人材検索／育成・キャリア) ----
-    yearsOfExperience: r.years_of_experience ? Number(r.years_of_experience) : undefined,
+    // 経験年数はjoinedAtからの自動計算に統一したためここでは読み込まない
+    // (utils.tsのcomputeYearsOfExperienceを参照)
     hasManagementExperience: /^(true|1|yes)$/i.test((r.has_management_experience || '').trim()),
     desiredAreas: splitTags(r.desired_areas),
     desiredSkills: splitTags(r.desired_skills), // DEV-002
@@ -879,7 +880,6 @@ export const remoteApi = {
   updateSearchProfile: (
     memberId: string,
     profile: {
-      yearsOfExperience: number | null
       hasManagementExperience: boolean
       desiredAreas: string[]
       desiredSkills: string[]

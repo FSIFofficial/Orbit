@@ -9,7 +9,7 @@ import { Modal } from '@/components/orbit/modal'
 import { useToast } from '@/components/orbit/toast'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
-import { computeTaskPerformanceScore } from '@/lib/orbit/utils'
+import { computeTaskPerformanceScore, computeYearsOfExperience, formatTenure } from '@/lib/orbit/utils'
 import { downloadPortableRecord, parsePortableRecordFile } from '@/lib/orbit/portable-record'
 import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
 import { cn } from '@/lib/utils'
@@ -130,7 +130,6 @@ export function CareerTab({
   updateSearchProfile: (
     id: string,
     p: {
-      yearsOfExperience: number | null
       hasManagementExperience: boolean
       desiredAreas: string[]
       desiredSkills: string[]
@@ -257,24 +256,17 @@ function SearchProfileSection({
       description={t('career.searchProfile.desc')}
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">{t('career.searchProfile.yearsOfExperience')}</span>
-          <input
-            type="number"
-            min={0}
-            disabled={!editable}
-            defaultValue={member.yearsOfExperience ?? ''}
-            onBlur={(e) =>
-              onSave(member.id, {
-                yearsOfExperience: e.target.value ? Number(e.target.value) : null,
-                hasManagementExperience: !!member.hasManagementExperience,
-                desiredAreas: member.desiredAreas ?? [],
-                desiredSkills: member.desiredSkills ?? [],
-              })
-            }
-            className={cn(fieldClass, 'w-20 disabled:opacity-50')}
-          />
-        </label>
+          {/* item: 経験年数は自己申告の数値ではなく、所属日(joinedAt)からの
+              自動計算に統一した。編集はできず、所属日はperson-detail.tsxの
+              「所属歴」欄から変更する */}
+          <span className="text-sm">
+            {member.joinedAt
+              ? `${computeYearsOfExperience(member.joinedAt)}年（${formatTenure(member.joinedAt)}）`
+              : t('common.notSet')}
+          </span>
+        </div>
         <label className="flex items-center gap-1.5 pt-5">
           <input
             type="checkbox"
@@ -282,7 +274,6 @@ function SearchProfileSection({
             checked={!!member.hasManagementExperience}
             onChange={(e) =>
               onSave(member.id, {
-                yearsOfExperience: member.yearsOfExperience ?? null,
                 hasManagementExperience: e.target.checked,
                 desiredAreas: member.desiredAreas ?? [],
                 desiredSkills: member.desiredSkills ?? [],
@@ -301,7 +292,6 @@ function SearchProfileSection({
             editable={editable}
             onChange={(next) =>
               onSave(member.id, {
-                yearsOfExperience: member.yearsOfExperience ?? null,
                 hasManagementExperience: !!member.hasManagementExperience,
                 desiredAreas: next,
                 desiredSkills: member.desiredSkills ?? [],
@@ -321,7 +311,6 @@ function SearchProfileSection({
             options={skillOptions}
             onChange={(next) =>
               onSave(member.id, {
-                yearsOfExperience: member.yearsOfExperience ?? null,
                 hasManagementExperience: !!member.hasManagementExperience,
                 desiredAreas: member.desiredAreas ?? [],
                 desiredSkills: next,

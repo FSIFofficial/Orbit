@@ -1060,7 +1060,7 @@ export const ja = {
 
   // ---- career-tab（各セクションの見出し・説明のみ）--------------------------
   'career.searchProfile.title': '人材検索プロフィール',
-  'career.searchProfile.desc': 'Admin → Membersの人材検索フィルタで使われます。',
+  'career.searchProfile.desc': 'Admin → Membersの人材検索フィルタで使われます。経験年数は所属日から自動計算されます（所属日は下の「所属歴」欄で変更できます）。',
   'career.skillLevels.title': 'スキルレベル',
   'career.skillLevels.desc': '各スキルの習熟度（1〜5）です。Lv.1は「何もできない」ではなく「やり始めたばかり」の意味です。タスクを完了するとLv.1で自動登録され、団体外の経験なども自分で追加できます。要求分野の認定は、ここに登録されたスキルの保有率で判定されます。',
   'career.radarChart.title': 'スキルレーダーチャート',
