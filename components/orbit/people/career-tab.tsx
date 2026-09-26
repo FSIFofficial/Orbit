@@ -1,17 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { SectionLabel, Avatar } from '@/components/orbit/primitives'
 import { EditableTags } from '@/components/orbit/editable-tags'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/orbit/modal'
+import { useToast } from '@/components/orbit/toast'
 import { useI18n, type TranslationKey } from '@/lib/orbit/i18n'
 import { SkillRadarChart } from '@/components/orbit/skill-radar-chart'
 import { computeTaskPerformanceScore } from '@/lib/orbit/utils'
+import { downloadPortableRecord, parsePortableRecordFile } from '@/lib/orbit/portable-record'
 import { DIFFICULTY_LABEL } from '@/lib/orbit/types'
 import { cn } from '@/lib/utils'
-import { X, Plus, GraduationCap, CheckCircle2 } from 'lucide-react'
+import { X, Plus, GraduationCap, CheckCircle2, Download, Upload } from 'lucide-react'
 import type {
   CareerHistoryEntry,
   Competency,
@@ -24,6 +26,7 @@ import type {
   RadarAxis,
   SkillLevel,
   SkillLevelValue,
+  SkillPoints,
   TrainingRecord,
   TransferRecord,
 } from '@/lib/orbit/types'
@@ -99,6 +102,7 @@ export function CareerTab({
   updateSearchProfile,
   updateCareerHistory,
   updateQualifications,
+  importPortableRecord,
   updateEvaluationHistory,
   updateTransferHistory,
   updateSkillLevels,
@@ -134,6 +138,7 @@ export function CareerTab({
   ) => void
   updateCareerHistory: (id: string, entries: CareerHistoryEntry[]) => void
   updateQualifications: (id: string, entries: Qualification[]) => void
+  importPortableRecord: (id: string, skillPoints: SkillPoints, qualifications: Qualification[]) => void
   updateEvaluationHistory: (id: string, entries: EvaluationRecord[]) => void
   updateTransferHistory: (id: string, entries: TransferRecord[]) => void
   updateSkillLevels: (id: string, levels: SkillLevel[]) => void
@@ -192,6 +197,7 @@ export function CareerTab({
       <CompetenciesSection member={member} editable={editableAdminOnly} onSave={updateCompetencies} />
       <CareerHistorySection member={member} editable={editable} onSave={updateCareerHistory} rid={rid} />
       <QualificationsSection member={member} editable={editable} onSave={updateQualifications} rid={rid} />
+      <PortableRecordSection member={member} editable={editable} onImport={importPortableRecord} />
       <TrainingHistorySection
         member={member}
         editable={editable}
@@ -854,6 +860,80 @@ function QualificationsSection({
           </button>
         </div>
       )}
+    </Section>
+  )
+}
+
+// 他団体での実績の持ち出し/持ち込み。ライブでの団体間連携ではなく、
+// 「エクスポートしたファイルを新しい団体側でインポートする」方式にして
+// いるため、今の「団体ごとに独立したスプレッドシート」という構成のまま
+// 実現できる。対象は共通スキル(FSIF配布の基本スキル)のポイント・レベルと
+// 資格のみで、団体独自スキルは対象外(portable-record.tsで絞り込み済み)
+function PortableRecordSection({
+  member,
+  editable,
+  onImport,
+}: {
+  member: Member
+  editable: boolean
+  onImport: CareerTabProps['importPortableRecord']
+}) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+
+  if (!editable) return null
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true)
+    try {
+      const record = await parsePortableRecordFile(file)
+      onImport(member.id, record.skillPoints, record.qualifications)
+      toast(
+        t('career.portableRecord.importedToast', {
+          skillCount: Object.keys(record.skillPoints).length,
+          qualCount: record.qualifications.length,
+        }),
+      )
+    } catch {
+      toast(t('career.portableRecord.importErrorToast'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  return (
+    <Section
+      title={t('career.portableRecord.title')}
+      description={t('career.portableRecord.desc')}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" className="gap-1.5" onClick={() => downloadPortableRecord(member)}>
+          <Download className="size-3.5" />
+          {t('career.portableRecord.exportButton')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-1.5"
+          disabled={importing}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload className="size-3.5" />
+          {t('career.portableRecord.importButton')}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
     </Section>
   )
 }

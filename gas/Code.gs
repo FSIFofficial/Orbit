@@ -410,6 +410,60 @@ function computeAutoLevels(currentLevels, cumulativePoints, thresholds) {
 }
 
 /**
+ * 他団体で積んだ実績(共通スキルのポイント・資格)の持ち込み。本人が自分の
+ * ページからエクスポートしたファイルを、新しい団体で自分のページから
+ * インポートする想定(lib/orbit/portable-record.ts)。awardSkillPointsと同じ
+ * 「累計加算→レベル自動繰り上げ」ロジックだが、タスクには紐付けない。
+ * 資格は名前+取得日が一致するものは重複とみなしスキップして追記する。
+ */
+function importPortableRecord(memberId, skillPoints, qualifications) {
+  var memberRow = findRow(SHEET_MEMBERS, memberId)
+  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+
+  var currentPoints = {}
+  try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
+  var currentLevels = []
+  try { currentLevels = JSON.parse(memberRow.skill_levels_json || '[]') } catch (_) {}
+  var currentQualifications = []
+  try { currentQualifications = JSON.parse(memberRow.qualifications_json || '[]') } catch (_) {}
+
+  var skillKeys = Object.keys(skillPoints || {})
+  for (var i = 0; i < skillKeys.length; i++) {
+    var s = skillKeys[i]
+    currentPoints[s] = (currentPoints[s] || 0) + (Number(skillPoints[s]) || 0)
+  }
+
+  var thresholds = getSkillLevelThresholds()
+  var newLevels = computeAutoLevels(currentLevels, currentPoints, thresholds)
+
+  var existingKeys = {}
+  for (var j = 0; j < currentQualifications.length; j++) {
+    var eq = currentQualifications[j]
+    existingKeys[(eq.name || '') + '|' + (eq.acquiredDate || '')] = true
+  }
+  var incoming = qualifications || []
+  for (var k = 0; k < incoming.length; k++) {
+    var q = incoming[k]
+    var key = (q.name || '') + '|' + (q.acquiredDate || '')
+    if (existingKeys[key]) continue
+    existingKeys[key] = true
+    currentQualifications.push({
+      id: 'q-' + Utilities.getUuid().slice(0, 8),
+      name: q.name || '',
+      acquiredDate: q.acquiredDate || undefined,
+      issuer: q.issuer || undefined,
+    })
+  }
+
+  updateMemberFields(memberId, {
+    skill_points_json: JSON.stringify(currentPoints),
+    skill_levels_json: JSON.stringify(newLevels),
+    qualifications_json: JSON.stringify(currentQualifications),
+  })
+  return { ok: true, newPoints: currentPoints, newLevels: newLevels, qualifications: currentQualifications }
+}
+
+/**
  * Awards skill points to a member on task completion.
  * Updates skill_points_json and auto-levels skill_levels_json.
  * Also saves awarded_points_json on the task for future avg calculations.
@@ -791,6 +845,7 @@ function authorizeAction(acting, action, body) {
     'updateDevelopmentPlan',// 本人・管理者双方が編集可
     'updateCareerHistory',  // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
     'updateQualifications', // 本人が主体だが管理者も修正可（安全側: 本人or管理者）
+    'importPortableRecord', // 他団体からの実績持ち込みは本人が主体（管理者も代理可）
     'updateTrainingHistory',// 本人が申請、管理者が更新（ステータス変更）
     'notifyTrainingRequest',// 本人が申請するが念のため本人or管理者に制限
     'updateEducationInfo',  // 大学名・学部・学科・学年は本人・管理者双方が編集可
@@ -1370,6 +1425,9 @@ function doPost(e) {
         break
       case 'awardSkillPoints':
         result = awardSkillPoints(body.taskId, body.memberId, body.points || {})
+        break
+      case 'importPortableRecord':
+        result = importPortableRecord(body.memberId, body.skillPoints || {}, body.qualifications || [])
         break
       case 'submitQuizResult':
         result = submitQuizResult(body.quizId, body.memberId, body.answers || [], actingMember)

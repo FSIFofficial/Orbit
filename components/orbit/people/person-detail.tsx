@@ -116,6 +116,7 @@ export function PersonDetail({ id }: { id: string }) {
     updateSearchProfile,
     updateCareerHistory,
     updateQualifications,
+    importPortableRecord,
     updateEvaluationHistory,
     updateTransferHistory,
     updateSkillLevels,
@@ -1000,6 +1001,7 @@ export function PersonDetail({ id }: { id: string }) {
           updateSearchProfile={updateSearchProfile}
           updateCareerHistory={updateCareerHistory}
           updateQualifications={updateQualifications}
+          importPortableRecord={importPortableRecord}
           updateEvaluationHistory={updateEvaluationHistory}
           updateTransferHistory={updateTransferHistory}
           updateSkillLevels={updateSkillLevels}

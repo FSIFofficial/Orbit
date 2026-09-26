@@ -100,7 +100,12 @@ const SKILL_CERT_THRESHOLD = 3
 // hidden from the normal workspace, visible only under the Archive tab.
 const ARCHIVE_AFTER_DAYS = 14
 
-const DEFAULT_SKILL_OPTIONS = [
+// FSIF側で配布する「共通スキル」の固定リスト。団体は自由に追加(addSkillOption)
+// できるが、この基本リストは団体側で削除・改名できない前提とする。
+// lib/orbit/portable-record.ts の実績エクスポート/インポートで、他団体でも
+// 通用するスキルかどうかの判定にそのまま使う(このリストに載っているスキル
+// のポイントだけを持ち出し・持ち込みの対象にする)
+export const DEFAULT_SKILL_OPTIONS = [
   'デザイン', 'Canva', 'PowerPoint', 'ライティング', 'リサーチ', 'SNS', '広報', 'コミュニケーション',
   'イベント運営', 'メール', 'UI/UX', '実装', '企画', '要件定義', 'プロダクト設計', '校閲', 'Claude', 'V0',
 ]
@@ -324,6 +329,14 @@ interface OrbitContextValue extends OrbitState {
   quizDefinitions: QuizDefinition[]
   radarAxes: RadarAxis[]
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) => void
+  // 他団体での実績(共通スキルのポイント・資格)の持ち込み。本人が自分の
+  // ページから実行する想定(lib/orbit/portable-record.tsのエクスポート/
+  // インポートとセットで使う) — awardSkillPointsと違いタスクには紐付かない
+  importPortableRecord: (
+    memberId: string,
+    skillPoints: SkillPoints,
+    qualifications: Qualification[],
+  ) => void
   updateQuizDefinitions: (quizzes: QuizDefinition[]) => void
   updateRadarAxes: (axes: RadarAxis[]) => void
   // LRN-001: 学習コンテンツ
@@ -1568,6 +1581,56 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
       )
       setTasks((prev) => prev.map((t) => (t.id !== taskId ? t : { ...t, awardedPoints: points })))
       if (isRemoteConfigured) runRemote(remoteApi.awardSkillPoints(taskId, memberId, points))
+    },
+    [skillLevelThresholds, runRemote],
+  )
+
+  // 他団体での実績の持ち込み — awardSkillPointsと同じ「累計加算→レベル
+  // 再計算」ロジックだが、タスクには紐付けない。加えて資格も重複を避けて
+  // 追記する。共通スキル(DEFAULT_SKILL_OPTIONS)以外のキーは念のため無視する
+  // (エクスポート側で既に絞り込み済みだが、手編集されたファイル対策)
+  const importPortableRecord = useCallback(
+    (memberId: string, skillPoints: SkillPoints, qualifications: Qualification[]) => {
+      const commonSkills = new Set(DEFAULT_SKILL_OPTIONS)
+      const filteredPoints = Object.fromEntries(
+        Object.entries(skillPoints).filter(([skill]) => commonSkills.has(skill)),
+      )
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id !== memberId) return m
+          const current = { ...m.skillPoints }
+          Object.entries(filteredPoints).forEach(([skill, pts]) => {
+            current[skill] = (current[skill] ?? 0) + pts
+          })
+          const defaultThreshold = skillLevelThresholds['デフォルト'] ?? 100
+          const existingLevels = [...(m.skillLevels ?? [])]
+          Object.entries(current).forEach(([skill, pts]) => {
+            const threshold = skillLevelThresholds[skill] ?? defaultThreshold
+            const earnedLevel = Math.min(5, Math.floor(pts / threshold) + 1) as SkillLevelValue
+            const idx = existingLevels.findIndex((sl) => sl.skill === skill)
+            if (idx < 0) {
+              existingLevels.push({ skill, level: earnedLevel })
+            } else if (earnedLevel > existingLevels[idx].level) {
+              existingLevels[idx] = { ...existingLevels[idx], level: earnedLevel }
+            }
+          })
+          const existingQualifications = m.qualifications ?? []
+          const existingKeys = new Set(
+            existingQualifications.map((q) => `${q.name}|${q.acquiredDate ?? ''}`),
+          )
+          const newQualifications = qualifications.filter(
+            (q) => !existingKeys.has(`${q.name}|${q.acquiredDate ?? ''}`),
+          )
+          return {
+            ...m,
+            skillPoints: current,
+            skillLevels: existingLevels,
+            qualifications: [...existingQualifications, ...newQualifications],
+          }
+        }),
+      )
+      if (isRemoteConfigured)
+        runRemote(remoteApi.importPortableRecord(memberId, filteredPoints, qualifications))
     },
     [skillLevelThresholds, runRemote],
   )
@@ -4723,6 +4786,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     quizDefinitions,
     radarAxes,
     awardSkillPoints,
+    importPortableRecord,
     updateQuizDefinitions,
     updateRadarAxes,
     submitQuizResult,

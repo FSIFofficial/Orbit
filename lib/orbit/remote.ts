@@ -913,6 +913,12 @@ export const remoteApi = {
   // ---- スキルポイント付与 ----
   awardSkillPoints: (taskId: string, memberId: string, points: SkillPoints) =>
     postToGas<{ newLevels: SkillLevel[]; newPoints: SkillPoints }>('awardSkillPoints', { taskId, memberId, points }),
+  // ---- 他団体からの実績持ち込み (lib/orbit/portable-record.ts) ----
+  importPortableRecord: (memberId: string, skillPoints: SkillPoints, qualifications: Qualification[]) =>
+    postToGas<{ newLevels: SkillLevel[]; newPoints: SkillPoints; qualifications: Qualification[] }>(
+      'importPortableRecord',
+      { memberId, skillPoints, qualifications },
+    ),
   // ---- 検定 ----
   updateQuizDefinitions: (quizzes: QuizDefinition[]) =>
     postToGas('updateSetting', { key: 'quiz_definitions', value: JSON.stringify(quizzes) }),
