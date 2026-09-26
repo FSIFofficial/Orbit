@@ -839,7 +839,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
 
   const reportRemoteError = useCallback((err: unknown) => {
     // eslint-disable-next-line no-console
-    console.error('[orbit] remote sync failed', err)
+    console.error('[orbit] リモートとの同期に失敗しました', err)
     setRemoteError(err instanceof Error ? err.message : String(err))
   }, [])
 
