@@ -466,7 +466,9 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
 | updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates, updateTimezone, updateLocale | 本人のみ |
 | createTasks, updateProgress, updateTaskStatus（担当者のみ）, submitSurveyResponse 等 | ログイン済みなら誰でも |
-| updateComments, updateDeliverables, updateHistory, updateEstimatedHours, updateActualHours, updateRetrospective, updateTaskSchedule, updateTaskForm | そのタスクの担当者・確認者・作成者・全権管理者のみ(updateComments/updateHistoryはさらに、他人が投稿・記録した既存データの書き換え・削除を拒否) |
+| updateDeliverables, updateHistory, updateEstimatedHours, updateActualHours, updateRetrospective, updateTaskSchedule, updateTaskForm | そのタスクの担当者・確認者・作成者・全権管理者のみ(updateHistoryはさらに、他人が記録した既存データの書き換え・削除を拒否) |
+| updateComments(新規コメント追加) | そのタスクを閲覧できるメンバーなら誰でも(フロントの`canSeeExecTasks`と同じ基準: 幹部限定タスクは`role !== '一般'`のメンバーのみ)。投稿者ID( `byId` )はクライアント値を信用せず認証済み本人IDで固定する |
+| updateComments(既存コメントの編集・削除) | 投稿者本人 または 全権管理者のみ |
 
 ---
 

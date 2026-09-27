@@ -993,12 +993,29 @@ function authorizeAction(acting, action, body) {
       }
     }
 
+    // 仕様変更(レビュー指摘対応1): updateComments は「タスクを閲覧できる人
+    // なら誰でもコメント追加可」に緩和する(担当者・確認者・作成者に限らな
+    // い)。閲覧可否はフロント(lib/orbit/types.ts の canSeeExecTasks /
+    // store.tsx の visibleTasks)と同じ基準 = 幹部限定タスク
+    // (visibility === '幹部')は role が '一般' のメンバーには見えない、
+    // それ以外は誰でも見える、をそのままGAS側で再現する。既存コメントの
+    // 編集・削除は投稿者本人・全権管理者のみ(validateCommentsUpdate)のまま。
+    if (action === 'updateComments') {
+      var ucTask = findRow(SHEET_TASKS, String(body.taskId || ''))
+      if (!ucTask) throw userError('対象のタスクが見つかりません。')
+      if (String(ucTask.visibility || '') === '幹部' && acting.role === '一般') {
+        throw userError('この操作は幹部限定タスクを閲覧できるメンバーのみ実行できます。')
+      }
+      validateCommentsUpdate(ucTask, body.comments, acting)
+      return
+    }
+
     // F1/F10: これらはタスクに紐づく更新だが anyLoggedIn 扱いだったため、
-    // 無関係な第三者が他人のタスクのコメント・履歴・成果物・工数・振り返り・
+    // 無関係な第三者が他人のタスクの履歴・成果物・工数・振り返り・
     // 日程調整・フォームを書き換えられてしまっていた。担当者・確認者・
     // 作成者・全権管理者のみに制限する。
     var taskOwnerScopedActions = [
-      'updateComments', 'updateDeliverables', 'updateHistory',
+      'updateDeliverables', 'updateHistory',
       'updateEstimatedHours', 'updateActualHours', 'updateRetrospective',
       'updateTaskSchedule', 'updateTaskForm',
     ]
@@ -1019,10 +1036,9 @@ function authorizeAction(acting, action, body) {
         }
       }
 
-      // updateComments/updateHistory はクライアントが配列を丸ごと置き換える
-      // 仕様のため、他人が投稿・記録した既存データを書き換え/削除できないか
-      // 追加でチェックする（所有者チェックを通っていても対象）。
-      if (action === 'updateComments') validateCommentsUpdate(tosTask, body.comments, acting)
+      // updateHistory はクライアントが配列を丸ごと置き換える仕様のため、
+      // 他人が記録した既存データを書き換え/削除できないか追加でチェックする
+      // (所有者チェックを通っていても対象)。
       if (action === 'updateHistory') validateHistoryUpdate(tosTask, body.history, acting)
     }
 
@@ -1048,7 +1064,6 @@ var HISTORY_CAP = 50
 // 新規/既存の判定だけで足りる。
 function validateCommentsUpdate(task, newComments, acting) {
   if (!Array.isArray(newComments)) throw userError('コメントの形式が不正です。')
-  if (isActingFullAdmin(acting)) return
 
   var oldComments = []
   try { oldComments = JSON.parse(task.comments_json || '[]') } catch (e) {}
@@ -1057,28 +1072,34 @@ function validateCommentsUpdate(task, newComments, acting) {
   var oldById = {}
   oldComments.forEach(function (c) { if (c && c.id) oldById[c.id] = c })
   var newIds = {}
+  var isAdmin = isActingFullAdmin(acting)
 
   newComments.forEach(function (c) {
     if (!c || !c.id) throw userError('コメントの形式が不正です。')
     newIds[c.id] = true
     var old = oldById[c.id]
     if (old) {
-      var changed = JSON.stringify(old) !== JSON.stringify(c)
-      if (changed && old.byId !== acting.id) {
-        throw userError('他のメンバーが投稿したコメントは編集できません。')
+      if (!isAdmin) {
+        var changed = JSON.stringify(old) !== JSON.stringify(c)
+        if (changed && old.byId !== acting.id) {
+          throw userError('他のメンバーが投稿したコメントは編集できません。')
+        }
       }
     } else {
-      if (c.byId !== acting.id) {
-        throw userError('コメントの投稿者は本人である必要があります。')
-      }
+      // 仕様変更(レビュー指摘対応1): 新規コメントの投稿者(byId)はクライアント
+      // の値を信用せず、認証済みの本人IDで常に上書きする(なりすまし防止。
+      // 管理者も例外なし)。
+      c.byId = acting.id
     }
   })
 
-  oldComments.forEach(function (c) {
-    if (c && c.id && !newIds[c.id] && c.byId !== acting.id) {
-      throw userError('他のメンバーが投稿したコメントは削除できません。')
-    }
-  })
+  if (!isAdmin) {
+    oldComments.forEach(function (c) {
+      if (c && c.id && !newIds[c.id] && c.byId !== acting.id) {
+        throw userError('他のメンバーが投稿したコメントは削除できません。')
+      }
+    })
+  }
 }
 
 // F1/F10: updateHistory も同様に配列を丸ごと置き換える仕様。history は
