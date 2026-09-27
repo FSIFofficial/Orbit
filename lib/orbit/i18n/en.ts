@@ -622,6 +622,7 @@ export const en = {
   'taskDrawer.confirmDelete.confirm': 'Delete',
 
   // ---- task-detail-drawer: assign modal ----------------------------------
+  'taskDrawer.assign.editAria': 'Edit assignee',
   'taskDrawer.assign.title': 'Change assignee',
   'taskDrawer.assign.hint': 'You can select multiple people.',
   'taskDrawer.assign.unassignedToast': 'Assignee has been unset',

@@ -622,6 +622,7 @@ export const ja = {
   'taskDrawer.confirmDelete.confirm': '削除する',
 
   // ---- task-detail-drawer: assign modal ----------------------------------
+  'taskDrawer.assign.editAria': '担当者を編集',
   'taskDrawer.assign.title': '担当者を変更',
   'taskDrawer.assign.hint': '複数人選べます。',
   'taskDrawer.assign.unassignedToast': '担当者を未アサインにしました',

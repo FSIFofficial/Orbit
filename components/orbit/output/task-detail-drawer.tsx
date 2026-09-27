@@ -1451,19 +1451,39 @@ function DrawerBody({
                   </span>
                 ))}
                 {isAdmin && (
-                  <button
-                    onClick={onOpenHandoff}
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    {t('taskDrawer.handoff')}
-                  </button>
+                  <>
+                    <button
+                      onClick={onOpenAssign}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={t('taskDrawer.assign.editAria')}
+                      title={t('taskDrawer.assign.editAria')}
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      onClick={onOpenHandoff}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      {t('taskDrawer.handoff')}
+                    </button>
+                  </>
                 )}
               </div>
             ) : (
-              <div className="mt-1">
+              <div className="mt-1 flex items-center gap-1.5">
                 <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
                   {t('output.list.unassigned')}
                 </span>
+                {isAdmin && (
+                  <button
+                    onClick={onOpenAssign}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={t('taskDrawer.assign.editAria')}
+                    title={t('taskDrawer.assign.editAria')}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2242,14 +2262,11 @@ function DrawerBody({
         )}
       </div>
 
-      {/* Footer actions */}
+      {/* Footer actions — 担当者の変更は上部の担当者欄の鉛筆アイコンから
+          その場で行うようにしたため、ここでは自分が未アサインの場合の
+          「担当する」ショートカットのみ表示する */}
       <div className="border-t border-border px-5 py-3.5">
-        {isAdmin ? (
-          <Button variant="outline" className="h-9 w-full" onClick={onOpenAssign}>
-            <UserPlus className="size-4" />
-            {t('taskDrawer.assign.title')}
-          </Button>
-        ) : !isAssignee ? (
+        {!isAssignee ? (
           <Button className="h-9 w-full" onClick={onTake}>
             <UserPlus className="size-4" />
             {t('taskDrawer.takeButton')}
