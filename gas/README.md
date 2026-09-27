@@ -291,7 +291,10 @@ Orbit のログインには Google アカウントでのサインインを使い
 3. 「スクリプト プロパティ」→「プロパティを追加」
 4. プロパティ名: `GOOGLE_OAUTH_CLIENT_ID`、値: 上でコピーしたクライアントID
 
-> `GOOGLE_OAUTH_CLIENT_ID` が未設定の場合、ログイン認証が簡易モードになります（メールアドレスのみ照合、クライアントIDの検証なし）。
+> **`GOOGLE_OAUTH_CLIENT_ID` の設定は必須です。** 以前は未設定の場合に
+> クライアントIDの検証をスキップする「簡易モード」がありましたが、
+> なりすましトークンを弾けなくなるセキュリティ上の問題があったため廃止
+> しました。未設定のまま利用しようとすると、ログイン時にエラーになります。
 
 ---
 
@@ -462,7 +465,70 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 | approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies, notifyProjectHealth, updateProjectHealthRecord, approveTaskReview 等 | 任意の管理者ロール（代表 または 班長以上） |
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
 | updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates, updateTimezone, updateLocale | 本人のみ |
-| createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables, submitSurveyResponse 等 | ログイン済みなら誰でも |
+| createTasks, updateProgress, updateTaskStatus（担当者のみ）, submitSurveyResponse 等 | ログイン済みなら誰でも |
+| updateDeliverables, updateHistory, updateEstimatedHours, updateActualHours, updateRetrospective, updateTaskSchedule, updateTaskForm | そのタスクの担当者・確認者・作成者・全権管理者のみ(updateHistoryはさらに、他人が記録した既存データの書き換え・削除を拒否) |
+| updateComments(新規コメント追加) | そのタスクを閲覧できるメンバーなら誰でも(フロントの`canSeeExecTasks`と同じ基準: 幹部限定タスクは`role !== '一般'`のメンバーのみ)。投稿者ID( `byId` )はクライアント値を信用せず認証済み本人IDで固定する |
+| updateComments(既存コメントの編集・削除) | 投稿者本人 または 全権管理者のみ |
+
+---
+
+## 9.5. 数式インジェクション対策と既存データの点検
+
+自由入力が書き込まれる列（タスク名・説明・カテゴリ・要求スキル・進捗メモ・
+ブロッカーの理由、プロジェクト名・説明・目標、メンバー名・表示名・大学名等、
+経費の領収書URL・理由・目的・差し戻し理由、候補者の氏名・電話番号・履歴書・
+面接メモ、日報・週報の各本文、Settingsシートのvalue列）は、書き込み時に
+セルの表示形式を書式なしテキスト（`@`）にしてから値を設定することで、
+先頭が `=` `+` `-` `@` の値が数式として解釈されるのを防いでいます
+（`Code.gs` の `FORMULA_INJECTION_PROTECTED_COLUMNS` /
+`protectRowFromFormulaInjection`）。Settingsのvalue列にはJSON文字列（
+`role_levels`、`permission_overrides_json` 等）も入りますが、書式なし
+テキスト化はJSON文字列の読み書きには影響しません。
+
+この対策は導入後に新しく書き込まれる値にのみ効きます。
+
+**性能上の理由から、Tasks/Projects/Members/Expenses/Candidates/
+DailyReportsについては行を新規作成する時（`appendRow`の直前）にのみ
+書式を設定し、その後の値更新（`updateRowFields`）では毎回は設定し
+直しません**（既存行のセルは作成時に既に書式なしテキストになっている
+前提のため）。なお、Settingsシートは書き込み頻度が低いため例外的に
+毎回設定し直しており、この制約はありません。
+
+導入前から入っている既存データについては、**GASを新しいバージョンに
+デプロイした直後に必ず** 次の2つの関数を、この順番で実行してください。
+両者は性質が異なる別々の操作なので、意図的に関数を分けています。
+
+1. `protectAllExistingRows()` — **値は一切変更せず**、既存の全行の
+   保護対象列を書式なしテキスト（`@`）にします。中身を確認する必要が
+   無い純粋な書式操作なので、確認なしで何度でも安全に実行できます。
+   `updateRowFields`が書き込みのたびに書式を設定し直さなくなったため、
+   既存行の保護は基本的にこの関数の実行に依存します（後回しにすると、
+   実行するまでの間に古い行が編集されても保護されません）。
+   `setupOrbit()`の実行時にも自動的に呼ばれるので、シートを作り直したり
+   列を追加したりした後に`setupOrbit()`を再実行すれば、この関数の
+   実行を個別に忘れても既存行は保護されます。
+2. `auditFormulaInjectionRisks()` / `auditFormulaInjectionRisks(true)` —
+   **既にセルの値が数式として危険な状態になっていないか**を点検・修正
+   します。`protectAllExistingRows()`とは異なり、`(true)`で実行すると
+   値そのものが変わりうるため、まず引数なしで一覧表示して内容を確認して
+   から`(true)`を実行してください。具体的な動作は以下のとおりです。
+   - `auditFormulaInjectionRisks()` — 該当しそうなセルを実行ログに一覧
+     表示するだけで、何も変更しません
+   - `auditFormulaInjectionRisks(true)` — 一覧表示した上で、該当セルを
+     修正します。修正内容はセルの状態によって次のいずれかです:
+     - まだ数式として評価されていない（表示文字列が`=` `+` `-` `@`で
+       始まっているだけの）セル: 書式を書式なしテキストにするのみで、
+       表示内容（文字列そのもの）は変更しません
+     - 既にSheets側で数式として評価されてしまっているセル: 書式なし
+       テキストにした上で、元の数式の文字列（例: `=1+1`）をそのまま
+       リテラルな文字列として書き戻します。これにより表示内容は
+       計算結果（例: `2`）から元の入力文字列（例: `=1+1`）に変わります
+       （数式としては実行されなくなりますが、表示上の値は変化します）
+
+なお、この対策はGoogleスプレッドシート上で直接開いた場合や、Excel/ODS
+形式でダウンロードした場合には有効ですが、**「ウェブに公開」の公開CSVを
+直接Excel等で開いた場合には効きません**（CSVには書式情報が乗らないため）。
+公開CSVの読み取り自体の廃止は別途の対応とします。
 
 ---
 
@@ -474,3 +540,5 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 - 通知メールは Apps Script を実行しているGoogleアカウントの MailApp 経由で送られます（1日の送信数に上限あり）
 - INPUT画面の選択肢プールは `SETTINGS_CSV` を設定していない場合、ブラウザのlocalStorageにのみ保存され他の人の画面には反映されません
 - スキルレベル・カスタム項目・アンケート回答など、メンバー1行にJSON配列を持たせている列は、データが増えるとセルサイズに近づく可能性があります(Googleスプレッドシートのセル上限は約5万文字)
+- 書き込みを伴う操作は`LockService`で排他制御しているため、複数人が同時に操作すると「混み合っています。少し待って再度お試しください。」と表示されることがあります。数秒待って再実行してください
+- 利用者にそのまま見せてよいエラーメッセージは`throw new Error(...)`ではなく`throw userError('...')`で投げること。目印(`isUserError`)の無い例外は`doPost`側で定型メッセージに変換され、詳細はLoggerにのみ記録される(`Code.gs`の`userError`/`toErrorMessage`参照)。新しいアクションを追加する際もこのルールに従うこと

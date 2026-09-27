@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useOrbit } from '@/lib/orbit/store'
 import { Modal } from '@/components/orbit/modal'
 import { useI18n } from '@/lib/orbit/i18n'
+import { isSafeHttpUrl } from '@/lib/orbit/utils'
 import type { ExpenseApplication } from '@/lib/orbit/types'
 import { Loader2, Paperclip } from 'lucide-react'
 
@@ -66,6 +67,10 @@ export function ExpenseApplicationModal({
     if (!amount || isNaN(amt) || amt <= 0) { setError(t('expenseApplication.amountError')); return }
     if (!receiptUrl.trim() && !justification.trim()) {
       setError(t('expenseApplication.receiptOrJustificationError'))
+      return
+    }
+    if (receiptUrl.trim() && !isSafeHttpUrl(receiptUrl)) {
+      setError(t('expenseApplication.receiptUrlInvalid'))
       return
     }
     if (!currentUser) return

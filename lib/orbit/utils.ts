@@ -2,6 +2,21 @@ import type { Difficulty, Member, Project, ProjectHealthLevel, Qualification, Ra
 import { DIFFICULTY_LABEL, STATUS_LABEL } from './types'
 import { todayStrInTz, DEFAULT_TIMEZONE } from './timezone'
 
+// F5: 成果物リンク・経費の領収書URLなど、ユーザーが自由に入力したURLを
+// リンクとして描画する前に必ず通す。http/https以外(javascript:等)を拒否する。
+// 入力時(フロント送信前)・保存時(GAS側)・表示時(リンク描画前)の3か所で
+// このチェックを行う想定。
+export function isSafeHttpUrl(url: string): boolean {
+  const trimmed = url.trim()
+  if (!trimmed) return false
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function parseDepartmentPath(path: string): string[] {
   return path.split('>').map((s) => s.trim()).filter(Boolean)
 }

@@ -224,26 +224,20 @@ export function savePersonalSheetId(userId: string, sheetId: string): void {
 // ---- Google Calendar token cache (module-level, browser-only) -------------
 // Separate from the GAS auth token — Calendar scope is requested incrementally
 // when the user first accesses calendar features, not at login time.
+//
+// F13: メモリ上(モジュール変数)にのみ保持する。以前はsessionStorageにも
+// 保存していたが、XSSが発生した場合にトークンを窃取されるリスクがあるため
+// (sessionStorageはJSから読める)、永続化はせずページ再読み込みごとに
+// 取り直す仕様にした(再度Calendarへのアクセス許可を求められることはある)。
 
-const GCAL_TOKEN_KEY = 'orbit-gcal-token'
 let _calendarToken: string | null = null
 
 export function getCalendarToken(): string | null {
-  if (_calendarToken) return _calendarToken
-  // restore from sessionStorage (survives page reload within the same tab)
-  try {
-    const stored = typeof window !== 'undefined' ? window.sessionStorage.getItem(GCAL_TOKEN_KEY) : null
-    if (stored) { _calendarToken = stored }
-  } catch { /* ignore */ }
   return _calendarToken
 }
 
 export function setCalendarToken(token: string | null): void {
   _calendarToken = token
-  try {
-    if (token) window.sessionStorage.setItem(GCAL_TOKEN_KEY, token)
-    else window.sessionStorage.removeItem(GCAL_TOKEN_KEY)
-  } catch { /* ignore */ }
 }
 
 /** Request (or silently refresh) the Calendar scope token. */
