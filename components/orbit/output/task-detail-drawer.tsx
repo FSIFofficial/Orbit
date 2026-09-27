@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getCalendarToken, requestCalendarToken, isGoogleOAuthConfigured } from '@/lib/orbit/google-sheet-sync'
 import { createCalendarEvent } from '@/lib/orbit/google-calendar'
 import { Drawer, Modal } from '../modal'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useOrbit } from '@/lib/orbit/store'
 import { useTaskDrawer } from '@/lib/orbit/task-drawer'
 import { useToast } from '../toast'
+import { EditableTags } from '../editable-tags'
 import {
   Avatar,
   DifficultyBadge,
@@ -154,6 +155,8 @@ export function TaskDetailDrawer({
     updateReviewers,
     approveTaskReview,
     updateTaskDetails,
+    updateDifficulty,
+    updatePriority,
     setBlocker,
     setHoldReason,
     addDeliverable,
@@ -187,7 +190,6 @@ export function TaskDetailDrawer({
   const [reviewerOpen, setReviewerOpen] = useState(false)
   const [blockerOpen, setBlockerOpen] = useState(false)
   const [handoffOpen, setHandoffOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [awardOpen, setAwardOpen] = useState(false)
 
   const { t: tr, locale } = useI18n()
@@ -203,6 +205,27 @@ export function TaskDetailDrawer({
   const isAdmin = !!currentUser && isAdminRole(currentUser.role)
   const reviewer = getMember(task?.reviewerId ?? null) ?? null
   const reviewers = (task?.reviewerIds ?? (task?.reviewerId ? [task.reviewerId] : [])).map((id) => getMember(id)).filter(Boolean) as ReturnType<typeof getMember>[]
+
+  // 点3: 上部の「編集」ボタン(EditTaskModal)を廃止し、名前・詳細・分類系の
+  // 項目をすべてその場で編集できるようにした。updateTaskDetailsは全項目を
+  // まとめて送るAPIなので、現在値に変更分だけ重ねて送るヘルパーにする
+  const patchTaskDetails = (patch: Partial<Parameters<typeof updateTaskDetails>[1]>) => {
+    if (!task) return
+    updateTaskDetails(task.id, {
+      name: task.name,
+      description: task.description ?? '',
+      projectId: task.projectId,
+      department: task.department,
+      category: task.category,
+      skills: task.skills,
+      difficulty: task.difficulty,
+      priority: task.priority,
+      visibility: task.visibility ?? 'all',
+      importance: task.importance ?? '一般',
+      requiredSkillLevels: task.requiredSkillLevels,
+      ...patch,
+    })
+  }
 
   return (
     <>
@@ -222,13 +245,25 @@ export function TaskDetailDrawer({
             projects={projects}
             projectName={getProject(task.projectId)?.name ?? ''}
             hasSourceInput={!!sourceInput}
+            skillOptions={skillOptions}
+            categoryOptions={categoryOptions}
+            onAddSkillOption={addSkillOption}
+            onAddCategoryOption={addCategoryOption}
             onClose={onClose}
             onStatus={(s) => updateTaskStatus(task.id, s)}
             onTake={() => setConfirmTake(true)}
             onOpenAssign={() => setAssignOpen(true)}
             onOpenInput={() => setInputOpen(true)}
             onOpenSchedule={() => setScheduleOpen(true)}
-            onOpenEdit={() => setEditOpen(true)}
+            onUpdateName={(name) => patchTaskDetails({ name })}
+            onUpdateDescription={(description) => patchTaskDetails({ description })}
+            onUpdateDepartment={(department) => patchTaskDetails({ department })}
+            onUpdateCategory={(category) => patchTaskDetails({ category })}
+            onUpdateSkills={(skills) => patchTaskDetails({ skills })}
+            onUpdateDifficulty={(difficulty) => updateDifficulty(task.id, difficulty)}
+            onUpdatePriority={(priority) => updatePriority(task.id, priority)}
+            onUpdateVisibility={(visibility) => patchTaskDetails({ visibility })}
+            onUpdateImportance={(importance) => patchTaskDetails({ importance })}
             onOpenDelete={() => setConfirmDelete(true)}
             onOpenDepends={() => setDependsOpen(true)}
             onOpenReviewer={() => setReviewerOpen(true)}
@@ -500,25 +535,6 @@ export function TaskDetailDrawer({
           updateSchedule(task.id, startDate, deadline)
           toast(tr('taskDrawer.schedule.savedToast'))
           setScheduleOpen(false)
-        }}
-      />
-
-      {/* Admin edit (title/description/project/department/category/skills/
-          difficulty/priority/visibility/importance) */}
-      <EditTaskModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        task={task}
-        projects={projects}
-        skillOptions={skillOptions}
-        categoryOptions={categoryOptions}
-        onAddSkillOption={addSkillOption}
-        onAddCategoryOption={addCategoryOption}
-        onSave={(details) => {
-          if (!task) return
-          updateTaskDetails(task.id, details)
-          toast(tr('taskDrawer.edit.savedToast'))
-          setEditOpen(false)
         }}
       />
 
@@ -1100,371 +1116,6 @@ function ScheduleModal({
 
 const PRIORITY_OPTIONS: Priority[] = ['高', '中', '低']
 
-// 管理者向けの一括編集モーダル — INPUT画面の承認前カード（parsed-task-card.tsx）
-// と同じ項目を、承認後のタスクに対しても編集できるようにする
-function EditTaskModal({
-  open,
-  onClose,
-  task,
-  projects,
-  skillOptions,
-  categoryOptions,
-  onAddSkillOption,
-  onAddCategoryOption,
-  onSave,
-}: {
-  open: boolean
-  onClose: () => void
-  task: Task | null
-  projects: Project[]
-  skillOptions: string[]
-  categoryOptions: string[]
-  onAddSkillOption: (skill: string) => void
-  onAddCategoryOption: (category: string) => void
-  onSave: (details: {
-    name: string
-    description: string
-    projectId: string
-    department: Department
-    category: string
-    skills: string[]
-    difficulty: Difficulty
-    priority: Priority
-    visibility: 'all' | '幹部'
-    importance: TaskImportance
-    requiredSkillLevels?: Partial<Record<string, SkillLevelValue>>
-  }) => void
-}) {
-  const { t } = useI18n()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [department, setDepartment] = useState<Department>(DEPARTMENTS[0])
-  const [category, setCategory] = useState('')
-  const [addingCategory, setAddingCategory] = useState(false)
-  const [categoryDraft, setCategoryDraft] = useState('')
-  const [skills, setSkills] = useState<string[]>([])
-  const [skillDraft, setSkillDraft] = useState('')
-  // item 10/11: このタスクをこなすのに必要なスキルレベルの目安（任意入力）
-  const [requiredSkillLevels, setRequiredSkillLevels] = useState<Partial<Record<string, SkillLevelValue>>>({})
-  const [difficulty, setDifficulty] = useState<Difficulty>(DIFFICULTY_LABEL[0])
-  const [priority, setPriority] = useState<Priority>('中')
-  const [visibility, setVisibility] = useState<'all' | '幹部'>('all')
-  const [importance, setImportance] = useState<TaskImportance>('一般')
-
-  // sync drafts whenever the modal opens for a (possibly different) task
-  const [lastTaskId, setLastTaskId] = useState<string | null>(null)
-  if (task && task.id !== lastTaskId && open) {
-    setLastTaskId(task.id)
-    setName(task.name)
-    setDescription(task.description ?? '')
-    setProjectId(task.projectId)
-    setDepartment(task.department)
-    setCategory(task.category)
-    setSkills(task.skills)
-    setRequiredSkillLevels(task.requiredSkillLevels ?? {})
-    setDifficulty(task.difficulty)
-    setPriority(task.priority)
-    setVisibility(task.visibility ?? 'all')
-    setImportance(task.importance ?? '一般')
-  }
-
-  const addSkill = () => {
-    const v = skillDraft.trim()
-    if (v) {
-      onAddSkillOption(v)
-      if (!skills.includes(v)) setSkills([...skills, v])
-    }
-    setSkillDraft('')
-  }
-  const availableSkills = skillOptions.filter((s) => !skills.includes(s))
-
-  const commitNewCategory = () => {
-    const v = categoryDraft.trim()
-    if (v) {
-      onAddCategoryOption(v)
-      setCategory(v)
-    }
-    setCategoryDraft('')
-    setAddingCategory(false)
-  }
-
-  const fieldClass =
-    'h-9 w-full cursor-pointer rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary'
-
-  return (
-    <Modal open={open} onClose={onClose} labelledBy="edit-task-title">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="edit-task-title" className="text-base font-semibold">
-          {t('taskDrawer.edit.title')}
-        </h2>
-        <button onClick={onClose} aria-label={t('common.close')}>
-          <X className="size-4 text-muted-foreground" />
-        </button>
-      </div>
-      <div className="flex max-h-[70vh] flex-col gap-3 overflow-auto orbit-scroll pr-1">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.nameLabel')}</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.descriptionLabel')}</span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.project')}</span>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={fieldClass}>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.department')}</span>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value as Department)}
-              className={fieldClass}
-            >
-              {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.category')}</span>
-            {addingCategory ? (
-              <input
-                autoFocus
-                value={categoryDraft}
-                onChange={(e) => setCategoryDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    commitNewCategory()
-                  }
-                  if (e.key === 'Escape') {
-                    setCategoryDraft('')
-                    setAddingCategory(false)
-                  }
-                }}
-                onBlur={commitNewCategory}
-                placeholder={t('taskDrawer.edit.newCategoryPlaceholder')}
-                className="h-9 rounded-lg border border-primary bg-card px-3 text-sm outline-none"
-              />
-            ) : (
-              <select
-                value={category}
-                onChange={(e) => {
-                  if (e.target.value === '__new__') {
-                    setAddingCategory(true)
-                  } else {
-                    setCategory(e.target.value)
-                  }
-                }}
-                className={fieldClass}
-              >
-                {!categoryOptions.includes(category) && category && (
-                  <option value={category}>{category}</option>
-                )}
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-                <option value="__new__">{t('taskDrawer.edit.addCategoryOption')}</option>
-              </select>
-            )}
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.difficulty')}</span>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-              className={fieldClass}
-            >
-              {DIFFICULTY_LABEL.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.priorityLabel')}</span>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-              className={fieldClass}
-            >
-              {PRIORITY_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.visibilityLabel')}</span>
-            <select
-              value={visibility}
-              onChange={(e) => setVisibility(e.target.value as 'all' | '幹部')}
-              className={fieldClass}
-            >
-              <option value="all">{t('common.everyone')}</option>
-              <option value="幹部">{t('taskDrawer.execOnly')}</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.importanceLabel')}</span>
-            <select
-              value={importance}
-              onChange={(e) => setImportance(e.target.value as TaskImportance)}
-              className={fieldClass}
-            >
-              {TASK_IMPORTANCE.map((i) => (
-                <option key={i} value={i}>
-                  {i}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.row.skills')}</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {skills.map((s) => (
-              <Tag
-                key={s}
-                onRemove={() => {
-                  setSkills(skills.filter((x) => x !== s))
-                  setRequiredSkillLevels((prev) => {
-                    const next = { ...prev }
-                    delete next[s]
-                    return next
-                  })
-                }}
-              >
-                {s}
-              </Tag>
-            ))}
-            {availableSkills.length > 0 && (
-              <span className="inline-flex flex-wrap items-center gap-1.5">
-                {availableSkills.slice(0, 6).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSkills([...skills, s])}
-                    className="inline-flex items-center gap-0.5 rounded-md border border-primary/25 bg-primary/5 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-primary/10"
-                  >
-                    <Plus className="size-3 text-primary" />
-                    {s}
-                  </button>
-                ))}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-1.5 py-0.5">
-              <input
-                value={skillDraft}
-                onChange={(e) => setSkillDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addSkill()
-                  }
-                }}
-                placeholder={t('common.add')}
-                className="w-14 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground"
-                aria-label={t('taskDrawer.edit.addSkillAria')}
-              />
-              <button
-                type="button"
-                onClick={addSkill}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label={t('taskDrawer.edit.addSkillAria')}
-              >
-                <Plus className="size-3" />
-              </button>
-            </span>
-          </div>
-        </label>
-        {skills.length > 0 && (
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('taskDrawer.edit.requiredSkillLevelsLabel')}</span>
-            <div className="flex flex-wrap items-center gap-2">
-              {skills.map((s) => (
-                <span key={s} className="flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-1 text-xs">
-                  {s}
-                  <select
-                    value={requiredSkillLevels[s] ?? ''}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setRequiredSkillLevels((prev) => {
-                        const next = { ...prev }
-                        if (!v) delete next[s]
-                        else next[s] = Number(v) as SkillLevelValue
-                        return next
-                      })
-                    }}
-                    className="cursor-pointer rounded border border-border bg-background px-1 py-0.5 text-xs outline-none focus:border-primary"
-                  >
-                    <option value="">{t('common.notSet')}</option>
-                    {([1, 2, 3, 4, 5] as SkillLevelValue[]).map((lv) => (
-                      <option key={lv} value={lv}>{lv}</option>
-                    ))}
-                  </select>
-                </span>
-              ))}
-            </div>
-          </label>
-        )}
-      </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="ghost" className="h-9" onClick={onClose}>
-          {t('common.cancel')}
-        </Button>
-        <Button
-          className="h-9"
-          disabled={!name.trim() || !projectId}
-          onClick={() => {
-            onSave({
-              name: name.trim(),
-              description: description.trim(),
-              projectId,
-              department,
-              category: category.trim() || '未分類',
-              skills,
-              difficulty,
-              priority,
-              visibility,
-              importance,
-              requiredSkillLevels,
-            })
-          }}
-        >
-          {t('common.save')}
-        </Button>
-      </div>
-    </Modal>
-  )
-}
-
 function DrawerBody({
   task,
   currentUserId,
@@ -1479,6 +1130,10 @@ function DrawerBody({
   projects,
   projectName,
   hasSourceInput,
+  skillOptions,
+  categoryOptions,
+  onAddSkillOption,
+  onAddCategoryOption,
   onClose,
   onStatus,
   onTake,
@@ -1492,7 +1147,15 @@ function DrawerBody({
   onClearBlocker,
   onSetHoldReason,
   onOpenHandoff,
-  onOpenEdit,
+  onUpdateName,
+  onUpdateDescription,
+  onUpdateDepartment,
+  onUpdateCategory,
+  onUpdateSkills,
+  onUpdateDifficulty,
+  onUpdatePriority,
+  onUpdateVisibility,
+  onUpdateImportance,
   onOpenDelete,
   onOpenAward,
   onAddDeliverable,
@@ -1522,6 +1185,10 @@ function DrawerBody({
   projects: Project[]
   projectName: string
   hasSourceInput: boolean
+  skillOptions: string[]
+  categoryOptions: string[]
+  onAddSkillOption: (skill: string) => void
+  onAddCategoryOption: (category: string) => void
   onClose: () => void
   onStatus: (s: TaskStatus) => void
   onTake: () => void
@@ -1535,7 +1202,15 @@ function DrawerBody({
   onClearBlocker: () => void
   onSetHoldReason: (note: string | null) => void
   onOpenHandoff: () => void
-  onOpenEdit: () => void
+  onUpdateName: (name: string) => void
+  onUpdateDescription: (description: string) => void
+  onUpdateDepartment: (department: Department) => void
+  onUpdateCategory: (category: string) => void
+  onUpdateSkills: (skills: string[]) => void
+  onUpdateDifficulty: (difficulty: Difficulty) => void
+  onUpdatePriority: (priority: Priority) => void
+  onUpdateVisibility: (visibility: 'all' | '幹部') => void
+  onUpdateImportance: (importance: TaskImportance) => void
   onOpenDelete: () => void
   onOpenAward: () => void
   onAddDeliverable: (label: string, url: string) => void
@@ -1569,6 +1244,9 @@ function DrawerBody({
   const canManageBlocker = isAdmin || isAssignee
   const canManageDeliverables = isAdmin || isAssignee
   const [progressDraft, setProgressDraft] = useState('')
+  // 点3: カテゴリのインライン編集中、新規カテゴリ追加の入力モードかどうか
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [categoryDraft, setCategoryDraft] = useState('')
   const [addingDeliverable, setAddingDeliverable] = useState(false)
   const [deliverableLabel, setDeliverableLabel] = useState('')
   const [deliverableUrl, setDeliverableUrl] = useState('')
@@ -1614,8 +1292,12 @@ function DrawerBody({
 
       <div className="flex-1 overflow-auto orbit-scroll px-5 py-4">
         <div className="flex items-center gap-2">
-          <h2 id="task-drawer-title" className="text-lg font-semibold tracking-tight text-balance">
-            <TranslatedText text={task.name} />
+          <h2 id="task-drawer-title" className="min-w-0 flex-1 text-lg font-semibold tracking-tight text-balance">
+            {isAdmin ? (
+              <TaskNameField key={task.id} value={task.name} onSave={onUpdateName} />
+            ) : (
+              <TranslatedText text={task.name} />
+            )}
           </h2>
           {task.pendingApproval && (
             <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
@@ -1634,19 +1316,8 @@ function DrawerBody({
           )}
           {isAdmin && (
             <button
-              onClick={onOpenEdit}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-              aria-label={t('taskDrawer.editAria')}
-              title={t('taskDrawer.editAria')}
-            >
-              <Pencil className="size-3.5" />
-              {t('taskDrawer.edit')}
-            </button>
-          )}
-          {isAdmin && (
-            <button
               onClick={onOpenDelete}
-              className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               aria-label={t('taskDrawer.deleteAria')}
               title={t('taskDrawer.deleteAria')}
             >
@@ -1655,10 +1326,24 @@ function DrawerBody({
             </button>
           )}
         </div>
-        {task.description && (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            <TranslatedText text={task.description} />
-          </p>
+        {isAdmin ? (
+          <textarea
+            key={task.id + (task.description ?? '')}
+            defaultValue={task.description ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v !== (task.description ?? '')) onUpdateDescription(v)
+            }}
+            placeholder={t('taskDrawer.edit.descriptionLabel')}
+            rows={2}
+            className="mt-2 w-full resize-none rounded-md border border-transparent bg-transparent px-1 -mx-1 text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50 hover:border-border focus:border-primary"
+          />
+        ) : (
+          task.description && (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <TranslatedText text={task.description} />
+            </p>
+          )
         )}
 
         {/* 点1: 画面上部はタスク名/ステータス/進捗率/期限/担当者/プロジェクト
@@ -1879,16 +1564,105 @@ function DrawerBody({
           </p>
           <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
             <InfoField label={t('taskDrawer.row.department')}>
-              <DepartmentTag name={task.department} />
+              {isAdmin ? (
+                <select
+                  value={task.department}
+                  onChange={(e) => onUpdateDepartment(e.target.value as Department)}
+                  className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                >
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              ) : (
+                <DepartmentTag name={task.department} />
+              )}
             </InfoField>
             <InfoField label={t('taskDrawer.row.category')}>
-              <TranslatedText text={task.category} />
+              {isAdmin ? (
+                addingCategory ? (
+                  <input
+                    autoFocus
+                    value={categoryDraft}
+                    onChange={(e) => setCategoryDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const v = categoryDraft.trim()
+                        if (v) {
+                          onAddCategoryOption(v)
+                          onUpdateCategory(v)
+                        }
+                        setCategoryDraft('')
+                        setAddingCategory(false)
+                      }
+                      if (e.key === 'Escape') {
+                        setCategoryDraft('')
+                        setAddingCategory(false)
+                      }
+                    }}
+                    onBlur={() => {
+                      const v = categoryDraft.trim()
+                      if (v) {
+                        onAddCategoryOption(v)
+                        onUpdateCategory(v)
+                      }
+                      setCategoryDraft('')
+                      setAddingCategory(false)
+                    }}
+                    placeholder={t('taskDrawer.edit.newCategoryPlaceholder')}
+                    className="h-7 rounded-md border border-primary bg-card px-1.5 text-sm outline-none"
+                  />
+                ) : (
+                  <select
+                    value={task.category}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') setAddingCategory(true)
+                      else onUpdateCategory(e.target.value)
+                    }}
+                    className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                  >
+                    {!categoryOptions.includes(task.category) && (
+                      <option value={task.category}>{task.category}</option>
+                    )}
+                    {categoryOptions.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__new__">{t('taskDrawer.edit.addCategoryOption')}</option>
+                  </select>
+                )
+              ) : (
+                <TranslatedText text={task.category} />
+              )}
             </InfoField>
             <InfoField label={t('taskDrawer.row.difficulty')}>
-              <DifficultyBadge difficulty={task.difficulty} />
+              {isAdmin ? (
+                <select
+                  value={task.difficulty}
+                  onChange={(e) => onUpdateDifficulty(e.target.value as Difficulty)}
+                  className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                >
+                  {DIFFICULTY_LABEL.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              ) : (
+                <DifficultyBadge difficulty={task.difficulty} />
+              )}
             </InfoField>
             <InfoField label={t('taskDrawer.row.skills')}>
-              {task.skills.length > 0 ? (
+              {isAdmin ? (
+                <EditableTags
+                  tags={task.skills}
+                  editable
+                  onChange={onUpdateSkills}
+                  emptyText={t('common.notSet')}
+                  placeholder={t('common.add')}
+                  options={skillOptions}
+                  onNewOption={onAddSkillOption}
+                />
+              ) : task.skills.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {task.skills.map((s) => (
                     <Tag key={s}>{s}</Tag>
@@ -1896,6 +1670,50 @@ function DrawerBody({
                 </div>
               ) : (
                 <span className="text-muted-foreground/50">{t('common.notSet')}</span>
+              )}
+            </InfoField>
+            <InfoField label={t('taskDrawer.edit.priorityLabel')}>
+              {isAdmin ? (
+                <select
+                  value={task.priority}
+                  onChange={(e) => onUpdatePriority(e.target.value as Priority)}
+                  className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                >
+                  {PRIORITY_OPTIONS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              ) : (
+                <span>{task.priority}</span>
+              )}
+            </InfoField>
+            <InfoField label={t('taskDrawer.edit.visibilityLabel')}>
+              {isAdmin ? (
+                <select
+                  value={task.visibility ?? 'all'}
+                  onChange={(e) => onUpdateVisibility(e.target.value as 'all' | '幹部')}
+                  className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                >
+                  <option value="all">{t('common.everyone')}</option>
+                  <option value="幹部">{t('taskDrawer.execOnly')}</option>
+                </select>
+              ) : (
+                <span>{task.visibility === '幹部' ? t('taskDrawer.execOnly') : t('common.everyone')}</span>
+              )}
+            </InfoField>
+            <InfoField label={t('taskDrawer.edit.importanceLabel')}>
+              {isAdmin ? (
+                <select
+                  value={task.importance ?? '一般'}
+                  onChange={(e) => onUpdateImportance(e.target.value as TaskImportance)}
+                  className="h-7 cursor-pointer rounded-md border border-transparent bg-transparent text-sm outline-none hover:border-border focus:border-primary"
+                >
+                  {TASK_IMPORTANCE.map((i) => (
+                    <option key={i} value={i}>{i}</option>
+                  ))}
+                </select>
+              ) : (
+                <span>{task.importance ?? '一般'}</span>
               )}
             </InfoField>
             <InfoField label={t('taskDrawer.row.startDate')}>
@@ -2448,6 +2266,49 @@ function DrawerBody({
 
 // 点3: 「タスク情報」カード内の2列コンパクト表示用(旧Rowの左右分割レイアウトと
 // 異なり、ラベルを上・値を下に積む縦積み表示にしてグリッドに収める)
+// タスク名が長くても折り返して全文が見えるよう、内容に応じて高さが伸びる
+// textareaでインライン編集する（点: タスクの名前が長すぎても表示できるように）
+function TaskNameField({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState(value)
+
+  useEffect(() => setDraft(value), [value])
+  useEffect(() => {
+    const el = ref.current
+    if (el) {
+      el.style.height = 'auto'
+      el.style.height = `${el.scrollHeight}px`
+    }
+  }, [draft])
+
+  const commit = () => {
+    const v = draft.trim()
+    if (v && v !== value) onSave(v)
+    else setDraft(value)
+  }
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+        if (e.key === 'Escape') {
+          setDraft(value)
+          e.currentTarget.blur()
+        }
+      }}
+      className="w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 -mx-1 text-lg font-semibold tracking-tight text-balance outline-none hover:border-border focus:border-primary"
+    />
+  )
+}
+
 function InfoField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
