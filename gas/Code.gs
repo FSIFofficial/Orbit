@@ -171,6 +171,12 @@ function setupOrbit() {
     }
   } catch (e) { console.error('❌ トリガー設定: ' + e) }
 
+  // F4(レビュー再確認対応): シートを作り直したり列を追加したりした際、
+  // 点検関数(protectAllExistingRows/auditFormulaInjectionRisks)の手動
+  // 実行を忘れても既存行が保護されるよう、setupOrbit()の実行時にも
+  // 既存の全行の保護対象列を書式なしテキストにしておく(値は変更しない)。
+  protectAllExistingRows()
+
   console.log('🚀 setupOrbit 完了')
 }
 
@@ -3255,13 +3261,56 @@ function protectRowFromFormulaInjection(sheet, headers, rowNumber, sheetName) {
   })
 }
 
+// F4(レビュー再確認対応): auditFormulaInjectionRisks()とは別に、既存の
+// 全行の保護対象列を書式なしテキスト(@)にするだけの関数。値は一切
+// 変更しない(数式として評価されてしまっている値の復元は行わない —
+// それはauditFormulaInjectionRisks(true)の役目)。
+//
+// updateRowFields()は性能上の理由から書き込みのたびに書式を設定し直さ
+// なくなったため(行の新規作成時にのみ設定する)、導入前から入っている
+// 既存行のうち「現時点では危険な値になっていない行」は書式なしテキスト
+// になっていない。この関数はそうした行も含めて対象列を丸ごと書式なし
+// テキストにする(値の中身を一切見ないので、確認・レビューなしで何度
+// でも安全に実行できる)。setupOrbit()実行時にも自動的に呼ばれる。
+function protectAllExistingRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var summary = []
+  Object.keys(FORMULA_INJECTION_PROTECTED_COLUMNS).forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName)
+    if (!sheet) return
+    var headers = headerRow(sheet)
+    var lastRow = sheet.getLastRow()
+    if (lastRow < 2) return
+    FORMULA_INJECTION_PROTECTED_COLUMNS[sheetName].forEach(function (colName) {
+      var colIdx = headers.indexOf(colName)
+      if (colIdx < 0) return
+      sheet.getRange(2, colIdx + 1, lastRow - 1, 1).setNumberFormat('@')
+      summary.push(sheetName + '.' + colName + '(' + (lastRow - 1) + '行)')
+    })
+  })
+  console.log(
+    '🔒 protectAllExistingRows: 値は変更せず、既存の全行を書式なしテキストにしました: ' +
+    (summary.length > 0 ? summary.join(', ') : '対象シートがまだ存在しません'),
+  )
+}
+
 // F4: 既存データの点検用。Apps Scriptエディタから手動で実行する。
 //   auditFormulaInjectionRisks()      … 一覧表示のみ、何も変更しない(既定)
-//   auditFormulaInjectionRisks(true)  … 見つかったセルを書式なしテキスト(@)に修正する
+//   auditFormulaInjectionRisks(true)  … 見つかったセルを修正する(下記参照)
 // 対象はFORMULA_INJECTION_PROTECTED_COLUMNSに挙げた全シート・全列。
 // 「先頭が=+-@の値」に加え、既にSheets側で数式として評価されてしまって
-// いるセル(getFormulas()が空でない)も対象にする — 修正時はその数式の
-// 生の文字列を書式なしテキストとして書き戻す(元の入力文字列を復元する)。
+// いるセル(getFormulas()が空でない)も対象にする。
+//
+// fix=trueの具体的な動作(値を変更しうる点でprotectAllExistingRows()とは
+// 性質が異なる):
+//   - まだ数式として評価されていない(表示上の文字列がそのまま=+-@で
+//     始まっているだけの)セル: 書式を書式なしテキスト(@)にするのみ。
+//     セルの表示内容(文字列そのもの)は変更しない。
+//   - 既にSheets側で数式として評価されてしまっているセル: 書式なし
+//     テキスト(@)にした上で、元の数式の文字列(例: "=1+1")をそのまま
+//     リテラルな文字列として書き戻す。これによりセルの表示内容は
+//     計算結果(例: "2")から元の入力文字列(例: "=1+1")に変わる
+//     (=数式は実行されなくなるが、表示上の値は変化する)。
 // 注意: 過去に実際に数式が評価されてしまっていた場合、その時点で
 // IMPORTXML等による外部通信が発生していた可能性はこの関数では取り消せない
 // (今後の再評価を防ぐことだけができる)。
