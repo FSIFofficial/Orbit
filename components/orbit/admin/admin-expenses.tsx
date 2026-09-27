@@ -7,6 +7,7 @@ import { Plus, Trash2, CheckCircle, XCircle, ChevronDown, ChevronUp, Undo2 } fro
 import { Modal } from '@/components/orbit/modal'
 import { AdminAccessNote } from '@/components/orbit/primitives'
 import { useI18n } from '@/lib/orbit/i18n'
+import { isSafeHttpUrl } from '@/lib/orbit/utils'
 
 // ---- ApprovalStepEditor ----
 
@@ -298,7 +299,11 @@ function ApplicationCard({
           )}
           {app.receiptUrl && (
             <div className="text-sm"><span className="text-muted-foreground">{t('admin.expenses.receiptLabel')}</span>
-              <a href={app.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">{t('admin.expenses.receiptShow')}</a>
+              {isSafeHttpUrl(app.receiptUrl) ? (
+                <a href={app.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">{t('admin.expenses.receiptShow')}</a>
+              ) : (
+                <span className="text-destructive">{t('admin.expenses.receiptUrlUnsafe')}</span>
+              )}
             </div>
           )}
           {app.justification && (

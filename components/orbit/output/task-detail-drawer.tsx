@@ -40,7 +40,7 @@ import {
   type TaskRetrospective,
   type TaskStatus,
 } from '@/lib/orbit/types'
-import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, computeAvgSkillPoints, computeBaseSkillPoints, type WorkloadCapacity } from '@/lib/orbit/utils'
+import { formatDeadlineFull, formatDateTime, googleCalendarUrl, isOverdue, getDepartmentTopsBySegment, directManagersOf, memberWorkloadCapacity, computeAvgSkillPoints, computeBaseSkillPoints, isSafeHttpUrl, type WorkloadCapacity } from '@/lib/orbit/utils'
 import { allowedStatusOptions, canChangeTaskStatus } from '@/lib/orbit/permissions'
 import { useI18n, STATUS_KEY, type TranslationKey } from '@/lib/orbit/i18n'
 import { TranslatedText } from '@/components/orbit/translated-text'
@@ -1229,6 +1229,7 @@ function DrawerBody({
 }) {
   const { t } = useI18n()
   const { openTask } = useTaskDrawer()
+  const toast = useToast()
   const currentUserTz = members.find((m) => m.id === currentUserId)?.timezone ?? DEFAULT_TIMEZONE
   const overdue = isOverdue(task, currentUserTz)
   const calendarUrl = googleCalendarUrl(task, {
@@ -1994,15 +1995,25 @@ function DrawerBody({
                   key={d.id}
                   className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2"
                 >
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-w-0 items-center gap-1.5 text-sm text-primary hover:underline"
-                  >
-                    <Link2 className="size-3.5 shrink-0" />
-                    <span className="truncate">{d.label}</span>
-                  </a>
+                  {isSafeHttpUrl(d.url) ? (
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-w-0 items-center gap-1.5 text-sm text-primary hover:underline"
+                    >
+                      <Link2 className="size-3.5 shrink-0" />
+                      <span className="truncate">{d.label}</span>
+                    </a>
+                  ) : (
+                    <span
+                      className="inline-flex min-w-0 items-center gap-1.5 text-sm text-destructive"
+                      title={t('taskDrawer.deliverables.unsafeUrlWarning')}
+                    >
+                      <TriangleAlert className="size-3.5 shrink-0" />
+                      <span className="truncate">{d.label}</span>
+                    </span>
+                  )}
                   {canManageDeliverables && (
                     <button
                       onClick={() => onRemoveDeliverable(d.id)}
@@ -2040,6 +2051,10 @@ function DrawerBody({
                 className="h-9 shrink-0"
                 disabled={!deliverableLabel.trim() || !deliverableUrl.trim()}
                 onClick={() => {
+                  if (!isSafeHttpUrl(deliverableUrl)) {
+                    toast(t('taskDrawer.deliverables.invalidUrl'))
+                    return
+                  }
                   onAddDeliverable(deliverableLabel, deliverableUrl)
                   setDeliverableLabel('')
                   setDeliverableUrl('')

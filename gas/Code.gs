@@ -1322,6 +1322,12 @@ function doPost(e) {
         })
         break
       case 'updateDeliverables':
+        // F5: javascript:等の危険なURLを保存させない
+        ;(body.deliverables || []).forEach(function (d) {
+          if (d && d.url && !isSafeHttpUrl(d.url)) {
+            throw new Error('成果物のURLは http または https で始まるURLのみ登録できます。')
+          }
+        })
         result = updateTaskFields(body.taskId, {
           deliverables_json: JSON.stringify(body.deliverables || []),
         })
@@ -3079,6 +3085,14 @@ function findRow(sheetName, rowId) {
 
 // Finds the row whose "id" column equals rowId, and writes `fields`
 // (a {headerName: value} map) into the matching columns of that row.
+// F5: 成果物リンク・経費の領収書URLがhttp/https以外(javascript:等)で
+// ないことを保存時に検証する。フロント側の入力時チェック・表示時チェックと
+// 同じ基準をサーバー側でも掛ける(フロントを経由しない直接のAPI呼び出しに
+// 対する防御)。
+function isSafeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url.trim())
+}
+
 // F4: 自由入力(ユーザーが自由なテキストを入力できる)列の一覧。数式インジェ
 // クション対策として、書き込み前にこれらの列のセルを書式なしテキスト(@)に
 // してから値を設定する(セルに値を書き込んだ「後」にsetNumberFormatしても、
@@ -3792,6 +3806,10 @@ function saveSurveyResponse(memberId, answers) {
 }
 
 function saveExpenseApplication(application, acting) {
+  // F5: javascript:等の危険なURLを保存させない
+  if (application.receiptUrl && !isSafeHttpUrl(application.receiptUrl)) {
+    throw new Error('領収書URLは http または https で始まるURLのみ登録できます。')
+  }
   var sheet = ensureExpensesSheet()
   protectRowFromFormulaInjection(sheet, headerRow(sheet), sheet.getLastRow() + 1, 'Expenses')
   sheet.appendRow([
@@ -3839,6 +3857,10 @@ function resubmitExpense(applicationId, fields, actorId) {
   }
 
   fields = fields || {}
+  // F5: javascript:等の危険なURLを保存させない
+  if (fields.receiptUrl && !isSafeHttpUrl(fields.receiptUrl)) {
+    throw new Error('領収書URLは http または https で始まるURLのみ登録できます。')
+  }
   var approvalSteps = fields.approvalSteps || JSON.parse(String(found.data[headers.indexOf('approval_steps_json')] || '[]'))
   var amount = fields.amount != null ? fields.amount : found.data[headers.indexOf('amount')]
 
