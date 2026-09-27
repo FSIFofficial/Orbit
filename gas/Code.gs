@@ -1132,8 +1132,16 @@ function validateHistoryUpdate(task, newHistory, acting) {
   }
 }
 
+// F7: LockServiceで保護しない(=書き込みを伴わない)アクション。
+// translateText/getMyEmails/fetchDailyReportsは読み取りのみ。
+// checkAndGenerateRecurringTasksはgenerateRecurringTasksLocked()内で
+// 既に自前のスクリプトロックを取得するため、ここでも取得すると同一実行内で
+// 同じロックを二重に待つことになり無駄(かつ不必要に複雑)なので対象外にする。
+var LOCK_EXEMPT_ACTIONS = ['translateText', 'getMyEmails', 'fetchDailyReports', 'checkAndGenerateRecurringTasks']
+
 function doPost(e) {
   var result
+  var lock = null
   try {
     var body = JSON.parse(e.postData.contents)
 
@@ -1169,6 +1177,19 @@ function doPost(e) {
       return jsonOutput({ ok: false, error: String(authErr), authError: true })
     }
     // ------------------------------------------------------------------------
+
+    // F7: 書き込みを伴うアクションはLockService.getScriptLock()で排他制御する。
+    // 同時書き込みによる行の取り違え・カウンタの競合等を防ぐ。取得できな
+    // かった場合はエラーを返す(finallyで確実にreleaseLockする)。
+    if (LOCK_EXEMPT_ACTIONS.indexOf(body.action) < 0) {
+      lock = LockService.getScriptLock()
+      try {
+        lock.waitLock(10000)
+      } catch (lockErr) {
+        lock = null
+        return jsonOutput({ ok: false, error: '混み合っています。少し待って再度お試しください。' })
+      }
+    }
 
     switch (body.action) {
       case 'createTasks':
@@ -1687,6 +1708,8 @@ function doPost(e) {
     return jsonOutput({ ok: true, result: result })
   } catch (err) {
     return jsonOutput({ ok: false, error: String(err) })
+  } finally {
+    if (lock) lock.releaseLock()
   }
 }
 
