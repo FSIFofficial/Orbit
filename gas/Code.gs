@@ -225,7 +225,36 @@ function doGet(e) {
  * security properties are equivalent for our purposes.
  */
 function verifyToken(accessToken) {
-  if (!accessToken) throw new Error('認証トークンがありません。再ログインしてください。')
+  if (!accessToken || typeof accessToken !== 'string') {
+    throw new Error('認証トークンがありません。再ログインしてください。')
+  }
+  // F6: 明らかに形式が不正なリクエストはtokeninfoを呼ぶ前に拒否する
+  // (無駄な外部呼び出しを避ける)。GoogleのアクセストークンはURL-safeな
+  // 文字列で十分な長さがあることを前提にした簡易チェック。
+  if (!/^[A-Za-z0-9\-_.\/]{20,2048}$/.test(accessToken)) {
+    throw new Error('認証トークンの形式が不正です。再ログインしてください。')
+  }
+
+  // F6: tokeninfoの検証結果を数分間キャッシュする(同じトークンでの連続
+  // リクエストのたびに外部呼び出しするのを避ける)。キーはトークンそのもの
+  // ではなくハッシュ値にする(CacheServiceの中身が万一漏れてもトークンを
+  // 復元できないようにするため)。
+  var cacheKey = 'tokeninfo_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, accessToken),
+  )
+  var cache = CacheService.getScriptCache()
+  var cached
+  try { cached = cache.get(cacheKey) } catch (e) { cached = null }
+  if (cached) return JSON.parse(cached)
+
+  // F6: GOOGLE_OAUTH_CLIENT_ID is set in Apps Script: Project Settings >
+  // Script Properties. 未設定のまま検証をスキップする「簡易モード」は
+  // 廃止した — 必ず設定すること(gas/README.md 4.1参照)。
+  var expectedClientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_OAUTH_CLIENT_ID')
+  if (!expectedClientId) {
+    throw new Error('サーバー側の設定(GOOGLE_OAUTH_CLIENT_ID)が未設定です。管理者にお問い合わせください。')
+  }
+
   var url = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken)
   var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true })
   var code = resp.getResponseCode()
@@ -242,17 +271,28 @@ function verifyToken(accessToken) {
     throw new Error('トークンが無効です: ' + (info.error_description || info.error) + '。再ログインしてください。')
   }
   // Verify the token was issued for this app (audience check).
-  // GOOGLE_OAUTH_CLIENT_ID is set in Apps Script: Project Settings > Script Properties.
-  var expectedClientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_OAUTH_CLIENT_ID')
-  if (expectedClientId) {
-    // access_token tokeninfo returns 'audience'; id_token tokeninfo uses 'aud'
-    var audience = info.audience || info.azp
-    if (audience !== expectedClientId) {
-      throw new Error('トークンの発行元がこのアプリと一致しません。')
-    }
+  // access_token tokeninfo returns 'audience'; id_token tokeninfo uses 'aud'
+  var audience = info.audience || info.azp
+  if (audience !== expectedClientId) {
+    throw new Error('トークンの発行元がこのアプリと一致しません。')
   }
   if (!info.email) throw new Error('トークンからメールアドレスを取得できませんでした。')
-  return { email: info.email }
+  // F6: メールアドレスが確認済み(email_verified)のGoogleアカウントのみ許可する
+  if (info.email_verified === false || info.email_verified === 'false') {
+    throw new Error('メールアドレスが確認されていないGoogleアカウントのため利用できません。')
+  }
+
+  var result = { email: info.email }
+  try {
+    // トークン自体の有効期限を超えてキャッシュし続けないよう、Googleが返す
+    // expires_in(秒)と既定値(300秒)の短い方をTTLにする
+    var ttl = 300
+    if (info.expires_in) ttl = Math.max(1, Math.min(ttl, Number(info.expires_in)))
+    cache.put(cacheKey, JSON.stringify(result), ttl)
+  } catch (e) {
+    // キャッシュ書き込み失敗は致命的ではない(次回また検証し直せばよい)
+  }
+  return result
 }
 
 /**
