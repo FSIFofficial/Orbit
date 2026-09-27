@@ -952,6 +952,40 @@ function authorizeAction(acting, action, body) {
         }
       }
     }
+
+    // F1/F10: これらはタスクに紐づく更新だが anyLoggedIn 扱いだったため、
+    // 無関係な第三者が他人のタスクのコメント・履歴・成果物・工数・振り返り・
+    // 日程調整・フォームを書き換えられてしまっていた。担当者・確認者・
+    // 作成者・全権管理者のみに制限する。
+    var taskOwnerScopedActions = [
+      'updateComments', 'updateDeliverables', 'updateHistory',
+      'updateEstimatedHours', 'updateActualHours', 'updateRetrospective',
+      'updateTaskSchedule', 'updateTaskForm',
+    ]
+    if (taskOwnerScopedActions.indexOf(action) >= 0) {
+      var tosTask = findRow(SHEET_TASKS, String(body.taskId || ''))
+      if (!tosTask) throw new Error('対象のタスクが見つかりません。')
+
+      if (!isActingFullAdmin(acting)) {
+        var tosAssigneeIds = String(tosTask.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+        var tosReviewerIds = String(tosTask.reviewer_ids || tosTask.reviewer_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
+        var tosCreatorId = String(tosTask.creator_id || '').trim()
+        var tosAllowed =
+          tosAssigneeIds.indexOf(acting.id) >= 0 ||
+          tosReviewerIds.indexOf(acting.id) >= 0 ||
+          (tosCreatorId && tosCreatorId === acting.id)
+        if (!tosAllowed) {
+          throw new Error('この操作はタスクの担当者・確認者・作成者・管理者のみ実行できます。')
+        }
+      }
+
+      // updateComments/updateHistory はクライアントが配列を丸ごと置き換える
+      // 仕様のため、他人が投稿・記録した既存データを書き換え/削除できないか
+      // 追加でチェックする（所有者チェックを通っていても対象）。
+      if (action === 'updateComments') validateCommentsUpdate(tosTask, body.comments, acting)
+      if (action === 'updateHistory') validateHistoryUpdate(tosTask, body.history, acting)
+    }
+
     return
   }
 
@@ -959,6 +993,102 @@ function authorizeAction(acting, action, body) {
   if (!isLeader) {
     // コメント: 未分類のactionは代表/班長のみに制限（新機能追加時の安全装置）
     throw new Error('この操作は代表または管理者のみ実行できます。(未分類のaction: ' + action + ')')
+  }
+}
+
+// lib/orbit/store.tsx の appendHistory と同じ値。history_json は
+// [新しい変更, ...既存].slice(0, HISTORY_CAP) という形で常に先頭に追記される
+// ため、この値がずれるとキャップ落ちの正当な範囲が誤判定される。
+var HISTORY_CAP = 50
+
+// F1/F10: updateComments はコメント配列を丸ごと置き換える仕様のため、
+// GAS側で「新しく追加されるコメントのbyIdは本人か」「既存コメントの
+// 編集・削除は投稿者本人か全権管理者のみか」を検証する。
+// コメントは(historyと違って)件数上限による自動切り捨てが無いため、
+// 新規/既存の判定だけで足りる。
+function validateCommentsUpdate(task, newComments, acting) {
+  if (!Array.isArray(newComments)) throw new Error('コメントの形式が不正です。')
+  if (isActingFullAdmin(acting)) return
+
+  var oldComments = []
+  try { oldComments = JSON.parse(task.comments_json || '[]') } catch (e) {}
+  if (!Array.isArray(oldComments)) oldComments = []
+
+  var oldById = {}
+  oldComments.forEach(function (c) { if (c && c.id) oldById[c.id] = c })
+  var newIds = {}
+
+  newComments.forEach(function (c) {
+    if (!c || !c.id) throw new Error('コメントの形式が不正です。')
+    newIds[c.id] = true
+    var old = oldById[c.id]
+    if (old) {
+      var changed = JSON.stringify(old) !== JSON.stringify(c)
+      if (changed && old.byId !== acting.id) {
+        throw new Error('他のメンバーが投稿したコメントは編集できません。')
+      }
+    } else {
+      if (c.byId !== acting.id) {
+        throw new Error('コメントの投稿者は本人である必要があります。')
+      }
+    }
+  })
+
+  oldComments.forEach(function (c) {
+    if (c && c.id && !newIds[c.id] && c.byId !== acting.id) {
+      throw new Error('他のメンバーが投稿したコメントは削除できません。')
+    }
+  })
+}
+
+// F1/F10: updateHistory も同様に配列を丸ごと置き換える仕様。history は
+// HISTORY_CAP件を超えると自動的に末尾(=最も古いもの)が切り捨てられる正当な
+// 動作があるため、「非管理者による更新は次の形と完全一致する場合のみ許可」
+// という厳密な形で検証する:
+//   新しい配列 == [今回追加されたエントリ(byIdは本人)] + 既存配列の先頭から
+//                 (HISTORY_CAP - 追加件数) 件をそのまま
+// 既存エントリの内容・順序が1件でも変わっている、または上限に達していない
+// のに古いエントリが消えている場合は拒否する。全権管理者は制限なし。
+function validateHistoryUpdate(task, newHistory, acting) {
+  if (!Array.isArray(newHistory)) throw new Error('履歴の形式が不正です。')
+  if (isActingFullAdmin(acting)) return
+
+  var oldHistory = []
+  try { oldHistory = JSON.parse(task.history_json || '[]') } catch (e) {}
+  if (!Array.isArray(oldHistory)) oldHistory = []
+
+  var oldIds = {}
+  oldHistory.forEach(function (h) { if (h && h.id) oldIds[h.id] = true })
+
+  // 配列の先頭から、「既存配列に無いid(=新規追加分)」が連続する個数を数える。
+  // 新規追加分は必ず先頭にまとまって入る仕様(appendHistory参照)なので、
+  // 先頭以外に紛れ込んでいる場合は後段の完全一致チェックで拒否される。
+  var addedCount = 0
+  while (
+    addedCount < newHistory.length &&
+    newHistory[addedCount] &&
+    newHistory[addedCount].id &&
+    !oldIds[newHistory[addedCount].id]
+  ) {
+    addedCount++
+  }
+
+  var addedEntries = newHistory.slice(0, addedCount)
+  var remainingEntries = newHistory.slice(addedCount)
+
+  addedEntries.forEach(function (h) {
+    if (h.byId !== acting.id) {
+      throw new Error('新しい履歴の記録者は本人である必要があります。')
+    }
+  })
+
+  var expectedKeepCount = Math.max(HISTORY_CAP - addedCount, 0)
+  var expected = oldHistory.slice(0, expectedKeepCount)
+  if (
+    remainingEntries.length !== expected.length ||
+    JSON.stringify(remainingEntries) !== JSON.stringify(expected)
+  ) {
+    throw new Error('他のメンバーが記録した履歴を変更・削除することはできません。')
   }
 }
 
@@ -1002,7 +1132,8 @@ function doPost(e) {
 
     switch (body.action) {
       case 'createTasks':
-        result = createTasks(body.tasks)
+        // F1: creator_id はクライアントの値ではなく認証済みの本人IDを使う
+        result = createTasks(body.tasks, actingMember.id)
         break
       case 'updateTaskStatus':
         result = updateTaskFields(body.taskId, {
@@ -1518,7 +1649,7 @@ function doPost(e) {
 // New rows are built by walking the sheet's actual header row (see
 // gas/README.md for the full column list), so this works regardless of
 // column order and leaves any column not listed below blank.
-function createTasks(tasks) {
+function createTasks(tasks, actingMemberId) {
   var sheet = getSheet(SHEET_TASKS)
   var headers = headerRow(sheet)
   var nextId = nextIntId(sheet, headers)
@@ -1544,7 +1675,9 @@ function createTasks(tasks) {
         case 'assignee_id':
           return (t.assigneeIds || []).join(',')
         case 'creator_id':
-          return t.creatorId || ''
+          // F1: クライアントが送ってきた t.creatorId は使わない(なりすまし防止)。
+          // 必ず認証済みの本人ID(actingMemberId)を記録する。
+          return actingMemberId || ''
         case 'created_at':
           return today
         case 'start_date':
