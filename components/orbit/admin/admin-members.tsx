@@ -391,7 +391,9 @@ export function AdminMembers() {
                         <div>
                           <div className="font-medium">{m.displayName || m.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {m.departmentPath ? formatDepartmentPath(m.departmentPath) : m.affiliation}
+                            {m.departmentPaths && m.departmentPaths.length > 0
+                              ? m.departmentPaths.map(formatDepartmentPath).join('　/　')
+                              : m.affiliation}
                           </div>
                         </div>
                       </div>

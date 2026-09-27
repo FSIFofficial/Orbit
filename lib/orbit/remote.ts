@@ -242,7 +242,7 @@ function mapMemberRow(r: Record<string, string>, projectsById: Map<string, Proje
     developmentPlan: parseJsonArray<DevelopmentPlanEntry>(r.development_plan_json),
     oneOnOnes: parseJsonArray<OneOnOneRecord>(r.one_on_ones_json),
     // ---- 組織階層・権限・スキルポイント ----------------------------------------
-    departmentPath: r.department_path || undefined,
+    departmentPaths: splitTags(r.department_path),
     permissionOverrides: parseJsonArray<PermissionOverride>(r.permission_overrides_json),
     skillPoints: parseJsonObject<SkillPoints>(r.skill_points_json),
     inactive: r.inactive === 'TRUE' ? true : undefined,
@@ -450,7 +450,7 @@ export interface RemoteSettings {
   // 初ログイン時付与タスク — Settings キー "initial_tasks_json"
   initialTasks: { name: string; description: string }[]
   // ORG-002: 部署ツリー構成 — Settings キー "department_tree_config"。
-  // 省略時はMembers.departmentPathの実データから動的導出される
+  // 省略時はMembers.departmentPathsの実データから動的導出される
   departmentTreeConfig: DepartmentTreeNode[]
   // LRN-001: 学習コンテンツ一覧 — Settings キー "learning_contents"
   learningContents: LearningContent[]
@@ -787,8 +787,10 @@ export const remoteApi = {
   testSlackWebhook: () => postToGas('testSlackWebhook', {}),
   updateMemberInactive: (memberId: string, inactive: boolean) =>
     postToGas('updateMemberInactive', { memberId, inactive }),
-  updateMemberDepartmentPath: (memberId: string, departmentPath: string) =>
-    postToGas('updateMemberDepartmentPath', { memberId, departmentPath }),
+  // GAS側のアクション名・パラメータ名(departmentPath)は単一文字列のままだが、
+  // 複数部署をカンマ区切りの1文字列にjoinして渡す(splitTagsで復元される)
+  updateMemberDepartmentPaths: (memberId: string, departmentPaths: string[]) =>
+    postToGas('updateMemberDepartmentPath', { memberId, departmentPath: departmentPaths.join(', ') }),
   updateMemberProjects: (memberId: string, projectIds: string[]) =>
     postToGas('updateMemberProjects', { memberId, projectIds }),
   updateEducationInfo: (

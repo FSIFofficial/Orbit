@@ -249,7 +249,7 @@ interface OrbitContextValue extends OrbitState {
   dismissNotification: (notificationId: string) => void
   setSlackWebhookUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
   toggleMemberInactive: (memberId: string) => void
-  updateMemberDepartmentPath: (memberId: string, departmentPath: string) => void
+  updateMemberDepartmentPaths: (memberId: string, departmentPaths: string[]) => void
   updateAbsentDates: (memberId: string, dates: string[]) => void
   // item 20: 1on1ワークシート質問項目
   oneOnOneQuestions: string[]
@@ -767,7 +767,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
   const [skillFieldThreshold, setSkillFieldThresholdState] = useState<number>(
     DEFAULT_SKILL_FIELD_THRESHOLD,
   )
-  // ORG-002: 部署ツリー構成。空配列(=未設定)ならMembers.departmentPathから
+  // ORG-002: 部署ツリー構成。空配列(=未設定)ならMembers.departmentPathsから
   // 動的導出するフォールバックのまま(admin-org-tree.tsx側で判定)
   const [departmentTreeConfig, setDepartmentTreeConfigState] = useState<DepartmentTreeNode[]>([])
   // 団体メール — 幹部/事業責任者(=full admin)がAdmin > Tagsから登録する共有
@@ -4323,10 +4323,11 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     [runRemote],
   )
 
-  const updateMemberDepartmentPath = useCallback(
-    (memberId: string, departmentPath: string) => {
-      setMembers((prev) => prev.map((m) => m.id !== memberId ? m : { ...m, departmentPath: departmentPath || undefined }))
-      if (isRemoteConfigured) runRemote(remoteApi.updateMemberDepartmentPath(memberId, departmentPath))
+  const updateMemberDepartmentPaths = useCallback(
+    (memberId: string, departmentPaths: string[]) => {
+      const next = Array.from(new Set(departmentPaths.map((p) => p.trim()).filter(Boolean)))
+      setMembers((prev) => prev.map((m) => m.id !== memberId ? m : { ...m, departmentPaths: next }))
+      if (isRemoteConfigured) runRemote(remoteApi.updateMemberDepartmentPaths(memberId, next))
     },
     [runRemote],
   )
@@ -4773,7 +4774,7 @@ export function OrbitProvider({ children }: { children: React.ReactNode }) {
     dismissNotification,
     setSlackWebhookUrl,
     toggleMemberInactive,
-    updateMemberDepartmentPath,
+    updateMemberDepartmentPaths,
     updateAbsentDates,
     oneOnOneQuestions,
     setOneOnOneQuestions,

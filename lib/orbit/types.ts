@@ -230,7 +230,10 @@ export interface Member {
 
   // 所属パス ("事業本部A>事業部1>グループX") — ">" 区切りで最上位から記述。
   // affiliation（プロジェクトから動的導出）とは独立した静的な組織階層情報。
-  departmentPath?: string
+  // メンバーは複数の部署に同時に所属できるため配列で持つ（1つだけの場合も
+  // 要素数1の配列になる）。スプレッドシート上ではカンマ区切りの1セルで
+  // 保持する（remote.tsのsplitTags/join参照）。
+  departmentPaths?: string[]
 
   // 個別の例外許可。たとえば「一般メンバーだが特定タスクだけ閲覧可」など
   // ロールベースの権限チェックに重ねて適用する。
@@ -468,7 +471,7 @@ export type SkillLevelThresholds = Record<string, number>
 
 /**
  * 部署ツリー設定 (Settings キー: "department_tree_config", 省略可)
- * 省略時は Members.departmentPath の実データから動的導出される。
+ * 省略時は Members.departmentPaths の実データから動的導出される。
  * 例: [{ "path": "事業本部A>事業部1>グループX" }]
  */
 export interface DepartmentTreeNode {
