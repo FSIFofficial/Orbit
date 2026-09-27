@@ -462,7 +462,34 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 | approveTask, assignTask, updateTaskDetails, setBlocker, createProject, updateProject, updatePriority, updateReviewer(s), removeTask, bulkUpdateSkills, updateExpenseStatus, addExpenseApplication, manageCustomForm, updateEvaluationHistory, updateTransferHistory, updateOneOnOnes, updateCompetencies, notifyProjectHealth, updateProjectHealthRecord, approveTaskReview 等 | 任意の管理者ロール（代表 または 班長以上） |
 | updateSkillLevels, updateCareerGoals, updateDevelopmentPlan, updateCareerHistory, updateQualifications, updateTrainingHistory | 本人 または 管理者 |
 | updateWill, updateNotify, updateNotifySettings, updateAvatar, uploadAvatar, updateDisplayName, updateUnavailableDates, updateTimezone, updateLocale | 本人のみ |
-| createTasks, updateProgress, updateComments, updateTaskStatus（担当者のみ）, updateDeliverables, submitSurveyResponse 等 | ログイン済みなら誰でも |
+| createTasks, updateProgress, updateTaskStatus（担当者のみ）, submitSurveyResponse 等 | ログイン済みなら誰でも |
+| updateComments, updateDeliverables, updateHistory, updateEstimatedHours, updateActualHours, updateRetrospective, updateTaskSchedule, updateTaskForm | そのタスクの担当者・確認者・作成者・全権管理者のみ(updateComments/updateHistoryはさらに、他人が投稿・記録した既存データの書き換え・削除を拒否) |
+
+---
+
+## 9.5. 数式インジェクション対策と既存データの点検
+
+自由入力が書き込まれる列（タスク名・説明・カテゴリ・要求スキル・進捗メモ・
+ブロッカーの理由、プロジェクト名・説明・目標、メンバー名・表示名・大学名等、
+経費の領収書URL・理由・目的・差し戻し理由、候補者の氏名・電話番号・履歴書・
+面接メモ、日報・週報の各本文）は、書き込み時にセルの表示形式を書式なし
+テキスト（`@`）にしてから値を設定することで、先頭が `=` `+` `-` `@` の値が
+数式として解釈されるのを防いでいます（`Code.gs` の
+`FORMULA_INJECTION_PROTECTED_COLUMNS` / `protectRowFromFormulaInjection`）。
+
+この対策は導入後に新しく書き込まれる値にのみ効きます。導入前から入って
+いる既存データを点検するには、Apps Scriptエディタで次の関数を手動実行
+してください。
+
+- `auditFormulaInjectionRisks()` — 該当しそうなセルを実行ログに一覧表示
+  するだけで、何も変更しません（まずはこちらで確認してください）
+- `auditFormulaInjectionRisks(true)` — 一覧表示した上で、該当セルを書式
+  なしテキストに修正します（値そのものは変更しません）
+
+なお、この対策はGoogleスプレッドシート上で直接開いた場合や、Excel/ODS
+形式でダウンロードした場合には有効ですが、**「ウェブに公開」の公開CSVを
+直接Excel等で開いた場合には効きません**（CSVには書式情報が乗らないため）。
+公開CSVの読み取り自体の廃止は別途の対応とします。
 
 ---
 

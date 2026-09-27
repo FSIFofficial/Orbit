@@ -1714,6 +1714,8 @@ function createTasks(tasks, actingMemberId) {
           return ''
       }
     })
+    // F4: 値を書き込む前に対象列を書式なしテキスト(@)にする
+    protectRowFromFormulaInjection(sheet, headers, sheet.getLastRow() + 1, 'Tasks')
     sheet.appendRow(row)
     created.push({ tempId: t.tempId, id: id })
     if (t.assigneeIds && t.assigneeIds.length > 0) syncCalendarForTask(id)
@@ -2603,6 +2605,7 @@ function createProject(name, description, type, parentId) {
     if (h === 'parent_id') return parentId || ''
     return ''
   })
+  protectRowFromFormulaInjection(sheet, headers, sheet.getLastRow() + 1, 'Projects')
   sheet.appendRow(row)
   return { id: id }
 }
@@ -2736,6 +2739,7 @@ function addMember(name, email, affiliation, role) {
         return ''
     }
   })
+  protectRowFromFormulaInjection(sheet, headers, sheet.getLastRow() + 1, 'Members')
   sheet.appendRow(row)
   // affiliation isn't its own column — it's derived from project_ids (or,
   // for admin roles with none, defaulted client-side), so nothing to store
@@ -3075,6 +3079,108 @@ function findRow(sheetName, rowId) {
 
 // Finds the row whose "id" column equals rowId, and writes `fields`
 // (a {headerName: value} map) into the matching columns of that row.
+// F4: 自由入力(ユーザーが自由なテキストを入力できる)列の一覧。数式インジェ
+// クション対策として、書き込み前にこれらの列のセルを書式なしテキスト(@)に
+// してから値を設定する(セルに値を書き込んだ「後」にsetNumberFormatしても、
+// 既に数式として解釈された内容は元に戻らないため、必ず値を書く前に呼ぶこと)。
+// _json列・数値列・ID列・日付列・固定選択肢(enum)列はここに含めない
+// (JSON文字列は必ず"["か"{"で始まるためSheets側で数式と誤解釈されない)。
+// シート名は文字列リテラルで直接指定する — SHEET_EXPENSES等の定数は
+// このオブジェクトより後ろで定義されており、スクリプト読み込み時点では
+// まだ代入されていないため使えない。
+var FORMULA_INJECTION_PROTECTED_COLUMNS = {
+  Tasks: ['title', 'description', 'category', 'skills', 'progress_note', 'blocker_note'],
+  Projects: ['name', 'description', 'goal'],
+  Members: [
+    'name', 'display_name', 'career_aspiration', 'desired_future_role', 'career_plan',
+    'university', 'faculty', 'department_name', 'will_tags', 'judgment_tags',
+    'department_path', 'desired_areas', 'desired_skills',
+  ],
+  Expenses: ['receipt_url', 'justification', 'purpose', 'rejection_reason'],
+  Candidates: ['name', 'phone', 'resume_text', 'interview_notes'],
+  DailyReports: ['done_text', 'todo_text', 'issues_text'],
+}
+
+// 指定した行のうち、そのシートで保護対象の列だけを書式なしテキスト(@)にする。
+// appendRowで新しい行を追加する「前」に、追加先になる行番号(sheet.getLastRow()+1)
+// に対して呼ぶ想定。
+function protectRowFromFormulaInjection(sheet, headers, rowNumber, sheetName) {
+  var cols = FORMULA_INJECTION_PROTECTED_COLUMNS[sheetName]
+  if (!cols) return
+  cols.forEach(function (colName) {
+    var idx = headers.indexOf(colName)
+    if (idx >= 0) sheet.getRange(rowNumber, idx + 1).setNumberFormat('@')
+  })
+}
+
+// F4: 既存データの点検用。Apps Scriptエディタから手動で実行する。
+//   auditFormulaInjectionRisks()      … 一覧表示のみ、何も変更しない(既定)
+//   auditFormulaInjectionRisks(true)  … 見つかったセルを書式なしテキスト(@)に修正する
+// 対象はFORMULA_INJECTION_PROTECTED_COLUMNSに挙げた全シート・全列。
+// 「先頭が=+-@の値」に加え、既にSheets側で数式として評価されてしまって
+// いるセル(getFormulas()が空でない)も対象にする — 修正時はその数式の
+// 生の文字列を書式なしテキストとして書き戻す(元の入力文字列を復元する)。
+// 注意: 過去に実際に数式が評価されてしまっていた場合、その時点で
+// IMPORTXML等による外部通信が発生していた可能性はこの関数では取り消せない
+// (今後の再評価を防ぐことだけができる)。
+function auditFormulaInjectionRisks(fix) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var found = []
+
+  Object.keys(FORMULA_INJECTION_PROTECTED_COLUMNS).forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName)
+    if (!sheet) return
+    var headers = headerRow(sheet)
+    var idCol = headers.indexOf('id')
+    var lastRow = sheet.getLastRow()
+    if (lastRow < 2) return
+
+    FORMULA_INJECTION_PROTECTED_COLUMNS[sheetName].forEach(function (colName) {
+      var colIdx = headers.indexOf(colName)
+      if (colIdx < 0) return
+      var range = sheet.getRange(2, colIdx + 1, lastRow - 1, 1)
+      var values = range.getValues()
+      var formulas = range.getFormulas()
+
+      for (var i = 0; i < values.length; i++) {
+        var display = String(values[i][0])
+        var formula = formulas[i][0]
+        var isRisky = /^[=+\-@]/.test(display) || !!formula
+        if (!isRisky) continue
+
+        var rowNumber = i + 2
+        var idValue = idCol >= 0 ? sheet.getRange(rowNumber, idCol + 1).getValue() : ''
+        found.push({
+          sheet: sheetName,
+          row: rowNumber,
+          id: idValue,
+          column: colName,
+          value: formula || display,
+          wasEvaluatedAsFormula: !!formula,
+        })
+
+        if (fix) {
+          var literal = formula || display
+          sheet.getRange(rowNumber, colIdx + 1).setNumberFormat('@').setValue(literal)
+        }
+      }
+    })
+  })
+
+  if (fix) {
+    console.log('🔧 auditFormulaInjectionRisks: ' + found.length + '件を書式なしテキストに修正しました。')
+  } else {
+    console.log('🔍 auditFormulaInjectionRisks: ' + found.length + '件の疑わしいセルが見つかりました(変更なし)。修正するには auditFormulaInjectionRisks(true) を実行してください。')
+  }
+  found.forEach(function (f) {
+    console.log(
+      '  - ' + f.sheet + ' 行' + f.row + ' (id=' + f.id + ') 列"' + f.column + '"' +
+      (f.wasEvaluatedAsFormula ? ' [既に数式として評価済み]' : '') + ': ' + f.value,
+    )
+  })
+  return found
+}
+
 function updateRowFields(sheetName, rowId, fields) {
   var sheet = getSheet(sheetName)
   var headers = headerRow(sheet)
@@ -3094,11 +3200,16 @@ function updateRowFields(sheetName, rowId, fields) {
 
   var missingKeys = []
   var matchedCount = 0
+  var protectedCols = FORMULA_INJECTION_PROTECTED_COLUMNS[sheetName] || []
   Object.keys(fields).forEach(function (key) {
     var col = headers.indexOf(key) + 1
     if (col === 0) {
       missingKeys.push(key)
       return // このシートにまだ無い列 — 個別にはスキップするが、下でまとめて報告する
+    }
+    // F4: 値を書き込む前に書式なしテキスト(@)にする(順序が重要 — 後からでは遅い)
+    if (protectedCols.indexOf(key) >= 0) {
+      sheet.getRange(targetRow, col).setNumberFormat('@')
     }
     sheet.getRange(targetRow, col).setValue(fields[key])
     matchedCount++
@@ -3682,6 +3793,7 @@ function saveSurveyResponse(memberId, answers) {
 
 function saveExpenseApplication(application, acting) {
   var sheet = ensureExpensesSheet()
+  protectRowFromFormulaInjection(sheet, headerRow(sheet), sheet.getLastRow() + 1, 'Expenses')
   sheet.appendRow([
     application.id,
     application.applicantId,
@@ -4130,6 +4242,7 @@ function ensureDailyReportsSheet() {
 // REP-004: 日報・週報の保存(追記のみ)。
 function saveDailyReport(report, acting) {
   var sheet = ensureDailyReportsSheet()
+  protectRowFromFormulaInjection(sheet, headerRow(sheet), sheet.getLastRow() + 1, 'DailyReports')
   sheet.appendRow([
     report.id,
     report.memberId,
@@ -4196,6 +4309,7 @@ function addCandidate(candidate) {
   var headers = headerRow(sheet)
   var id = String(nextIntId(sheet, headers))
   var now = new Date().toISOString()
+  protectRowFromFormulaInjection(sheet, headers, sheet.getLastRow() + 1, 'Candidates')
   sheet.appendRow([
     id,
     candidate.name || '',
