@@ -477,10 +477,13 @@ Secrets が未設定のままだとローカルのモックデータで動きま
 自由入力が書き込まれる列（タスク名・説明・カテゴリ・要求スキル・進捗メモ・
 ブロッカーの理由、プロジェクト名・説明・目標、メンバー名・表示名・大学名等、
 経費の領収書URL・理由・目的・差し戻し理由、候補者の氏名・電話番号・履歴書・
-面接メモ、日報・週報の各本文）は、書き込み時にセルの表示形式を書式なし
-テキスト（`@`）にしてから値を設定することで、先頭が `=` `+` `-` `@` の値が
-数式として解釈されるのを防いでいます（`Code.gs` の
-`FORMULA_INJECTION_PROTECTED_COLUMNS` / `protectRowFromFormulaInjection`）。
+面接メモ、日報・週報の各本文、Settingsシートのvalue列）は、書き込み時に
+セルの表示形式を書式なしテキスト（`@`）にしてから値を設定することで、
+先頭が `=` `+` `-` `@` の値が数式として解釈されるのを防いでいます
+（`Code.gs` の `FORMULA_INJECTION_PROTECTED_COLUMNS` /
+`protectRowFromFormulaInjection`）。Settingsのvalue列にはJSON文字列（
+`role_levels`、`permission_overrides_json` 等）も入りますが、書式なし
+テキスト化はJSON文字列の読み書きには影響しません。
 
 この対策は導入後に新しく書き込まれる値にのみ効きます。導入前から入って
 いる既存データを点検するには、Apps Scriptエディタで次の関数を手動実行

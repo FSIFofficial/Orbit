@@ -3118,6 +3118,11 @@ function updateSetting(key, value) {
   var keys = lastRow > 1 ? sheet.getRange(2, keyCol, lastRow - 1, 1).getValues() : []
   for (var i = 0; i < keys.length; i++) {
     if (String(keys[i][0]) === String(key)) {
+      // F4(レビュー指摘対応2): Settingsは書き込み頻度が低く性能上の懸念が
+      // ない上、setupOrbit()が初期キーを書式設定なしでappendRowするため、
+      // Tasks等と違い「行作成時に必ず保護済み」という前提が成り立たない。
+      // よって更新のたびに設定する。
+      protectRowFromFormulaInjection(sheet, headers, i + 2, 'Settings')
       sheet.getRange(i + 2, valueCol).setValue(value)
       return { key: key }
     }
@@ -3127,6 +3132,7 @@ function updateSetting(key, value) {
     if (h === 'value') return value
     return ''
   })
+  protectRowFromFormulaInjection(sheet, headers, sheet.getLastRow() + 1, 'Settings')
   sheet.appendRow(row)
   return { key: key }
 }
@@ -3225,6 +3231,10 @@ var FORMULA_INJECTION_PROTECTED_COLUMNS = {
   Expenses: ['receipt_url', 'justification', 'purpose', 'rejection_reason'],
   Candidates: ['name', 'phone', 'resume_text', 'interview_notes'],
   DailyReports: ['done_text', 'todo_text', 'issues_text'],
+  // value列にはorg_name等の自由入力に加えrole_levels/permission_overrides_json
+  // 等のJSON値も入るが、書式なしテキスト化はJSON文字列の読み書きに影響しない
+  // (JSON.parseは文字列の内容だけを見るため)ので列全体を対象にする。
+  Settings: ['value'],
 }
 
 // 指定した行のうち、そのシートで保護対象の列だけを書式なしテキスト(@)にする。
