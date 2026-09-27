@@ -1707,6 +1707,16 @@ function doPost(e) {
     }
     return jsonOutput({ ok: true, result: result })
   } catch (err) {
+    // F14: こちらが意図して投げた業務上のエラー(throw new Error('日本語
+    // メッセージ'))はerr.name==='Error'になるため、そのままフロントに返す
+    // (個別のthrowによるメッセージは維持する)。TypeError等、こちらが想定
+    // していない例外は詳細をLoggerに記録し、フロントには定型メッセージだけ
+    // を返す(スタックトレース等の内部情報を渡さない)。リクエストの中身
+    // (body)やトークンはログに出さない。
+    if (err && err.name && err.name !== 'Error') {
+      Logger.log('doPost unexpected error [' + err.name + ']: ' + (err.stack || err.message || err))
+      return jsonOutput({ ok: false, error: '処理中に問題が発生しました。しばらくしてから再度お試しください。' })
+    }
     return jsonOutput({ ok: false, error: String(err) })
   } finally {
     if (lock) lock.releaseLock()
@@ -3130,7 +3140,8 @@ function findRow(sheetName, rowId) {
   var sheet = getSheet(sheetName)
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id')
-  if (idCol === -1) throw new Error('No "id" column on ' + sheetName)
+  // F14: シート名などの内部情報はエラーメッセージに含めない
+  if (idCol === -1) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
 
   var lastRow = sheet.getLastRow()
   var values = sheet.getRange(2, 1, Math.max(lastRow - 1, 0), headers.length).getValues()
@@ -3262,7 +3273,8 @@ function updateRowFields(sheetName, rowId, fields) {
   var sheet = getSheet(sheetName)
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id') + 1
-  if (idCol === 0) throw new Error('No "id" column on ' + sheetName)
+  // F14: シート名などの内部情報はエラーメッセージに含めない
+  if (idCol === 0) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
 
   var lastRow = sheet.getLastRow()
   var ids = sheet.getRange(2, idCol, Math.max(lastRow - 1, 0), 1).getValues()
@@ -4435,7 +4447,8 @@ function removeCandidate(candidateId) {
   var sheet = ensureCandidatesSheet()
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id') + 1
-  if (idCol === 0) throw new Error('No "id" column on ' + SHEET_CANDIDATES)
+  // F14: シート名などの内部情報はエラーメッセージに含めない
+  if (idCol === 0) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
   var lastRow = sheet.getLastRow()
   var ids = sheet.getRange(2, idCol, Math.max(lastRow - 1, 0), 1).getValues()
   for (var i = 0; i < ids.length; i++) {
