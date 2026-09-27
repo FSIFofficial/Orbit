@@ -128,7 +128,7 @@ export function PersonDetail({ id }: { id: string }) {
     notifyTrainingDecision,
     updateDevelopmentPlan,
     updateOneOnOnes,
-    updateMemberDepartmentPath,
+    updateMemberDepartmentPaths,
     radarAxes,
     quizDefinitions,
     submitQuizResult,
@@ -148,7 +148,6 @@ export function PersonDetail({ id }: { id: string }) {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [editingJoinedAt, setEditingJoinedAt] = useState(false)
-  const [editingDeptPath, setEditingDeptPath] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [initialsDraft, setInitialsDraft] = useState('')
@@ -460,39 +459,26 @@ export function PersonDetail({ id }: { id: string }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {member.role !== BASE_ROLE ? member.role : member.affiliation}
           </p>
-          {editingDeptPath && isAdmin ? (
-            <input
-              autoFocus
-              defaultValue={member.departmentPath ?? ''}
-              onBlur={(e) => {
-                updateMemberDepartmentPath(member.id, e.target.value.trim())
-                setEditingDeptPath(false)
-              }}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                if (e.key === 'Enter') { updateMemberDepartmentPath(member.id, e.currentTarget.value.trim()); setEditingDeptPath(false) }
-                if (e.key === 'Escape') setEditingDeptPath(false)
-              }}
-              placeholder={t('person.deptPath.placeholder')}
-              className="mt-0.5 h-6 w-64 rounded-md border border-primary bg-card px-1.5 text-xs outline-none"
-            />
-          ) : (
-            <div className="mt-0.5 flex items-center gap-1">
-              <p className="text-xs text-muted-foreground">
-                {member.departmentPath
-                  ? member.departmentPath.split('>').map((s) => s.trim()).join(' ＞ ')
-                  : isAdmin ? <span className="italic">{t('person.deptPath.unset')}</span> : null}
-              </p>
-              {isAdmin && (
-                <button
-                  onClick={() => setEditingDeptPath(true)}
-                  className="rounded-md p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  aria-label={t('person.avatar.editDeptPath')}
-                >
-                  <Pencil className="size-3" />
-                </button>
-              )}
+          {isAdmin ? (
+            // メンバーは複数部署に同時所属できるため、タグ形式でその場編集する
+            // (パスは"事業本部A>事業部1"のような">"区切りの文字列そのまま保持)
+            <div className="mt-0.5">
+              <EditableTags
+                tags={member.departmentPaths ?? []}
+                editable
+                onChange={(next) => updateMemberDepartmentPaths(member.id, next)}
+                emptyText={t('person.deptPath.unset')}
+                placeholder={t('person.deptPath.placeholder')}
+              />
             </div>
+          ) : (
+            (member.departmentPaths?.length ?? 0) > 0 && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {member.departmentPaths!
+                  .map((p) => p.split('>').map((s) => s.trim()).join(' ＞ '))
+                  .join('　/　')}
+              </p>
+            )
           )}
           <div className="mt-1 flex items-center gap-1.5">
             {editingJoinedAt ? (

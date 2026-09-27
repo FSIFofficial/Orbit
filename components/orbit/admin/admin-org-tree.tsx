@@ -157,7 +157,7 @@ function DepartmentTreeEditorModal({
   }
 
   const removeNode = (path: string) => {
-    // 削除時、このノードに所属するメンバーのdepartmentPathはそのまま残す
+    // 削除時、このノードに所属するメンバーのdepartmentPathsはそのまま残す
     // (member側のフィールドは一切書き換えない — ツリー構成からの削除のみ)
     setDraft((prev) => prev.filter((n) => n.path !== path && !n.path.startsWith(`${path}>`)))
   }
@@ -296,18 +296,31 @@ function DepartmentTreeEditorModal({
   )
 }
 
-function MemberRow({ m, onClick }: { m: Member; onClick: () => void }) {
+function MemberRow({ m, onClick, onRemove }: { m: Member; onClick: () => void; onRemove?: () => void }) {
+  const { t } = useI18n()
   return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
-    >
-      <Avatar member={m} size={32} />
-      <div className="min-w-0 flex-1">
-        <div className="font-medium">{m.displayName || m.name}</div>
-        <div className="text-xs text-muted-foreground">{m.affiliation}</div>
-      </div>
-    </button>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={onClick}
+        className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
+      >
+        <Avatar member={m} size={32} />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{m.displayName || m.name}</div>
+          <div className="text-xs text-muted-foreground">{m.affiliation}</div>
+        </div>
+      </button>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label={t('admin.orgTree.removeMemberAria')}
+          title={t('admin.orgTree.removeMemberAria')}
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -326,7 +339,7 @@ function TreeNodeRow({
 }) {
   const [open, setOpen] = useState(depth === 0)
   const hasChildren = node.children.length > 0
-  const deptMembers = members.filter((m) => m.departmentPath === node.path)
+  const deptMembers = members.filter((m) => m.departmentPaths?.includes(node.path))
   const isSelected = selected === node.path
 
   return (
@@ -386,7 +399,7 @@ function TreeNodeRow({
 }
 
 export function AdminOrgTree() {
-  const { members, departmentTreeConfig, updateDepartmentTreeConfig, isFullAdmin } = useOrbit()
+  const { members, departmentTreeConfig, updateDepartmentTreeConfig, updateMemberDepartmentPaths, isFullAdmin } = useOrbit()
   const { go } = useNav()
   const { t } = useI18n()
   const toast = useToast()
@@ -394,12 +407,12 @@ export function AdminOrgTree() {
   const [editingTree, setEditingTree] = useState(false)
 
   const dynamicPaths = useMemo(
-    () => Array.from(new Set(members.map((m) => m.departmentPath).filter(Boolean) as string[])),
+    () => Array.from(new Set(members.flatMap((m) => m.departmentPaths ?? []))),
     [members],
   )
 
   // ORG-002: department_tree_configが設定されていればそちらを優先し、
-  // 未設定(空配列)なら従来通りdepartmentPathから動的導出する
+  // 未設定(空配列)なら従来通りdepartmentPathsから動的導出する
   const usingConfig = departmentTreeConfig.length > 0
   const paths = usingConfig ? departmentTreeConfig.map((n) => n.path) : dynamicPaths
   const labelOverrides = useMemo(() => {
@@ -413,13 +426,22 @@ export function AdminOrgTree() {
   const tree = useMemo(() => buildTree(paths, labelOverrides), [paths, labelOverrides])
 
   const deptMembers = useMemo(
-    () => (selected ? members.filter((m) => m.departmentPath === selected) : []),
+    () => (selected ? members.filter((m) => m.departmentPaths?.includes(selected)) : []),
     [members, selected],
   )
 
   const tops = useMemo(
     () => (selected ? getDepartmentTops(selected, members) : []),
     [selected, members],
+  )
+
+  // Org Treeをこの画面から「組める」ように — 部署ノードを選んだ状態で
+  // メンバーをその場で追加・削除できるようにする(メンバーは複数部署に
+  // 同時所属できるので、追加は既存departmentPathsへの追記、削除は該当
+  // pathの除去のみで他の所属は変えない)
+  const addableMembers = useMemo(
+    () => (selected ? members.filter((m) => !m.departmentPaths?.includes(selected)) : []),
+    [members, selected],
   )
 
   const editorModal = isFullAdmin && (
@@ -535,10 +557,48 @@ export function AdminOrgTree() {
                       key={m.id}
                       m={m}
                       onClick={() => go({ name: 'person', id: m.id })}
+                      onRemove={
+                        isFullAdmin
+                          ? () =>
+                              updateMemberDepartmentPaths(
+                                m.id,
+                                (m.departmentPaths ?? []).filter((p) => p !== selected),
+                              )
+                          : undefined
+                      }
                     />
                   ))
                 )}
               </div>
+
+              {isFullAdmin && (
+                <div className="border-t border-border p-2">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const memberId = e.target.value
+                      if (!memberId || !selected) return
+                      const m = members.find((x) => x.id === memberId)
+                      if (!m) return
+                      updateMemberDepartmentPaths(memberId, [...(m.departmentPaths ?? []), selected])
+                      toast(t('admin.orgTree.memberAddedToast', { name: m.displayName || m.name }))
+                    }}
+                    disabled={addableMembers.length === 0}
+                    className="h-8 w-full cursor-pointer rounded-md border border-dashed border-border-strong bg-transparent px-2 text-xs text-muted-foreground outline-none hover:border-border disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">
+                      {addableMembers.length === 0
+                        ? t('admin.orgTree.addMemberNoneLeft')
+                        : t('admin.orgTree.addMemberPlaceholder')}
+                    </option>
+                    {addableMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName || m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
         </div>

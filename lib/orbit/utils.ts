@@ -12,20 +12,22 @@ export function formatDepartmentPath(path: string): string {
 
 export function getDepartmentTops(departmentPath: string, members: Member[]): Member[] {
   return members.filter((m) => {
-    if (m.departmentPath !== departmentPath) return false
+    if (!m.departmentPaths?.includes(departmentPath)) return false
     if (!m.reportsToId) return true
     const manager = members.find((x) => x.id === m.reportsToId)
-    return !manager || manager.departmentPath !== departmentPath
+    return !manager || !manager.departmentPaths?.includes(departmentPath)
   })
 }
 
-/** Finds dept tops for members whose departmentPath contains `segment` as any component. */
+/** Finds dept tops for members whose departmentPaths contain `segment` as any component of any path. */
 export function getDepartmentTopsBySegment(segment: string, members: Member[]): Member[] {
-  const matched = members.filter(
-    (m) => m.departmentPath && parseDepartmentPath(m.departmentPath).includes(segment),
-  )
-  const paths = Array.from(new Set(matched.map((m) => m.departmentPath as string)))
-  return paths.flatMap((p) => getDepartmentTops(p, members)).filter(
+  const paths = new Set<string>()
+  members.forEach((m) => {
+    m.departmentPaths?.forEach((p) => {
+      if (parseDepartmentPath(p).includes(segment)) paths.add(p)
+    })
+  })
+  return Array.from(paths).flatMap((p) => getDepartmentTops(p, members)).filter(
     (m, i, arr) => arr.findIndex((x) => x.id === m.id) === i,
   )
 }
