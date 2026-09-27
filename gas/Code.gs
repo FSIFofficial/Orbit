@@ -3617,6 +3617,11 @@ function getDiscordWebhookUrl() {
 // noticed/auditable, the same way every other admin-only action in this
 // file is observable through its effect on the sheet.
 function updateDiscordWebhookUrl(url) {
+  // F12: 本物のDiscord Webhook URL以外(内部ネットワークのURL等、SSRFの
+  // 踏み台になり得るもの)を保存させない。空文字(削除)は許可する。
+  if (url && url.indexOf('https://discord.com/api/webhooks/') !== 0 && url.indexOf('https://discordapp.com/api/webhooks/') !== 0) {
+    throw new Error('Discord Webhook URLは https://discord.com/api/webhooks/ または https://discordapp.com/api/webhooks/ で始まるURLのみ登録できます。')
+  }
   PropertiesService.getScriptProperties().setProperty(DISCORD_WEBHOOK_PROPERTY_KEY, url || '')
   notifyAdmins(
     '[Orbit] Discord Webhook URLが変更されました',
@@ -3633,6 +3638,10 @@ function getSlackWebhookUrl() {
 }
 
 function updateSlackWebhookUrl(url) {
+  // F12: 本物のSlack Webhook URL以外を保存させない。空文字(削除)は許可する。
+  if (url && url.indexOf('https://hooks.slack.com/services/') !== 0) {
+    throw new Error('Slack Webhook URLは https://hooks.slack.com/services/ で始まるURLのみ登録できます。')
+  }
   PropertiesService.getScriptProperties().setProperty(SLACK_WEBHOOK_PROPERTY_KEY, url || '')
   notifyAdmins(
     '[Orbit] Slack Webhook URLが変更されました',
