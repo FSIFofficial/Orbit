@@ -226,13 +226,13 @@ function doGet(e) {
  */
 function verifyToken(accessToken) {
   if (!accessToken || typeof accessToken !== 'string') {
-    throw new Error('認証トークンがありません。再ログインしてください。')
+    throw userError('認証トークンがありません。再ログインしてください。')
   }
   // F6: 明らかに形式が不正なリクエストはtokeninfoを呼ぶ前に拒否する
   // (無駄な外部呼び出しを避ける)。GoogleのアクセストークンはURL-safeな
   // 文字列で十分な長さがあることを前提にした簡易チェック。
   if (!/^[A-Za-z0-9\-_.\/]{20,2048}$/.test(accessToken)) {
-    throw new Error('認証トークンの形式が不正です。再ログインしてください。')
+    throw userError('認証トークンの形式が不正です。再ログインしてください。')
   }
 
   // F6: tokeninfoの検証結果を数分間キャッシュする(同じトークンでの連続
@@ -252,7 +252,7 @@ function verifyToken(accessToken) {
   // 廃止した — 必ず設定すること(gas/README.md 4.1参照)。
   var expectedClientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_OAUTH_CLIENT_ID')
   if (!expectedClientId) {
-    throw new Error('サーバー側の設定(GOOGLE_OAUTH_CLIENT_ID)が未設定です。管理者にお問い合わせください。')
+    throw userError('サーバー側の設定(GOOGLE_OAUTH_CLIENT_ID)が未設定です。管理者にお問い合わせください。')
   }
 
   var url = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken)
@@ -262,24 +262,24 @@ function verifyToken(accessToken) {
     var errBody = {}
     try { errBody = JSON.parse(resp.getContentText()) } catch (_) {}
     if (errBody.error_description === 'Token has been expired or revoked.') {
-      throw new Error('認証トークンの有効期限が切れています。再ログインしてください。')
+      throw userError('認証トークンの有効期限が切れています。再ログインしてください。')
     }
-    throw new Error('トークンの検証に失敗しました (HTTP ' + code + ')。再ログインしてください。')
+    throw userError('トークンの検証に失敗しました (HTTP ' + code + ')。再ログインしてください。')
   }
   var info = JSON.parse(resp.getContentText())
   if (info.error || info.error_description) {
-    throw new Error('トークンが無効です: ' + (info.error_description || info.error) + '。再ログインしてください。')
+    throw userError('トークンが無効です: ' + (info.error_description || info.error) + '。再ログインしてください。')
   }
   // Verify the token was issued for this app (audience check).
   // access_token tokeninfo returns 'audience'; id_token tokeninfo uses 'aud'
   var audience = info.audience || info.azp
   if (audience !== expectedClientId) {
-    throw new Error('トークンの発行元がこのアプリと一致しません。')
+    throw userError('トークンの発行元がこのアプリと一致しません。')
   }
-  if (!info.email) throw new Error('トークンからメールアドレスを取得できませんでした。')
+  if (!info.email) throw userError('トークンからメールアドレスを取得できませんでした。')
   // F6: メールアドレスが確認済み(email_verified)のGoogleアカウントのみ許可する
   if (info.email_verified === false || info.email_verified === 'false') {
-    throw new Error('メールアドレスが確認されていないGoogleアカウントのため利用できません。')
+    throw userError('メールアドレスが確認されていないGoogleアカウントのため利用できません。')
   }
 
   var result = { email: info.email }
@@ -303,7 +303,7 @@ function getActingMember(email) {
   // メール→メンバーIDの解決は非公開のMemberEmailsシート側で行う(Membersシートは
   // 公開CSVなのでemail列を置いていない — SHEET_MEMBER_EMAILS参照)。
   var memberId = findMemberIdByEmail(email)
-  if (!memberId) throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+  if (!memberId) throw userError('メンバー登録が見つかりません。管理者にお問い合わせください。')
 
   var sheet = getSheet(SHEET_MEMBERS)
   var headers = headerRow(sheet)
@@ -311,7 +311,7 @@ function getActingMember(email) {
   var roleCol = headers.indexOf('role')
   var projectIdsCol = headers.indexOf('project_ids')
   var overridesCol = headers.indexOf('permission_overrides_json')
-  if (idCol < 0) throw new Error('Membersシートの構造が不正です。')
+  if (idCol < 0) throw userError('Membersシートの構造が不正です。')
   var data = sheet.getDataRange().getValues()
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][idCol]) === memberId) {
@@ -329,7 +329,7 @@ function getActingMember(email) {
   }
   // MemberEmails側には行があるがMembers側に対応する行が無い(データ不整合) —
   // 通常起こらないはずだが、安全側に倒して「見つからない」として扱う
-  throw new Error('メンバー登録が見つかりません。管理者にお問い合わせください。')
+  throw userError('メンバー登録が見つかりません。管理者にお問い合わせください。')
 }
 
 /**
@@ -458,7 +458,7 @@ function computeAutoLevels(currentLevels, cumulativePoints, thresholds) {
  */
 function importPortableRecord(memberId, skillPoints, qualifications) {
   var memberRow = findRow(SHEET_MEMBERS, memberId)
-  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  if (!memberRow) throw userError('メンバーが見つかりません: ' + memberId)
 
   var currentPoints = {}
   try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
@@ -510,7 +510,7 @@ function importPortableRecord(memberId, skillPoints, qualifications) {
  */
 function awardSkillPoints(taskId, memberId, points) {
   var memberRow = findRow(SHEET_MEMBERS, memberId)
-  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  if (!memberRow) throw userError('メンバーが見つかりません: ' + memberId)
 
   var currentPoints = {}
   try { currentPoints = JSON.parse(memberRow.skill_points_json || '{}') } catch (_) {}
@@ -545,17 +545,17 @@ function awardSkillPoints(taskId, memberId, points) {
  */
 function submitQuizResult(quizId, memberId, answers, acting) {
   if (memberId !== acting.id && acting.role === '一般') {
-    throw new Error('他のメンバーの代わりに検定を受けることはできません。')
+    throw userError('他のメンバーの代わりに検定を受けることはできません。')
   }
   var defs = getQuizDefinitions()
   var quiz = null
   for (var i = 0; i < defs.length; i++) {
     if (defs[i].id === quizId) { quiz = defs[i]; break }
   }
-  if (!quiz) throw new Error('検定が見つかりません: ' + quizId)
+  if (!quiz) throw userError('検定が見つかりません: ' + quizId)
 
   var questions = quiz.questions || []
-  if (questions.length === 0) throw new Error('検定に設問がありません。')
+  if (questions.length === 0) throw userError('検定に設問がありません。')
 
   var correct = 0
   for (var j = 0; j < questions.length; j++) {
@@ -659,7 +659,7 @@ function authorizeAction(acting, action, body) {
   // isActingFullAdmin は使わない（restricted_roles 依存で穴が開くため）。
   if (daihyoOnly.indexOf(action) >= 0) {
     if (checkPermissionOverride(acting, action, body)) return
-    throw new Error('この操作は代表のみ実行できます。')
+    throw userError('この操作は代表のみ実行できます。')
   }
 
   // --- updateSetting / Webhook URL設定: 団体ごとに isActingFullAdmin (=
@@ -669,7 +669,7 @@ function authorizeAction(acting, action, body) {
   if (action === 'updateSetting' || action === 'updateDiscordWebhookUrl' || action === 'updateSlackWebhookUrl' || action === 'testDiscordWebhook' || action === 'testSlackWebhook' || action === 'updateProjectHealth') {
     if (isActingFullAdmin(acting)) return
     if (checkPermissionOverride(acting, action, body)) return
-    throw new Error('この操作は代表または全権管理者のみ実行できます。')
+    throw userError('この操作は代表または全権管理者のみ実行できます。')
   }
 
   // --- 代表 or 班長 (任意の管理者ロール) ---
@@ -735,7 +735,7 @@ function authorizeAction(acting, action, body) {
     if (!isLeader) {
       // ロールで弾かれた場合でも permission_overrides_json に該当する例外があれば許可（OR条件）
       if (checkPermissionOverride(acting, action, body)) return
-      throw new Error('この操作は代表または管理者（班長以上）のみ実行できます。')
+      throw userError('この操作は代表または管理者（班長以上）のみ実行できます。')
     }
     // 承認ステップの担当者チェック（代表は上で return 済みなので班長のみ到達）
     if (action === 'approveExpenseStep' || action === 'approveFormStep') {
@@ -772,7 +772,7 @@ function authorizeAction(acting, action, body) {
       } catch(e) {}
       if (!approverCheckPassed) {
         if (checkPermissionOverride(acting, action, body)) return
-        throw new Error('この承認ステップの担当者ではありません。')
+        throw userError('この承認ステップの担当者ではありません。')
       }
     }
 
@@ -786,7 +786,7 @@ function authorizeAction(acting, action, body) {
           // escalated: 全権管理者（isFullAdmin）のみ承認可能
           if (!isActingFullAdmin(acting)) {
             if (checkPermissionOverride(acting, action, body)) return
-            throw new Error('重要度が「重要」または「対外公開」のタスクは、全権管理者のみ承認できます。')
+            throw userError('重要度が「重要」または「対外公開」のタスクは、全権管理者のみ承認できます。')
           }
         } else {
           // non-escalated: タスク登録者の上長（creator の reports_to_id）のみ承認可能
@@ -801,7 +801,7 @@ function authorizeAction(acting, action, body) {
             }
             if (approverId && acting.id !== approverId) {
               if (checkPermissionOverride(acting, action, body)) return
-              throw new Error('このタスクの承認者として指定されていないため、承認できません。')
+              throw userError('このタスクの承認者として指定されていないため、承認できません。')
             }
           }
         }
@@ -827,7 +827,7 @@ function authorizeAction(acting, action, body) {
       // project_id が特定できた場合のみスコープチェック（特定できない操作は通過させる）
       if (targetProjectId && actingProjectIds.indexOf(targetProjectId) < 0) {
         if (checkPermissionOverride(acting, action, body)) return
-        throw new Error('この操作は担当プロジェクトの範囲内でのみ実行できます。')
+        throw userError('この操作は担当プロジェクトの範囲内でのみ実行できます。')
       }
 
       // updateSearchProfile は本人であればスコープ制限なしで許可
@@ -869,7 +869,7 @@ function authorizeAction(acting, action, body) {
         for (var mi = 0; mi < memberIdsToCheck.length; mi++) {
           if (!scopedMemberIdSet[memberIdsToCheck[mi]]) {
             if (checkPermissionOverride(acting, action, body)) return
-            throw new Error('この操作は担当プロジェクトのメンバーにのみ実行できます。')
+            throw userError('この操作は担当プロジェクトのメンバーにのみ実行できます。')
           }
         }
       }
@@ -894,7 +894,7 @@ function authorizeAction(acting, action, body) {
   if (selfOrAdmin.indexOf(action) >= 0) {
     var targetId = String(body.memberId || '')
     if (targetId !== acting.id && !isLeader) {
-      throw new Error('この操作は本人または管理者のみ実行できます。')
+      throw userError('この操作は本人または管理者のみ実行できます。')
     }
     return
   }
@@ -916,7 +916,7 @@ function authorizeAction(acting, action, body) {
   if (selfOnly.indexOf(action) >= 0) {
     var selfTargetId = String(body.memberId || '')
     if (selfTargetId !== acting.id) {
-      throw new Error('この操作は本人のみ実行できます。')
+      throw userError('この操作は本人のみ実行できます。')
     }
     return
   }
@@ -968,14 +968,14 @@ function authorizeAction(acting, action, body) {
             if (reviewerIdList.indexOf(acting.id) >= 0) reviewerAllowed = true
           }
           if (!reviewerAllowed) {
-            throw new Error('担当者は「完了」に変更できません。確認者または管理者に依頼してください。')
+            throw userError('担当者は「完了」に変更できません。確認者または管理者に依頼してください。')
           }
         } else {
           // 「完了」以外のステータス変更は担当者のみ許可
           if (task) {
             var assigneeIds = String(task.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
             if (assigneeIds.length > 0 && assigneeIds.indexOf(acting.id) < 0) {
-              throw new Error('このタスクの担当者のみステータスを変更できます。')
+              throw userError('このタスクの担当者のみステータスを変更できます。')
             }
           }
         }
@@ -988,7 +988,7 @@ function authorizeAction(acting, action, body) {
           ? String(taskForApproval.reviewer_ids || taskForApproval.reviewer_id || '').split(',').map(function(s){return s.trim()}).filter(Boolean)
           : []
         if (approvalReviewerIds.indexOf(acting.id) < 0) {
-          throw new Error('このタスクの確認者ではないため承認できません。')
+          throw userError('このタスクの確認者ではないため承認できません。')
         }
       }
     }
@@ -1004,7 +1004,7 @@ function authorizeAction(acting, action, body) {
     ]
     if (taskOwnerScopedActions.indexOf(action) >= 0) {
       var tosTask = findRow(SHEET_TASKS, String(body.taskId || ''))
-      if (!tosTask) throw new Error('対象のタスクが見つかりません。')
+      if (!tosTask) throw userError('対象のタスクが見つかりません。')
 
       if (!isActingFullAdmin(acting)) {
         var tosAssigneeIds = String(tosTask.assignee_id || '').split(',').map(function (s) { return s.trim() }).filter(Boolean)
@@ -1015,7 +1015,7 @@ function authorizeAction(acting, action, body) {
           tosReviewerIds.indexOf(acting.id) >= 0 ||
           (tosCreatorId && tosCreatorId === acting.id)
         if (!tosAllowed) {
-          throw new Error('この操作はタスクの担当者・確認者・作成者・管理者のみ実行できます。')
+          throw userError('この操作はタスクの担当者・確認者・作成者・管理者のみ実行できます。')
         }
       }
 
@@ -1032,7 +1032,7 @@ function authorizeAction(acting, action, body) {
   // Unknown action — 安全側に倒して管理者限定（新しいactionが追加された際の保護）
   if (!isLeader) {
     // コメント: 未分類のactionは代表/班長のみに制限（新機能追加時の安全装置）
-    throw new Error('この操作は代表または管理者のみ実行できます。(未分類のaction: ' + action + ')')
+    throw userError('この操作は代表または管理者のみ実行できます。(未分類のaction: ' + action + ')')
   }
 }
 
@@ -1047,7 +1047,7 @@ var HISTORY_CAP = 50
 // コメントは(historyと違って)件数上限による自動切り捨てが無いため、
 // 新規/既存の判定だけで足りる。
 function validateCommentsUpdate(task, newComments, acting) {
-  if (!Array.isArray(newComments)) throw new Error('コメントの形式が不正です。')
+  if (!Array.isArray(newComments)) throw userError('コメントの形式が不正です。')
   if (isActingFullAdmin(acting)) return
 
   var oldComments = []
@@ -1059,24 +1059,24 @@ function validateCommentsUpdate(task, newComments, acting) {
   var newIds = {}
 
   newComments.forEach(function (c) {
-    if (!c || !c.id) throw new Error('コメントの形式が不正です。')
+    if (!c || !c.id) throw userError('コメントの形式が不正です。')
     newIds[c.id] = true
     var old = oldById[c.id]
     if (old) {
       var changed = JSON.stringify(old) !== JSON.stringify(c)
       if (changed && old.byId !== acting.id) {
-        throw new Error('他のメンバーが投稿したコメントは編集できません。')
+        throw userError('他のメンバーが投稿したコメントは編集できません。')
       }
     } else {
       if (c.byId !== acting.id) {
-        throw new Error('コメントの投稿者は本人である必要があります。')
+        throw userError('コメントの投稿者は本人である必要があります。')
       }
     }
   })
 
   oldComments.forEach(function (c) {
     if (c && c.id && !newIds[c.id] && c.byId !== acting.id) {
-      throw new Error('他のメンバーが投稿したコメントは削除できません。')
+      throw userError('他のメンバーが投稿したコメントは削除できません。')
     }
   })
 }
@@ -1090,7 +1090,7 @@ function validateCommentsUpdate(task, newComments, acting) {
 // 既存エントリの内容・順序が1件でも変わっている、または上限に達していない
 // のに古いエントリが消えている場合は拒否する。全権管理者は制限なし。
 function validateHistoryUpdate(task, newHistory, acting) {
-  if (!Array.isArray(newHistory)) throw new Error('履歴の形式が不正です。')
+  if (!Array.isArray(newHistory)) throw userError('履歴の形式が不正です。')
   if (isActingFullAdmin(acting)) return
 
   var oldHistory = []
@@ -1118,7 +1118,7 @@ function validateHistoryUpdate(task, newHistory, acting) {
 
   addedEntries.forEach(function (h) {
     if (h.byId !== acting.id) {
-      throw new Error('新しい履歴の記録者は本人である必要があります。')
+      throw userError('新しい履歴の記録者は本人である必要があります。')
     }
   })
 
@@ -1128,7 +1128,7 @@ function validateHistoryUpdate(task, newHistory, acting) {
     remainingEntries.length !== expected.length ||
     JSON.stringify(remainingEntries) !== JSON.stringify(expected)
   ) {
-    throw new Error('他のメンバーが記録した履歴を変更・削除することはできません。')
+    throw userError('他のメンバーが記録した履歴を変更・削除することはできません。')
   }
 }
 
@@ -1137,6 +1137,28 @@ function validateHistoryUpdate(task, newHistory, acting) {
 // checkAndGenerateRecurringTasksはgenerateRecurringTasksLocked()内で
 // 既に自前のスクリプトロックを取得するため、ここでも取得すると同一実行内で
 // 同じロックを二重に待つことになり無駄(かつ不必要に複雑)なので対象外にする。
+// F14: 業務上のエラー(利用者にそのままメッセージを見せてよいもの)は必ず
+// この関数で作って投げる。SpreadsheetApp等のApps Scriptサービスが投げる
+// 例外やコード内の想定外のバグ(TypeError等)にはこの目印(isUserError)が
+// 付かないため、doPost側でtoErrorMessage()を使って「目印の有無」だけで
+// 安全に振り分けられる(err.nameのように実行環境依存の値に頼らない)。
+function userError(message) {
+  var e = new Error(message)
+  e.isUserError = true
+  return e
+}
+
+// doPost内の各catchで例外をクライアント向けメッセージに変換する共通処理。
+// userError()由来(業務エラー)ならそのメッセージをそのまま返す。目印が
+// 無い例外は「予期しない例外」とみなし、スタックトレース等の内部情報は
+// Loggerにのみ記録し(リクエスト本文やトークンは記録しない)、フロントには
+// 定型メッセージだけを返す。
+function toErrorMessage(err) {
+  if (err && err.isUserError) return String(err.message || err)
+  Logger.log('doPost unexpected error [' + (err && err.name) + ']: ' + ((err && err.stack) || (err && err.message) || err))
+  return '処理中に問題が発生しました。しばらくしてから再度お試しください。'
+}
+
 var LOCK_EXEMPT_ACTIONS = ['translateText', 'getMyEmails', 'fetchDailyReports', 'checkAndGenerateRecurringTasks']
 
 function doPost(e) {
@@ -1156,7 +1178,7 @@ function doPost(e) {
         var loginEmail = verifyToken(body.authToken || '').email
         return jsonOutput({ ok: true, result: { memberId: findMemberIdByEmail(loginEmail) } })
       } catch (loginErr) {
-        return jsonOutput({ ok: false, error: String(loginErr) })
+        return jsonOutput({ ok: false, error: toErrorMessage(loginErr) })
       }
     }
 
@@ -1174,7 +1196,7 @@ function doPost(e) {
       actingMember = getActingMember(verifyToken(body.authToken || '').email)
       authorizeAction(actingMember, body.action, body)
     } catch (authErr) {
-      return jsonOutput({ ok: false, error: String(authErr), authError: true })
+      return jsonOutput({ ok: false, error: toErrorMessage(authErr), authError: true })
     }
     // ------------------------------------------------------------------------
 
@@ -1386,7 +1408,7 @@ function doPost(e) {
         // F5: javascript:等の危険なURLを保存させない
         ;(body.deliverables || []).forEach(function (d) {
           if (d && d.url && !isSafeHttpUrl(d.url)) {
-            throw new Error('成果物のURLは http または https で始まるURLのみ登録できます。')
+            throw userError('成果物のURLは http または https で始まるURLのみ登録できます。')
           }
         })
         result = updateTaskFields(body.taskId, {
@@ -1703,21 +1725,16 @@ function doPost(e) {
         result = { ok: true }
         break
       default:
-        throw new Error('Unknown action: ' + body.action)
+        throw userError('Unknown action: ' + body.action)
     }
     return jsonOutput({ ok: true, result: result })
   } catch (err) {
-    // F14: こちらが意図して投げた業務上のエラー(throw new Error('日本語
-    // メッセージ'))はerr.name==='Error'になるため、そのままフロントに返す
-    // (個別のthrowによるメッセージは維持する)。TypeError等、こちらが想定
-    // していない例外は詳細をLoggerに記録し、フロントには定型メッセージだけ
-    // を返す(スタックトレース等の内部情報を渡さない)。リクエストの中身
-    // (body)やトークンはログに出さない。
-    if (err && err.name && err.name !== 'Error') {
-      Logger.log('doPost unexpected error [' + err.name + ']: ' + (err.stack || err.message || err))
-      return jsonOutput({ ok: false, error: '処理中に問題が発生しました。しばらくしてから再度お試しください。' })
-    }
-    return jsonOutput({ ok: false, error: String(err) })
+    // F14: userError()で作られた業務上のエラー(目印つき)はそのメッセージを
+    // フロントに返す。目印の無い例外(SpreadsheetApp等のApps Scriptサービス
+    // が投げるものや、コード内の想定外のバグ)は詳細をLoggerに記録し、
+    // フロントには定型メッセージだけを返す(スタックトレース等の内部情報や
+    // リクエストの中身・トークンは返さない/ログにも出さない)。
+    return jsonOutput({ ok: false, error: toErrorMessage(err) })
   } finally {
     if (lock) lock.releaseLock()
   }
@@ -1820,7 +1837,7 @@ function updateTaskFields(taskId, fields) {
 // 上書きしない。
 function approveTaskReview(taskId, actorId, comment) {
   var task = findRow(SHEET_TASKS, taskId)
-  if (!task) throw new Error('タスクが見つかりません: ' + taskId)
+  if (!task) throw userError('タスクが見つかりません: ' + taskId)
   var approvals = []
   try { approvals = JSON.parse(task.review_approvals_json || '[]') } catch (_) {}
   var already = approvals.some(function (a) { return a.memberId === actorId })
@@ -2916,9 +2933,9 @@ function findMemberIdByEmail(email) {
 // hotlinked from an <img> tag, replaces any previous upload for this
 // member, and records the resulting URL on their Members row.
 function uploadAvatar(memberId, dataUrl, filename, folderId) {
-  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  if (!folderId) throw userError('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
   var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
-  if (!match) throw new Error('Expected a base64 data URL')
+  if (!match) throw userError('Expected a base64 data URL')
   var mimeType = match[1]
   var base64Data = match[2]
 
@@ -2951,9 +2968,9 @@ function uploadAvatar(memberId, dataUrl, filename, folderId) {
 // 団体ロゴをDriveにアップロードし、Settingsシートのorg_logo_urlを更新する。
 // uploadAvatarと異なりMembersシートは変更しない。
 function uploadOrgLogo(dataUrl, filename, folderId) {
-  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  if (!folderId) throw userError('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
   var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
-  if (!match) throw new Error('Expected a base64 data URL')
+  if (!match) throw userError('Expected a base64 data URL')
   var mimeType = match[1]
   var base64Data = match[2]
 
@@ -2982,9 +2999,9 @@ function uploadOrgLogo(dataUrl, filename, folderId) {
 // 既存ファイルの削除は行わない。領収書は画像だけでなくPDFのこともあるので
 // サムネイルURLではなく汎用のDrive表示URLを返す。
 function uploadExpenseReceipt(dataUrl, filename, folderId) {
-  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  if (!folderId) throw userError('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
   var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
-  if (!match) throw new Error('Expected a base64 data URL')
+  if (!match) throw userError('Expected a base64 data URL')
   var mimeType = match[1]
   var base64Data = match[2]
 
@@ -3006,9 +3023,9 @@ function uploadExpenseReceipt(dataUrl, filename, folderId) {
 // 既存ファイルの削除はしない)。ただしこちらは画像専用なので、
 // アバターと同じgoogleusercontent.comホットリンク形式のURLを返す。
 function uploadSurveyImage(dataUrl, filename, folderId) {
-  if (!folderId) throw new Error('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
+  if (!folderId) throw userError('Drive folder is not configured (NEXT_PUBLIC_DRIVE_FOLDER_ID)')
   var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/)
-  if (!match) throw new Error('Expected a base64 data URL')
+  if (!match) throw userError('Expected a base64 data URL')
   var mimeType = match[1]
   var base64Data = match[2]
 
@@ -3074,7 +3091,7 @@ function updateSetting(key, value) {
   var headers = headerRow(sheet)
   var keyCol = headers.indexOf('key') + 1
   var valueCol = headers.indexOf('value') + 1
-  if (keyCol === 0 || valueCol === 0) throw new Error('Settings sheet needs "key" and "value" columns')
+  if (keyCol === 0 || valueCol === 0) throw userError('Settings sheet needs "key" and "value" columns')
 
   var lastRow = sheet.getLastRow()
   var keys = lastRow > 1 ? sheet.getRange(2, keyCol, lastRow - 1, 1).getValues() : []
@@ -3097,7 +3114,7 @@ function updateSetting(key, value) {
 
 function getSheet(name) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name)
-  if (!sheet) throw new Error('Sheet not found: ' + name)
+  if (!sheet) throw userError('Sheet not found: ' + name)
   return sheet
 }
 
@@ -3141,7 +3158,7 @@ function findRow(sheetName, rowId) {
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id')
   // F14: シート名などの内部情報はエラーメッセージに含めない
-  if (idCol === -1) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
+  if (idCol === -1) throw userError('シートの構成が不正です。管理者にお問い合わせください。')
 
   var lastRow = sheet.getLastRow()
   var values = sheet.getRange(2, 1, Math.max(lastRow - 1, 0), headers.length).getValues()
@@ -3274,7 +3291,7 @@ function updateRowFields(sheetName, rowId, fields) {
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id') + 1
   // F14: シート名などの内部情報はエラーメッセージに含めない
-  if (idCol === 0) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
+  if (idCol === 0) throw userError('シートの構成が不正です。管理者にお問い合わせください。')
 
   var lastRow = sheet.getLastRow()
   var ids = sheet.getRange(2, idCol, Math.max(lastRow - 1, 0), 1).getValues()
@@ -3285,7 +3302,7 @@ function updateRowFields(sheetName, rowId, fields) {
       break
     }
   }
-  if (targetRow === -1) throw new Error(sheetName + ' row not found for id ' + rowId)
+  if (targetRow === -1) throw userError(sheetName + ' row not found for id ' + rowId)
 
   var missingKeys = []
   var matchedCount = 0
@@ -3308,7 +3325,7 @@ function updateRowFields(sheetName, rowId, fields) {
   // 新しい列をCode.gs側に追加しただけでは既存のシートには反映されない
   // （setupOrbit()の再実行が必要）ため、このケースは実運用で起こりうる。
   if (matchedCount === 0 && missingKeys.length > 0) {
-    throw new Error(
+    throw userError(
       sheetName + 'シートに列が見つかりません: ' + missingKeys.join(', ') +
       '。Apps Scriptエディタで setupOrbit() を実行してヘッダー列を追加してください。',
     )
@@ -3632,7 +3649,7 @@ function updateDiscordWebhookUrl(url) {
   // F12: 本物のDiscord Webhook URL以外(内部ネットワークのURL等、SSRFの
   // 踏み台になり得るもの)を保存させない。空文字(削除)は許可する。
   if (url && url.indexOf('https://discord.com/api/webhooks/') !== 0 && url.indexOf('https://discordapp.com/api/webhooks/') !== 0) {
-    throw new Error('Discord Webhook URLは https://discord.com/api/webhooks/ または https://discordapp.com/api/webhooks/ で始まるURLのみ登録できます。')
+    throw userError('Discord Webhook URLは https://discord.com/api/webhooks/ または https://discordapp.com/api/webhooks/ で始まるURLのみ登録できます。')
   }
   PropertiesService.getScriptProperties().setProperty(DISCORD_WEBHOOK_PROPERTY_KEY, url || '')
   notifyAdmins(
@@ -3652,7 +3669,7 @@ function getSlackWebhookUrl() {
 function updateSlackWebhookUrl(url) {
   // F12: 本物のSlack Webhook URL以外を保存させない。空文字(削除)は許可する。
   if (url && url.indexOf('https://hooks.slack.com/services/') !== 0) {
-    throw new Error('Slack Webhook URLは https://hooks.slack.com/services/ で始まるURLのみ登録できます。')
+    throw userError('Slack Webhook URLは https://hooks.slack.com/services/ で始まるURLのみ登録できます。')
   }
   PropertiesService.getScriptProperties().setProperty(SLACK_WEBHOOK_PROPERTY_KEY, url || '')
   notifyAdmins(
@@ -3715,7 +3732,7 @@ function notifyChat(content) {
 
 function testDiscordWebhook() {
   var url = getDiscordWebhookUrl()
-  if (!url) throw new Error('Discord Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  if (!url) throw userError('Discord Webhook URLが保存されていません。先にURLを入力して保存してください。')
   var resp = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
@@ -3728,14 +3745,14 @@ function testDiscordWebhook() {
   var code = resp.getResponseCode()
   // Discordの正常応答は204 No Content
   if (code < 200 || code >= 300) {
-    throw new Error('Discordへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+    throw userError('Discordへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
   }
   return { tested: true }
 }
 
 function testSlackWebhook() {
   var url = getSlackWebhookUrl()
-  if (!url) throw new Error('Slack Webhook URLが保存されていません。先にURLを入力して保存してください。')
+  if (!url) throw userError('Slack Webhook URLが保存されていません。先にURLを入力して保存してください。')
   var resp = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
@@ -3747,7 +3764,7 @@ function testSlackWebhook() {
   var code = resp.getResponseCode()
   // Slack Incoming Webhookの正常応答は200(本文 "ok")
   if (code < 200 || code >= 300) {
-    throw new Error('Slackへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
+    throw userError('Slackへの送信に失敗しました(HTTP ' + code + ')。Webhook URLが正しいか確認してください。')
   }
   return { tested: true }
 }
@@ -3876,7 +3893,7 @@ function ensureFormSubmissionsSheet() {
 // read-modify-writeパターンで、custom_fields_json等の既存列と同じ設計。
 function saveSurveyResponse(memberId, answers) {
   var memberRow = findRow(SHEET_MEMBERS, memberId)
-  if (!memberRow) throw new Error('メンバーが見つかりません: ' + memberId)
+  if (!memberRow) throw userError('メンバーが見つかりません: ' + memberId)
   var existing = []
   try { existing = JSON.parse(memberRow.survey_responses_json || '[]') } catch (_) {}
   var responseId = Utilities.getUuid()
@@ -3892,7 +3909,7 @@ function saveSurveyResponse(memberId, answers) {
 function saveExpenseApplication(application, acting) {
   // F5: javascript:等の危険なURLを保存させない
   if (application.receiptUrl && !isSafeHttpUrl(application.receiptUrl)) {
-    throw new Error('領収書URLは http または https で始まるURLのみ登録できます。')
+    throw userError('領収書URLは http または https で始まるURLのみ登録できます。')
   }
   var sheet = ensureExpensesSheet()
   protectRowFromFormulaInjection(sheet, headerRow(sheet), sheet.getLastRow() + 1, 'Expenses')
@@ -3932,18 +3949,18 @@ function saveExpenseApplication(application, acting) {
 function resubmitExpense(applicationId, fields, actorId) {
   var sheet = ensureExpensesSheet()
   var found = findExpenseRow(sheet, applicationId)
-  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+  if (!found) throw userError('経費申請が見つかりません: ' + applicationId)
 
   var headers = found.headers
   var applicantId = String(found.data[headers.indexOf('applicant_id')])
   if (actorId && actorId !== applicantId) {
-    throw new Error('この経費申請を再提出する権限がありません。')
+    throw userError('この経費申請を再提出する権限がありません。')
   }
 
   fields = fields || {}
   // F5: javascript:等の危険なURLを保存させない
   if (fields.receiptUrl && !isSafeHttpUrl(fields.receiptUrl)) {
-    throw new Error('領収書URLは http または https で始まるURLのみ登録できます。')
+    throw userError('領収書URLは http または https で始まるURLのみ登録できます。')
   }
   var approvalSteps = fields.approvalSteps || JSON.parse(String(found.data[headers.indexOf('approval_steps_json')] || '[]'))
   var amount = fields.amount != null ? fields.amount : found.data[headers.indexOf('amount')]
@@ -3994,7 +4011,7 @@ function findExpenseRow(sheet, applicationId) {
 function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   var sheet = ensureExpensesSheet()
   var found = findExpenseRow(sheet, applicationId)
-  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+  if (!found) throw userError('経費申請が見つかりません: ' + applicationId)
 
   var headers = found.headers
   var data = found.data
@@ -4010,7 +4027,7 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
   // 3-1: stepId 順序チェック — 現在のステップと一致しない場合は拒否
   var currentStep = steps[currentIdx]
   if (!currentStep || currentStep.id !== stepId) {
-    throw new Error('指定されたステップは現在の承認ステップではありません。')
+    throw userError('指定されたステップは現在の承認ステップではありません。')
   }
 
   approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
@@ -4070,7 +4087,7 @@ function processExpenseStep(applicationId, stepId, actorId, action, comment) {
 function setExpenseStatus(applicationId, status, reason, actorId) {
   var sheet = ensureExpensesSheet()
   var found = findExpenseRow(sheet, applicationId)
-  if (!found) throw new Error('経費申請が見つかりません: ' + applicationId)
+  if (!found) throw userError('経費申請が見つかりません: ' + applicationId)
 
   var headers = found.headers
   var statusCol = headers.indexOf('status')
@@ -4079,7 +4096,7 @@ function setExpenseStatus(applicationId, status, reason, actorId) {
 
   // 取り下げは申請者本人のみ
   if (status === 'withdrawn' && actorId && actorId !== applicantId) {
-    throw new Error('この経費申請を取り下げる権限がありません。')
+    throw userError('この経費申請を取り下げる権限がありません。')
   }
 
   sheet.getRange(found.row, statusCol + 1).setValue(status)
@@ -4218,7 +4235,7 @@ function findFormSubmissionRow(sheet, submissionId) {
 function processFormStep(submissionId, stepId, actorId, action, comment) {
   var sheet = ensureFormSubmissionsSheet()
   var found = findFormSubmissionRow(sheet, submissionId)
-  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+  if (!found) throw userError('フォーム申請が見つかりません: ' + submissionId)
 
   var headers = found.headers
   var data = found.data
@@ -4243,7 +4260,7 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
 
   // 3-1: stepId 順序チェック — 現在のステップと一致しない場合は拒否
   if (!step || step.id !== stepId) {
-    throw new Error('指定されたステップは現在の承認ステップではありません。')
+    throw userError('指定されたステップは現在の承認ステップではありません。')
   }
 
   approvals.push({ stepId: stepId, memberId: actorId, at: new Date().toISOString(), action: action, comment: comment || '' })
@@ -4292,7 +4309,7 @@ function processFormStep(submissionId, stepId, actorId, action, comment) {
 function setFormSubmissionStatus(submissionId, status, reason) {
   var sheet = ensureFormSubmissionsSheet()
   var found = findFormSubmissionRow(sheet, submissionId)
-  if (!found) throw new Error('フォーム申請が見つかりません: ' + submissionId)
+  if (!found) throw userError('フォーム申請が見つかりません: ' + submissionId)
 
   var headers = found.headers
   var statusCol = headers.indexOf('status')
@@ -4448,7 +4465,7 @@ function removeCandidate(candidateId) {
   var headers = headerRow(sheet)
   var idCol = headers.indexOf('id') + 1
   // F14: シート名などの内部情報はエラーメッセージに含めない
-  if (idCol === 0) throw new Error('シートの構成が不正です。管理者にお問い合わせください。')
+  if (idCol === 0) throw userError('シートの構成が不正です。管理者にお問い合わせください。')
   var lastRow = sheet.getLastRow()
   var ids = sheet.getRange(2, idCol, Math.max(lastRow - 1, 0), 1).getValues()
   for (var i = 0; i < ids.length; i++) {
@@ -4464,7 +4481,7 @@ function removeCandidate(candidateId) {
 // Candidatesシートの行は自動削除しない — 手動でremoveCandidateするまで残す。
 function convertCandidateToMember(candidateId, role) {
   var candidate = findRow(SHEET_CANDIDATES, candidateId)
-  if (!candidate) throw new Error('候補者が見つかりません: ' + candidateId)
+  if (!candidate) throw userError('候補者が見つかりません: ' + candidateId)
   var created = addMember(String(candidate.name || ''), String(candidate.email || ''), '', role || '一般')
   updateRowFields(SHEET_CANDIDATES, candidateId, { status: 'hired', updated_at: new Date().toISOString() })
   return { memberId: created.id }
@@ -4478,13 +4495,13 @@ function bulkUpdateSkillLevels(updates) {
 
   var ss = SpreadsheetApp.getActiveSpreadsheet()
   var sheet = ss.getSheetByName(SHEET_MEMBERS)
-  if (!sheet) throw new Error('Membersシートが見つかりません')
+  if (!sheet) throw userError('Membersシートが見つかりません')
 
   var data = sheet.getDataRange().getValues()
   var headers = data[0].map(function(h) { return String(h).trim() })
   var idCol = headers.indexOf('id')
   var skillLevelsCol = headers.indexOf('skill_levels_json')
-  if (idCol < 0 || skillLevelsCol < 0) throw new Error('Membersシートの列が不足しています')
+  if (idCol < 0 || skillLevelsCol < 0) throw userError('Membersシートの列が不足しています')
 
   // group updates by memberId
   var byMember = {}
