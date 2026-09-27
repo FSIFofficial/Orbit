@@ -1180,7 +1180,13 @@ function toErrorMessage(err) {
   return '処理中に問題が発生しました。しばらくしてから再度お試しください。'
 }
 
-var LOCK_EXEMPT_ACTIONS = ['translateText', 'getMyEmails', 'fetchDailyReports', 'checkAndGenerateRecurringTasks']
+// testDiscordWebhook/testSlackWebhookはスプレッドシートを書き換えず外部
+// Webhookへの疎通確認(UrlFetchApp、数百ms〜数秒かかりうる)のみなので、
+// ロック保持時間を最小限にするため対象外にする(レビュー指摘対応4)。
+var LOCK_EXEMPT_ACTIONS = [
+  'translateText', 'getMyEmails', 'fetchDailyReports', 'checkAndGenerateRecurringTasks',
+  'testDiscordWebhook', 'testSlackWebhook',
+]
 
 function doPost(e) {
   var result
@@ -3337,16 +3343,17 @@ function updateRowFields(sheetName, rowId, fields) {
 
   var missingKeys = []
   var matchedCount = 0
-  var protectedCols = FORMULA_INJECTION_PROTECTED_COLUMNS[sheetName] || []
+  // F4(性能・レビュー指摘対応4): ここでは書式を設定しない。保護対象列は
+  // 行の新規作成時に必ずprotectRowFromFormulaInjection()で書式なしテキスト
+  // (@)にしてからappendRowしているため、既存行のセルは既にその書式に
+  // なっている前提が成り立つ(そうでない過去データはauditFormulaInjectionRisks(true)
+  // で一度だけ修正する — gas/README.md参照)。毎回setNumberFormatし直すと
+  // 書き込みの多いTasks等で余計なAPI呼び出しが倍になるため省略する。
   Object.keys(fields).forEach(function (key) {
     var col = headers.indexOf(key) + 1
     if (col === 0) {
       missingKeys.push(key)
       return // このシートにまだ無い列 — 個別にはスキップするが、下でまとめて報告する
-    }
-    // F4: 値を書き込む前に書式なしテキスト(@)にする(順序が重要 — 後からでは遅い)
-    if (protectedCols.indexOf(key) >= 0) {
-      sheet.getRange(targetRow, col).setNumberFormat('@')
     }
     sheet.getRange(targetRow, col).setValue(fields[key])
     matchedCount++
