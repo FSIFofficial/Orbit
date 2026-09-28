@@ -338,53 +338,85 @@ function getActingMember(email) {
   throw userError('メンバー登録が見つかりません。管理者にお問い合わせください。')
 }
 
+// ---- 権限の例外(permission_overrides) ------------------------------------------
+//
+// 例外は「対象の種類(task / project / department / recruiting)」と「対象ID」
+// 「アクセス水準(view < edit < approve)」の組。例外で許可するのは、下の表で
+// その種類の例外を受け付けると決めた操作だけにする。表に無い操作(代表専用の
+// 操作 — 役職の変更、メンバーの追加・削除など — や、設定・メンバー情報の
+// 変更、経費・フォームの承認など)は、どの例外でも許可しない。
+//   task      タスクを対象にする操作。タスクの例外に加え、そのタスクが属する
+//             プロジェクト・部署の例外も使える(プロジェクト・部署はリクエストの
+//             値ではなく、シート上のタスクの値で判定する)
+//   project   プロジェクトを対象にする操作。body.projectId のプロジェクトの例外
+//   recruiting 採用(候補者)の操作。採用の例外だけ
+var OVERRIDE_SCOPE_BY_ACTION = {
+  approveTask: 'task', assignTask: 'task', updateTaskDetails: 'task', updateVisibility: 'task',
+  updateReviewer: 'task', updateReviewers: 'task', removeTask: 'task', updatePriority: 'task',
+  updateDifficulty: 'task', updateSchedule: 'task', updateDependsOn: 'task', setBlocker: 'task',
+  notifyTaskRejected: 'task',
+  updateProjectDetails: 'project', updateProjectOwner: 'project', updateProjectParent: 'project',
+  updateProjectArchived: 'project', updateProjectMembers: 'project', notifyProjectHealth: 'project',
+  updateProjectHealthRecord: 'project', updateProjectHealth: 'project',
+  addCandidate: 'recruiting', updateCandidate: 'recruiting', removeCandidate: 'recruiting',
+  convertCandidateToMember: 'recruiting',
+}
+
+var OVERRIDE_ACCESS_LEVELS = { view: 0, edit: 1, approve: 2 }
+
+// 例外の一覧が、対象(targets)に対して必要な水準を満たすか(Google のサービスを
+// 使わない純粋な関数)。targets は { task, project, department, recruiting } の
+// うち、その操作で見てよいものだけを持つ。
+function overridesGrant(overrides, targets, requiredLevel) {
+  for (var i = 0; i < overrides.length; i++) {
+    var ov = overrides[i] || {}
+    var granted = OVERRIDE_ACCESS_LEVELS[ov.access]
+    if (typeof granted !== 'number' || granted < requiredLevel) continue
+    var targetId = String(ov.targetId || '')
+    if (ov.targetType === 'task' && targets.task && targetId === targets.task) return true
+    if (ov.targetType === 'project' && targets.project && targetId === targets.project) return true
+    if (ov.targetType === 'department' && targets.department && targetId === targets.department) return true
+    // recruiting: targetIdでの絞り込みは行わない（'all'固定運用のため、targetType一致とaccess水準のみで判定）
+    if (ov.targetType === 'recruiting' && targets.recruiting) return true
+  }
+  return false
+}
+
 /**
- * Returns true if acting member has a permission_overrides entry matching
- * the action's target. Used as OR fallback when role-based check denies.
- *
- * Access level hierarchy: approve > edit > view
- * Override { targetType, targetId, access } — targetId matches:
- *   task       → body.taskId
- *   project    → body.projectId or task.project_id
- *   department → body.department or task.department
+ * Returns true if acting member has a permission_overrides entry that
+ * applies to this action (see OVERRIDE_SCOPE_BY_ACTION). Used as OR
+ * fallback when the role-based check denies.
  */
 function checkPermissionOverride(acting, action, body) {
   var overrides = acting.permission_overrides
   if (!overrides || overrides.length === 0) return false
+  var scope = OVERRIDE_SCOPE_BY_ACTION[action]
+  if (!scope) return false
+  body = body || {}
 
-  // Map action → required access level and target extraction
-  var ACCESS_LEVELS = { view: 0, edit: 1, approve: 2 }
-
-  var taskId = String(body.taskId || '')
-  var projectId = String(body.projectId || '')
-  var department = String(body.department || '')
-
-  // For task-based actions resolve project/department from the sheet when not in body
-  if (taskId && (!projectId || !department)) {
-    var taskRow = findRow(SHEET_TASKS, taskId)
+  var targets = {}
+  if (scope === 'task') {
+    var taskId = String(body.taskId || '')
+    if (!taskId) return false
+    targets.task = taskId
+    var taskRow = null
+    try { taskRow = findRow(SHEET_TASKS, taskId) } catch (e) { taskRow = null }
     if (taskRow) {
-      if (!projectId) projectId = String(taskRow.project_id || '')
-      if (!department) department = String(taskRow.department || '')
+      targets.project = String(taskRow.project_id || '')
+      targets.department = String(taskRow.department || '')
     }
+  } else if (scope === 'project') {
+    targets.project = String(body.projectId || '')
+    if (!targets.project) return false
+  } else if (scope === 'recruiting') {
+    // 候補者を一般以外の役職でメンバー登録するのは役職の付与にあたるため、
+    // 代表専用(採用の例外では許可しない)
+    if (action === 'convertCandidateToMember' && String(body.role || '一般') !== '一般') return false
+    targets.recruiting = true
   }
 
-  // Minimum access required per action
-  var requiredAccess = 'edit' // default for daihyoOrLeader actions
-  if (action === 'approveTask') requiredAccess = 'approve'
-
-  var required = ACCESS_LEVELS[requiredAccess] || 0
-
-  for (var i = 0; i < overrides.length; i++) {
-    var ov = overrides[i]
-    var granted = ACCESS_LEVELS[ov.access]
-    if (typeof granted !== 'number' || granted < required) continue
-    if (ov.targetType === 'task' && ov.targetId === taskId && taskId) return true
-    if (ov.targetType === 'project' && ov.targetId === projectId && projectId) return true
-    if (ov.targetType === 'department' && ov.targetId === department && department) return true
-    // recruiting: targetIdでの絞り込みは行わない（'all'固定運用のため、targetType一致とaccess水準のみで判定）
-    if (ov.targetType === 'recruiting') return true
-  }
-  return false
+  var required = action === 'approveTask' ? OVERRIDE_ACCESS_LEVELS.approve : OVERRIDE_ACCESS_LEVELS.edit
+  return overridesGrant(overrides, targets, required)
 }
 
 /**
